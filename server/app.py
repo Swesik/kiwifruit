@@ -38,6 +38,17 @@ def init_db():
         with open(schema_path, 'r') as f:
             db.executescript(f.read())
 
+
+def _to_iso(ts):
+    # ts is a SQLite DATETIME like 'YYYY-MM-DD HH:MM:SS' or already ISO; return ISO8601 with timezone
+    if ts is None:
+        return None
+    try:
+        dt = datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')
+        return dt.replace(tzinfo=timezone.utc).isoformat()
+    except Exception:
+        return ts
+
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
@@ -80,17 +91,6 @@ def posts_handler():
         offset = page * pageSize
         # select post filename as postfile and user filename as userfile to avoid ambiguity
         rows = db.execute('SELECT p.postid, p.filename as postfile, p.owner, p.caption, p.created, u.userid, u.username, u.fullname, u.filename as userfile FROM posts p JOIN users u ON u.username = p.owner ORDER BY p.created DESC LIMIT ? OFFSET ?', (pageSize, offset)).fetchall()
-    def _to_iso(ts):
-        # ts is a SQLite DATETIME like 'YYYY-MM-DD HH:MM:SS' or already ISO; return ISO8601
-        if ts is None:
-            return None
-        try:
-            # Try parsing common SQLite format
-            dt = datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')
-            return dt.replace(tzinfo=timezone.utc).isoformat()
-        except Exception:
-            # If it's already ISO or another format, return as-is
-            return ts
 
         posts = []
         for r in rows:
@@ -98,13 +98,7 @@ def posts_handler():
             owner = {'id': r['userid'], 'username': r['username'], 'displayName': r['fullname'], 'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (r['userfile'] or 'default.jpg')}
             imageURL = request.host_url.rstrip('/') + '/uploads/' + r['postfile']
             likes = db.execute('SELECT COUNT(*) as c FROM likes WHERE postid = ?', (postid,)).fetchone()['c']
-            # convert created timestamp to ISO8601 so the Swift client can decode with .iso8601
-            created = r['created']
-            try:
-                from datetime import datetime
-                created = datetime.strptime(created, '%Y-%m-%d %H:%M:%S').isoformat()
-            except Exception:
-                pass
+            created = _to_iso(r['created'])
             posts.append({'id': str(postid), 'author': owner, 'imageURL': imageURL, 'caption': r['caption'], 'likes': likes, 'createdAt': created})
         return jsonify(posts)
 
@@ -141,14 +135,7 @@ def posts_handler():
     }
     imageURL = request.host_url.rstrip('/') + '/uploads/' + row['filename']
     likes = db.execute('SELECT COUNT(*) as c FROM likes WHERE postid = ?', (postid,)).fetchone()['c']
-    created = row['created']
-    # Convert SQLite timestamp to ISO8601 for client decoding
-    try:
-        from datetime import datetime
-        created = datetime.strptime(created, '%Y-%m-%d %H:%M:%S').isoformat()
-    except Exception:
-        # leave as-is if parsing fails
-        pass
+    created = _to_iso(row['created'])
     post = {
         'id': str(postid),
         'author': owner,
@@ -174,12 +161,7 @@ def post_like(post_id):
         owner = {'id': row['userid'], 'username': row['username'], 'displayName': row['fullname'], 'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (row['userfile'] or 'default.jpg')}
         imageURL = request.host_url.rstrip('/') + '/uploads/' + row['postfile']
         likes = db.execute('SELECT COUNT(*) as c FROM likes WHERE postid = ?', (post_id,)).fetchone()['c']
-        created = row['created']
-        try:
-            from datetime import datetime
-            created = datetime.strptime(created, '%Y-%m-%d %H:%M:%S').isoformat()
-        except Exception:
-            pass
+        created = _to_iso(row['created'])
         post = {'id': str(row['postid']), 'author': owner, 'imageURL': imageURL, 'caption': row['caption'], 'likes': likes, 'createdAt': created}
         return jsonify(post)
         db.execute('DELETE FROM likes WHERE owner = ? AND postid = ?', (username, post_id))
@@ -200,12 +182,7 @@ def post_detail(post_id):
         owner = {'id': row['userid'], 'username': row['username'], 'displayName': row['fullname'], 'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (row['userfile'] or 'default.jpg')}
         imageURL = request.host_url.rstrip('/') + '/uploads/' + row['postfile']
         likes = db.execute('SELECT COUNT(*) as c FROM likes WHERE postid = ?', (post_id,)).fetchone()['c']
-        created = row['created']
-        try:
-            from datetime import datetime
-            created = datetime.strptime(created, '%Y-%m-%d %H:%M:%S').isoformat()
-        except Exception:
-            pass
+        created = _to_iso(row['created'])
         post = {'id': str(row['postid']), 'author': owner, 'imageURL': imageURL, 'caption': row['caption'], 'likes': likes, 'createdAt': created}
         return jsonify(post)
 
