@@ -297,6 +297,16 @@ def get_username_from_token(req):
     row = db.execute('SELECT username FROM sessions WHERE token = ?', (token,)).fetchone()
     return row['username'] if row else None
 
+
+# Backwards-compatible aliases for clients calling /api/* paths
+try:
+    app.add_url_rule('/api/posts', endpoint='posts_handler_api', view_func=posts_handler, methods=['GET', 'POST'])
+    app.add_url_rule('/api/posts/<post_id>', endpoint='post_detail_api', view_func=post_detail, methods=['GET', 'DELETE'])
+    app.add_url_rule('/api/posts/<post_id>/like', endpoint='post_like_api', view_func=post_like, methods=['POST', 'DELETE'])
+except Exception:
+    # if handlers are not defined yet during import-time, ignore
+    pass
+
 if __name__ == '__main__':
     if not os.path.exists(DB_PATH):
         init_db()

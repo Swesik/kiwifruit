@@ -67,6 +67,19 @@ final class RESTAPIClient: APIClientProtocol {
         self.baseURL = baseURL
         self.session = session
     }
+    
+    private func debugLogRequest(_ req: URLRequest) {
+        var out = "API Request -> "
+        out += "\(req.httpMethod ?? "?") "
+        out += "\(req.url?.absoluteString ?? "<no-url>")"
+        if let headers = req.allHTTPHeaderFields, !headers.isEmpty {
+            out += " headers:\(headers)"
+        }
+        if let body = req.httpBody, let s = String(data: body, encoding: .utf8) {
+            out += " body:\(s)"
+        }
+        print(out)
+    }
 
     func setAuthToken(_ token: String?) {
         self.authToken = token
@@ -132,6 +145,7 @@ final class RESTAPIClient: APIClientProtocol {
             req.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
 
+        debugLogRequest(req)
         let (data, resp) = try await session.data(for: req)
         if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             let body = String(data: data, encoding: .utf8) ?? "<non-utf8>"
@@ -156,6 +170,7 @@ final class RESTAPIClient: APIClientProtocol {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
         let (data, _) = try await session.data(for: req)
         let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         if let likes = decoded?["like_count"] as? Int { return likes }
@@ -168,6 +183,7 @@ final class RESTAPIClient: APIClientProtocol {
         var req = URLRequest(url: url)
         req.httpMethod = "DELETE"
         if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
         let (data, _) = try await session.data(for: req)
         let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         if let likes = decoded?["like_count"] as? Int { return likes }
