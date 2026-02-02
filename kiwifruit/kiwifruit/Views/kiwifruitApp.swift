@@ -10,6 +10,7 @@ struct kiwifruitApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .withLogin()
                 .environment(\.postsStore, postsStore)
                 .environment(\.sessionStore, sessionStore)
         }
