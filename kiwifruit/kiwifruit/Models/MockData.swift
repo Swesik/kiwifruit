@@ -26,4 +26,14 @@ enum MockData {
         }
         return posts
     }
+
+    static func makeComments(for postId: UUID) -> [Comment] {
+        var comments: [Comment] = []
+        let authors = [sampleUser, User(id: UUID(), username: "reader1", displayName: "Reader 1", avatarURL: nil), User(id: UUID(), username: "reader2", displayName: "Reader 2", avatarURL: nil)]
+        for i in 0..<3 {
+            let c = Comment(id: UUID(), postId: postId, author: authors[i % authors.count], text: "Nice post! (\(i))", createdAt: Date().addingTimeInterval(TimeInterval(-i * 60)))
+            comments.append(c)
+        }
+        return comments
+    }
 }

@@ -28,7 +28,7 @@ How to run locally
 open kiwifruit.xcodeproj
 ```
 2. Run on a simulator or device (iOS 16+ recommended). PhotosPicker works best on real device or simulator populated with photos.
-3. By default the app uses `MockAPIClient`. To point at your Flask backend, instantiate `SessionStore(baseURL:)` with your API URL and ensure `APIClient.shared` is the `RESTAPIClient` (this is done automatically when `SessionStore` is initialized).
+3. By default the app uses `MockAPIClient`. To point at your Flask backend, instantiate `SessionStore(baseURL:)` with your API URL and ensure `AppAPI.shared` is the `RESTAPIClient` (this is done automatically when `SessionStore` is initialized).
 
 API and backend notes
 - See `ApiSpec.md` for endpoint suggestions (posts, sessions, likes). A prototype Flask server is included in the spec with multipart upload and like endpoints.
