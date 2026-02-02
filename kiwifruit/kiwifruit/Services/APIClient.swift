@@ -60,35 +60,23 @@ final class MockAPIClient: APIClientProtocol {
     }
 
     func followUser(_ username: String) async throws -> Void {
-        let url = baseURL.appendingPathComponent("/users/").appendingPathComponent(username).appendingPathComponent("follow")
-        var req = URLRequest(url: url); req.httpMethod = "POST"
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        _ = try await session.data(for: req)
+        try await Task.sleep(nanoseconds: 40 * 1_000_000)
+        return
     }
 
     func unfollowUser(_ username: String) async throws -> Void {
-        let url = baseURL.appendingPathComponent("/users/").appendingPathComponent(username).appendingPathComponent("follow")
-        var req = URLRequest(url: url); req.httpMethod = "DELETE"
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        _ = try await session.data(for: req)
+        try await Task.sleep(nanoseconds: 40 * 1_000_000)
+        return
     }
 
     func fetchFollowers(username: String) async throws -> [User] {
-        let url = baseURL.appendingPathComponent("/users/").appendingPathComponent(username).appendingPathComponent("followers")
-        var req = URLRequest(url: url)
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, _) = try await session.data(for: req)
-        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase; decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode([User].self, from: data)
+        try await Task.sleep(nanoseconds: 60 * 1_000_000)
+        return []
     }
 
     func fetchFollowing(username: String) async throws -> [User] {
-        let url = baseURL.appendingPathComponent("/users/").appendingPathComponent(username).appendingPathComponent("following")
-        var req = URLRequest(url: url)
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, _) = try await session.data(for: req)
-        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase; decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode([User].self, from: data)
+        try await Task.sleep(nanoseconds: 60 * 1_000_000)
+        return []
     }
 
     func createAccount(username: String, password: String, fullname: String?) async throws -> User {
@@ -191,6 +179,8 @@ final class RESTAPIClient: APIClientProtocol {
         if let likes = decoded?["likes"] as? Int { return likes }
         throw URLError(.badServerResponse)
     }
+
+    // Follow/unfollow and list implementations for REST client
 
     func unlikePost(_ postId: String) async throws -> Int {
         let url = baseURL.appendingPathComponent("/posts/\(postId)/like")
@@ -300,6 +290,38 @@ final class RESTAPIClient: APIClientProtocol {
         var req = URLRequest(url: url); req.httpMethod = "DELETE"
         if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         _ = try await session.data(for: req)
+    }
+
+    func followUser(_ username: String) async throws -> Void {
+        let url = baseURL.appendingPathComponent("/users/").appendingPathComponent(username).appendingPathComponent("follow")
+        var req = URLRequest(url: url); req.httpMethod = "POST"
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        _ = try await session.data(for: req)
+    }
+
+    func unfollowUser(_ username: String) async throws -> Void {
+        let url = baseURL.appendingPathComponent("/users/").appendingPathComponent(username).appendingPathComponent("follow")
+        var req = URLRequest(url: url); req.httpMethod = "DELETE"
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        _ = try await session.data(for: req)
+    }
+
+    func fetchFollowers(username: String) async throws -> [User] {
+        let url = baseURL.appendingPathComponent("/users/").appendingPathComponent(username).appendingPathComponent("followers")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, _) = try await session.data(for: req)
+        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase; decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode([User].self, from: data)
+    }
+
+    func fetchFollowing(username: String) async throws -> [User] {
+        let url = baseURL.appendingPathComponent("/users/").appendingPathComponent(username).appendingPathComponent("following")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, _) = try await session.data(for: req)
+        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase; decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode([User].self, from: data)
     }
 
     // Helper to normalize postid value if needed

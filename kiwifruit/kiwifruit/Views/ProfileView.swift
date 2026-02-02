@@ -197,7 +197,7 @@ struct ProfileView: View {
             print("toggleFollow failed: \(error)")
         }
     }
-    }
+
 }
 
 struct ProfileView_Previews: PreviewProvider {
