@@ -38,8 +38,8 @@ struct LoginView: View {
         isLoading = true
         defer { isLoading = false }
         do {
-            let (token, userId) = try await APIClient.shared.createSession(username: username)
-            session.save(token: token, userId: userId)
+            let (token, user) = try await APIClient.shared.createSession(username: username)
+            session.save(token: token, user: user)
             dismiss()
         } catch {
             print("Sign in failed: \(error)")

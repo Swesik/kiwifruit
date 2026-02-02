@@ -1,6 +1,7 @@
 import os
 import uuid
 import sqlite3
+import logging
 from flask import Flask, request, jsonify, g, abort, send_from_directory
 
 BASE_DIR = os.path.dirname(__file__)
@@ -10,6 +11,10 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Basic logging configuration
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("kiwifruit")
 
 def get_db():
     db = getattr(g, '_database', None)
@@ -52,10 +57,17 @@ def create_session():
         db.commit()
     db.execute('INSERT INTO sessions (token, username) VALUES (?, ?)', (token, username))
     db.commit()
-    # Return token and userId as generated uuid from users table
-    cur = db.execute('SELECT userid FROM users WHERE username = ?', (username,)).fetchone()
+    # Return token and user object as generated from users table
+    cur = db.execute('SELECT userid, username, fullname, filename FROM users WHERE username = ?', (username,)).fetchone()
     userid = cur['userid']
-    return jsonify({'token': token, 'userId': userid})
+    user = {
+        'id': userid,
+        'username': cur['username'],
+        'displayName': cur['fullname'],
+        'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (cur['filename'] or 'default.jpg')
+    }
+    logger.info("session created: username=%s token=%s userId=%s", username, token, userid)
+    return jsonify({'token': token, 'user': user})
 
 @app.route('/posts', methods=['GET', 'POST'])
 def posts_handler():
@@ -123,6 +135,7 @@ def posts_handler():
         'likes': likes,
         'createdAt': created
     }
+    logger.info("post created: postId=%s owner=%s filename=%s", postid, username, uuid_basename)
     return jsonify(post)
 
 @app.route('/posts/<post_id>/like', methods=['POST', 'DELETE'])
@@ -145,6 +158,43 @@ def post_like(post_id):
         db.commit()
     likes = db.execute('SELECT COUNT(*) as c FROM likes WHERE postid = ?', (post_id,)).fetchone()['c']
     return jsonify({'likes': likes})
+
+
+@app.route('/posts/<post_id>', methods=['GET','DELETE'])
+def post_detail(post_id):
+    db = get_db()
+    if request.method == 'GET':
+        row = db.execute('SELECT p.postid, p.filename, p.owner, p.caption, p.created, u.userid, u.username, u.fullname FROM posts p JOIN users u ON u.username = p.owner WHERE p.postid = ?', (post_id,)).fetchone()
+        if not row:
+            abort(404)
+        owner = {'id': row['userid'], 'username': row['username'], 'displayName': row['fullname'], 'avatarURL': request.host_url.rstrip('/') + '/uploads/' + row['filename']}
+        imageURL = request.host_url.rstrip('/') + '/uploads/' + row['filename']
+        likes = db.execute('SELECT COUNT(*) as c FROM likes WHERE postid = ?', (post_id,)).fetchone()['c']
+        post = {'id': str(row['postid']), 'author': owner, 'imageURL': imageURL, 'caption': row['caption'], 'likes': likes, 'createdAt': row['created']}
+        return jsonify(post)
+
+    # DELETE
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    row = db.execute('SELECT owner, filename FROM posts WHERE postid = ?', (post_id,)).fetchone()
+    if not row:
+        abort(404)
+    if row['owner'] != username:
+        abort(403)
+    # delete post record and associated file
+    db.execute('DELETE FROM posts WHERE postid = ?', (post_id,))
+    db.execute('DELETE FROM likes WHERE postid = ?', (post_id,))
+    db.execute('DELETE FROM comments WHERE postid = ?', (post_id,))
+    db.commit()
+    try:
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], row['filename'])
+        if os.path.exists(filepath):
+            os.remove(filepath)
+    except Exception as e:
+        logger.warning('failed to remove file %s: %s', row['filename'], e)
+    logger.info('post deleted: postId=%s owner=%s', post_id, username)
+    return jsonify({'status': 'ok'})
 
 @app.route('/comments', methods=['POST'])
 def comments_handler():
@@ -174,6 +224,21 @@ def comments_handler():
         db.commit()
         return jsonify({'status': 'ok'})
     abort(400)
+
+
+@app.route('/users/<user_id>', methods=['GET'])
+def get_user(user_id):
+    db = get_db()
+    row = db.execute('SELECT userid, username, fullname, filename FROM users WHERE userid = ?', (user_id,)).fetchone()
+    if not row:
+        abort(404)
+    user = {
+        'id': row['userid'],
+        'username': row['username'],
+        'displayName': row['fullname'],
+        'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (row['filename'] or 'default.jpg')
+    }
+    return jsonify(user)
 
 def get_username_from_token(req):
     auth = req.headers.get('Authorization')

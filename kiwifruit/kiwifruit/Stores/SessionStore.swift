@@ -6,9 +6,11 @@ import SwiftUI
 final class SessionStore {
     private let tokenKey = "kiwifruit.session.token"
     private let userKey = "kiwifruit.session.userId"
+    private let userJSONKey = "kiwifruit.session.user"
 
     private(set) var token: String? = nil
     private(set) var userId: UUID? = nil
+    private(set) var currentUser: User? = nil
 
     let apiClient: RESTAPIClient
 
@@ -23,11 +25,17 @@ final class SessionStore {
         apiClient.setAuthToken(token)
     }
 
-    func save(token: String, userId: UUID?) {
+    func save(token: String, user: User?) {
         self.token = token
-        self.userId = userId
+        self.currentUser = user
+        self.userId = user?.id
         UserDefaults.standard.set(token, forKey: tokenKey)
-        UserDefaults.standard.set(userId?.uuidString, forKey: userKey)
+        UserDefaults.standard.set(user?.id.uuidString, forKey: userKey)
+        if let user = user, let encoded = try? JSONEncoder().encode(user) {
+            UserDefaults.standard.set(encoded, forKey: userJSONKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: userJSONKey)
+        }
         apiClient.setAuthToken(token)
         APIClient.shared = apiClient
     }
@@ -35,8 +43,10 @@ final class SessionStore {
     func clear() {
         token = nil
         userId = nil
+        currentUser = nil
         UserDefaults.standard.removeObject(forKey: tokenKey)
         UserDefaults.standard.removeObject(forKey: userKey)
+        UserDefaults.standard.removeObject(forKey: userJSONKey)
         apiClient.setAuthToken(nil)
         APIClient.shared = MockAPIClient()
     }
@@ -47,6 +57,11 @@ final class SessionStore {
         }
         if let userIdStr = UserDefaults.standard.string(forKey: userKey), let uuid = UUID(uuidString: userIdStr) {
             self.userId = uuid
+        }
+        if let data = UserDefaults.standard.data(forKey: userJSONKey) {
+            if let user = try? JSONDecoder().decode(User.self, from: data) {
+                self.currentUser = user
+            }
         }
     }
 }

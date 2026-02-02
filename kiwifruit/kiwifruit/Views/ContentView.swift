@@ -6,6 +6,7 @@ struct ContentView: View {
     @State private var showingLogin = false
 
     private var currentUser: User {
+        if let user = session.currentUser { return user }
         if let id = session.userId, let user = postsStore.posts.first(where: { $0.author.id == id })?.author {
             return user
         }

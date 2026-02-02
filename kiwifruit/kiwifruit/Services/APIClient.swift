@@ -13,7 +13,7 @@ protocol APIClientProtocol {
     func fetchPosts(page: Int, pageSize: Int) async throws -> [Post]
     /// Create a post. `imageData` is optional; if provided the client should upload it.
     func createPost(authorId: UUID, imageData: Data?, caption: String?) async throws -> Post
-    func createSession(username: String) async throws -> (token: String, userId: UUID)
+    func createSession(username: String) async throws -> (token: String, user: User)
     func likePost(_ postId: UUID) async throws -> Int
     func unlikePost(_ postId: UUID) async throws -> Int
 }
@@ -51,9 +51,9 @@ final class MockAPIClient: APIClientProtocol {
         return Int.random(in: 0...499)
     }
 
-    func createSession(username: String) async throws -> (token: String, userId: UUID) {
+    func createSession(username: String) async throws -> (token: String, user: User) {
         try await Task.sleep(nanoseconds: 100 * 1_000_000)
-        return (token: UUID().uuidString, userId: MockData.sampleUser.id)
+        return (token: UUID().uuidString, user: MockData.sampleUser)
     }
 }
 
@@ -160,7 +160,7 @@ final class RESTAPIClient: APIClientProtocol {
         throw URLError(.badServerResponse)
     }
 
-    func createSession(username: String) async throws -> (token: String, userId: UUID) {
+    func createSession(username: String) async throws -> (token: String, user: User) {
         let url = baseURL.appendingPathComponent("/sessions")
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -169,13 +169,17 @@ final class RESTAPIClient: APIClientProtocol {
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, _) = try await session.data(for: req)
-        let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard let token = decoded?["token"] as? String,
-              let userIdString = decoded?["userId"] as? String,
-              let userId = UUID(uuidString: userIdString) else {
+        // Expect { "token": "...", "user": { ... } }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let wrapper = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let token = wrapper?["token"] as? String,
+              let userDict = wrapper?["user"] as? [String: Any],
+              let userData = try? JSONSerialization.data(withJSONObject: userDict) else {
             throw URLError(.badServerResponse)
         }
-        return (token: token, userId: userId)
+        let user = try decoder.decode(User.self, from: userData)
+        return (token: token, user: user)
     }
 }
 
