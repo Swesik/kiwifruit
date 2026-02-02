@@ -98,8 +98,7 @@ def posts_handler():
             owner = {'id': r['userid'], 'username': r['username'], 'displayName': r['fullname'], 'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (r['userfile'] or 'default.jpg')}
             imageURL = request.host_url.rstrip('/') + '/uploads/' + r['postfile']
             likes = db.execute('SELECT COUNT(*) as c FROM likes WHERE postid = ?', (postid,)).fetchone()['c']
-            created = _to_iso(r['created'])
-            posts.append({'id': str(postid), 'author': owner, 'imageURL': imageURL, 'caption': r['caption'], 'likes': likes, 'createdAt': created})
+            posts.append({'id': str(postid), 'author': owner, 'imageURL': imageURL, 'caption': r['caption'], 'likes': likes})
         return jsonify(posts)
 
     # POST - create
@@ -135,14 +134,12 @@ def posts_handler():
     }
     imageURL = request.host_url.rstrip('/') + '/uploads/' + row['filename']
     likes = db.execute('SELECT COUNT(*) as c FROM likes WHERE postid = ?', (postid,)).fetchone()['c']
-    created = _to_iso(row['created'])
     post = {
         'id': str(postid),
         'author': owner,
         'imageURL': imageURL,
         'caption': row['caption'],
-        'likes': likes,
-        'createdAt': created
+        'likes': likes
     }
     logger.info("post created: postId=%s owner=%s filename=%s", postid, username, uuid_basename)
     return jsonify(post)
@@ -161,8 +158,7 @@ def post_like(post_id):
         owner = {'id': row['userid'], 'username': row['username'], 'displayName': row['fullname'], 'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (row['userfile'] or 'default.jpg')}
         imageURL = request.host_url.rstrip('/') + '/uploads/' + row['postfile']
         likes = db.execute('SELECT COUNT(*) as c FROM likes WHERE postid = ?', (post_id,)).fetchone()['c']
-        created = _to_iso(row['created'])
-        post = {'id': str(row['postid']), 'author': owner, 'imageURL': imageURL, 'caption': row['caption'], 'likes': likes, 'createdAt': created}
+        post = {'id': str(row['postid']), 'author': owner, 'imageURL': imageURL, 'caption': row['caption'], 'likes': likes}
         return jsonify(post)
         db.execute('DELETE FROM likes WHERE owner = ? AND postid = ?', (username, post_id))
         db.commit()
@@ -182,8 +178,7 @@ def post_detail(post_id):
         owner = {'id': row['userid'], 'username': row['username'], 'displayName': row['fullname'], 'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (row['userfile'] or 'default.jpg')}
         imageURL = request.host_url.rstrip('/') + '/uploads/' + row['postfile']
         likes = db.execute('SELECT COUNT(*) as c FROM likes WHERE postid = ?', (post_id,)).fetchone()['c']
-        created = _to_iso(row['created'])
-        post = {'id': str(row['postid']), 'author': owner, 'imageURL': imageURL, 'caption': row['caption'], 'likes': likes, 'createdAt': created}
+        post = {'id': str(row['postid']), 'author': owner, 'imageURL': imageURL, 'caption': row['caption'], 'likes': likes}
         return jsonify(post)
 
     # DELETE

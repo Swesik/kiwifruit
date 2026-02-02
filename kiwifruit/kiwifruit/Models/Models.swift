@@ -14,7 +14,7 @@ struct Post: Identifiable, Codable, Hashable {
     let imageURL: URL
     let caption: String?
     var likes: Int
-    let createdAt: Date
+    let createdAt: Date?
     // Optional fields returned by the server for the MVP shape
     var commentCount: Int?
     var likedByMe: Bool?
