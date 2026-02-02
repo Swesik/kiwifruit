@@ -21,7 +21,7 @@ final class SessionStore {
         self.apiClient = RESTAPIClient(baseURL: baseURL)
         load()
         // Ensure global API client uses this REST client by default
-        APIClient.shared = apiClient
+        AppAPI.shared = apiClient
         apiClient.setAuthToken(token)
     }
 
@@ -37,7 +37,7 @@ final class SessionStore {
             UserDefaults.standard.removeObject(forKey: userJSONKey)
         }
         apiClient.setAuthToken(token)
-        APIClient.shared = apiClient
+        AppAPI.shared = apiClient
     }
 
     func clear() {
@@ -48,7 +48,7 @@ final class SessionStore {
         UserDefaults.standard.removeObject(forKey: userKey)
         UserDefaults.standard.removeObject(forKey: userJSONKey)
         apiClient.setAuthToken(nil)
-        APIClient.shared = MockAPIClient()
+        AppAPI.shared = MockAPIClient()
     }
 
     private func load() {

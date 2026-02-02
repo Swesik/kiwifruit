@@ -41,8 +41,8 @@ struct SignUpView: View {
         isLoading = true
         defer { isLoading = false }
         do {
-            _ = try await APIClient.shared.createAccount(username: username, password: password, fullname: fullname.isEmpty ? nil : fullname)
-            let (token, user) = try await APIClient.shared.createSession(username: username, password: password)
+            _ = try await AppAPI.shared.createAccount(username: username, password: password, fullname: fullname.isEmpty ? nil : fullname)
+            let (token, user) = try await AppAPI.shared.createSession(username: username, password: password)
             session.save(token: token, user: user)
             dismiss()
         } catch {

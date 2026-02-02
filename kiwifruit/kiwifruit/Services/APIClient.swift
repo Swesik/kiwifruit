@@ -241,7 +241,7 @@ final class RESTAPIClient: APIClientProtocol {
     }
 }
 
-enum APIClient {
+enum AppAPI {
     /// Default shared client. Swap to `RESTAPIClient(baseURL:)` when you have a backend.
     static var shared: APIClientProtocol = MockAPIClient()
 }

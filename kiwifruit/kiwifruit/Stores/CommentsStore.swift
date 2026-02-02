@@ -22,7 +22,7 @@ final class CommentsStore {
 
     func fetchForPost(_ post: Post) async {
         do {
-            let fetched = try await APIClient.shared.fetchComments(postId: post.id)
+            let fetched = try await AppAPI.shared.fetchComments(postId: post.id)
             commentsByPost[post.id] = fetched
             save()
         } catch {
@@ -33,7 +33,7 @@ final class CommentsStore {
 
     func createComment(_ text: String, post: Post, author: User?) async {
         do {
-            try await APIClient.shared.createComment(postId: post.id, text: text)
+            try await AppAPI.shared.createComment(postId: post.id, text: text)
             // refresh comments from server
             await fetchForPost(post)
         } catch {

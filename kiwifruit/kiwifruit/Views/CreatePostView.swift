@@ -69,7 +69,7 @@ struct CreatePostView: View {
         isSubmitting = true
         defer { isSubmitting = false }
         do {
-              let created = try await APIClient.shared.createPost(authorId: userId, imageData: selectedImageData, caption: caption.isEmpty ? nil : caption)
+              let created = try await AppAPI.shared.createPost(authorId: userId, imageData: selectedImageData, caption: caption.isEmpty ? nil : caption)
               postsStore.prepend(created)
               onCreated(created)
               isPresented = false

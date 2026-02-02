@@ -47,7 +47,7 @@ struct LoginView: View {
         isLoading = true
         defer { isLoading = false }
         do {
-            let (token, user) = try await APIClient.shared.createSession(username: username, password: password)
+            let (token, user) = try await AppAPI.shared.createSession(username: username, password: password)
             session.save(token: token, user: user)
             dismiss()
         } catch {

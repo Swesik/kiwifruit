@@ -23,7 +23,7 @@ final class PostsStore {
         isLoading = true
         defer { isLoading = false }
         do {
-            let new = try await APIClient.shared.fetchPosts(page: page, pageSize: pageSize)
+            let new = try await AppAPI.shared.fetchPosts(page: page, pageSize: pageSize)
             posts.append(contentsOf: new)
             page += 1
         } catch {

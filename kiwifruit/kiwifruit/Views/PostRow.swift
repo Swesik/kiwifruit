@@ -108,13 +108,13 @@ struct PostRow: View {
     private func toggleLike() async {
         likesStore.toggle(post)
         do {
-            if likesStore.isLiked(post) {
-                let updated = try await APIClient.shared.likePost(post.id)
-                postsStore.updateLikes(postId: post.id, likes: updated)
-            } else {
-                let updated = try await APIClient.shared.unlikePost(post.id)
-                postsStore.updateLikes(postId: post.id, likes: updated)
-            }
+                if likesStore.isLiked(post) {
+                    let updated = try await AppAPI.shared.likePost(post.id)
+                    postsStore.updateLikes(postId: post.id, likes: updated)
+                } else {
+                    let updated = try await AppAPI.shared.unlikePost(post.id)
+                    postsStore.updateLikes(postId: post.id, likes: updated)
+                }
         } catch {
             // On failure, rollback local optimistic like
             likesStore.toggle(post)
@@ -124,7 +124,7 @@ struct PostRow: View {
 
     private func deletePost() async {
         do {
-            try await APIClient.shared.deletePost(post.id)
+            try await AppAPI.shared.deletePost(post.id)
             postsStore.removePost(postId: post.id)
         } catch {
             print("deletePost failed: \(error)")
