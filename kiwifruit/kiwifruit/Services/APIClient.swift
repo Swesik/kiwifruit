@@ -59,26 +59,6 @@ final class MockAPIClient: APIClientProtocol {
         return (token: UUID().uuidString, user: MockData.sampleUser)
     }
 
-    func followUser(_ username: String) async throws -> Void {
-        try await Task.sleep(nanoseconds: 40 * 1_000_000)
-        return
-    }
-
-    func unfollowUser(_ username: String) async throws -> Void {
-        try await Task.sleep(nanoseconds: 40 * 1_000_000)
-        return
-    }
-
-    func fetchFollowers(username: String) async throws -> [User] {
-        try await Task.sleep(nanoseconds: 60 * 1_000_000)
-        return []
-    }
-
-    func fetchFollowing(username: String) async throws -> [User] {
-        try await Task.sleep(nanoseconds: 60 * 1_000_000)
-        return []
-    }
-
     func createAccount(username: String, password: String, fullname: String?) async throws -> User {
         try await Task.sleep(nanoseconds: 150 * 1_000_000)
         return MockData.sampleUser
