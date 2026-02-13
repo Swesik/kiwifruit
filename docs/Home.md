@@ -10,4 +10,5 @@ Welcome to the KiwiFruit project documentation! This wiki provides comprehensive
 4. [APIs and Controller](APIs-and-Controller) - API specifications and client-server communication
 5. [View UI/UX](View-UI-UX) - User interface and experience design *(to be completed)*
 6. [Team Roster](Team-Roster) - Team members and contributions
+7. [API Reference](api) - Auto-generated API documentation
 

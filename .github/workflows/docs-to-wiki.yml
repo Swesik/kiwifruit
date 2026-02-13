@@ -31,10 +31,13 @@ jobs:
         run: |
           git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki
 
+      - name: move server api docs to root docs folder
+        run: mv server/docs/build/markdown/api.md docs/
+
       - name: Copy docs to wiki
         run: |
           rm -rf wiki/*.md
-          cp server/docs/build/markdown/*.md wiki/
+          cp docs/*.md wiki/
 
       - name: Push to wiki
         run: |
