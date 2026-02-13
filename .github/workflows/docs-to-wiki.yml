@@ -31,7 +31,7 @@ jobs:
         run: |
           git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki
 
-      - name: move api docs to main
+      - name: move server api docs to root docs folder
         run: mv server/docs/build/markdown/api.md docs/
 
       - name: Copy docs to wiki
