@@ -124,8 +124,15 @@ def create_session():
     if not row:
         abort(403)
     stored = row['password'] or ''
+    # Allow a simple mock password marker for seeded development users.
+    # If the stored password is the literal string 'password', accept when
+    # the provided password is also 'password'. This enables simple mock
+    # accounts seeded into the repository for demos/testing.
+    if stored == 'password':
+        if password != 'password':
+            abort(403)
     # Support salted format: sha512$<salt>$<hash>
-    if stored.startswith('sha512$'):
+    elif stored.startswith('sha512$'):
         try:
             _prefix, salt, stored_hash = stored.split('$', 2)
             provided_hash = hashlib.sha512((salt + password).encode('utf-8')).hexdigest()
