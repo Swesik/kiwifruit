@@ -150,7 +150,6 @@ def _parse_epub_chapters(epubid, filepath):
             if not chapter_title:
                 chapter_title = f'Chapter {chapter_number}'
 
-            # Write chapter text to a .txt file
             txt_filename = f"{uuid.uuid4().hex}.txt"
             txt_filepath = os.path.join(UPLOAD_FOLDER, txt_filename)
             with open(txt_filepath, 'w', encoding='utf-8') as f:
@@ -179,7 +178,6 @@ def _parse_epub_chapters(epubid, filepath):
 
     except Exception as e:
         logger.exception('epub parsing failed: epubId=%s error=%s', epubid, e)
-        # Clean up any chapter files already written
         for fpath in chapter_files:
             try:
                 if os.path.exists(fpath):
