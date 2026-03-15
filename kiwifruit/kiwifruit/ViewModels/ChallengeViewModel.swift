@@ -42,13 +42,33 @@ final class ChallengeViewModel {
     
 
     func loadRecommendations() async {
-        let rec = await engine.recommend(limit: 4)
-        // reconcile state with accepted/completed and filter out completed/active
         let completedIDs = Set(completedChallenges.map { $0.id })
         let activeIDs = Set(activeChallenges.map { $0.id })
+        let exclude = completedIDs.union(activeIDs)
+
+        let rec = await engine.recommend(limit: 4, excludeIDs: exclude)
+        // reconcile state with accepted/completed and filter out completed/active
+        // avoid returning challenges that match completed or active content (title/description)
+        let completedTitles = Set(completedChallenges.map { $0.title.lowercased() })
+        let completedDescs = completedChallenges.map { $0.description.lowercased() }
+
+        let activeTitles = Set(activeChallenges.map { $0.title.lowercased() })
+        let activeDescs = activeChallenges.map { $0.description.lowercased() }
 
         var mapped = rec.compactMap { (ch) -> Challenge? in
+            // exclude by id
             if completedIDs.contains(ch.id) { return nil }
+            if activeIDs.contains(ch.id) { return nil }
+
+            // exclude by title or description match to avoid regenerated duplicates
+            let titleLower = ch.title.lowercased()
+            let descLower = ch.description.lowercased()
+            if completedTitles.contains(titleLower) { return nil }
+            if completedDescs.contains(where: { descLower.contains($0) || $0.contains(descLower) }) { return nil }
+
+            if activeTitles.contains(titleLower) { return nil }
+            if activeDescs.contains(where: { descLower.contains($0) || $0.contains(descLower) }) { return nil }
+
             var c = ch
             if activeIDs.contains(c.id) { c.state = .accepted }
             else { c.state = .available }
