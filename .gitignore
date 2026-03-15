@@ -158,3 +158,6 @@ server/kiwifruit.db
 
 # sphinx
 docs/build
+
+# Local keys file (do not commit)
+kiwifruit/Keys.plist

@@ -29,7 +29,7 @@ struct ContentView: View {
                 .tabItem { Label("Profile", systemImage: "person.crop.circle") }
                 .tag(2)
 
-            Text("Challenges")
+            NavigationStack { ChallengesView() }
                 .tabItem { Label("Challenges", systemImage: "flag.checkered") }
                 .tag(3)
 
