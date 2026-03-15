@@ -6,6 +6,16 @@ struct ChallengeScore {
 }
 
 final class ChallengeEngine {
+    static let shared = ChallengeEngine()
+
+    private let bank: [Challenge] = [
+        Challenge(title: "Morning Momentum", description: "Read 10 pages before 10am", category: "time", difficulty: 1, rewardXP: 20, recommendedConditions: RecommendedConditions(timeOfDay: "morning")),
+        Challenge(title: "Outdoor Reading", description: "Read outside for 15 minutes", category: "outdoor", difficulty: 2, rewardXP: 35, recommendedConditions: RecommendedConditions(weather: "Clear", minTemperature: 60)),
+        Challenge(title: "Night Owl", description: "Read after 9pm for 20 minutes", category: "time", difficulty: 2, rewardXP: 30, recommendedConditions: RecommendedConditions(timeOfDay: "night")),
+        Challenge(title: "Sprint Reader", description: "Read 25 pages in one session", category: "sprint", difficulty: 3, rewardXP: 50, recommendedConditions: RecommendedConditions()),
+        Challenge(title: "Cozy Tea Read", description: "Read 20 pages with tea while it's raining", category: "indoor", difficulty: 1, rewardXP: 25, recommendedConditions: RecommendedConditions(weather: "Rain")),
+        Challenge(title: "Lunchtime Bite", description: "Read during lunch for 15 minutes", category: "time", difficulty: 1, rewardXP: 15, recommendedConditions: RecommendedConditions(timeOfDay: "afternoon"))
+    ]
     private let weatherService: WeatherService
     private let streak: Int
 
@@ -27,6 +37,13 @@ final class ChallengeEngine {
         } catch {
             return Array(bank.shuffled().prefix(4))
         }
+    }
+
+    // Compatibility helper used by ViewModel
+    func recommend(limit: Int = 4, lat: Double = 37.7749, lon: Double = -122.4194) async -> [Challenge] {
+        let rec = await recommended(from: bank, latitude: lat, longitude: lon)
+        // ensure we only return requested limit
+        return Array(rec.prefix(limit))
     }
 
     private func computeScore(for challenge: Challenge, weather: WeatherInfo) -> Double {
