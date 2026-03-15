@@ -91,8 +91,6 @@ struct PostDetailView: View {
     }
 }
 
-struct PostDetailView_Previews: PreviewProvider {
-    static var previews: some View {
-        NavigationStack { PostDetailView(post: MockData.makePosts(count: 1, page: 0).first!) }
-    }
+#Preview {
+    NavigationStack { PostDetailView(post: MockData.makePosts(count: 1, page: 0).first!) }
 }

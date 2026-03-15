@@ -79,8 +79,6 @@ struct CreatePostView: View {
     }
 }
 
-struct CreatePostView_Previews: PreviewProvider {
-    static var previews: some View {
-        CreatePostView(isPresented: .constant(true)) { _ in }
-    }
+#Preview {
+    CreatePostView(isPresented: .constant(true)) { _ in }
 }
