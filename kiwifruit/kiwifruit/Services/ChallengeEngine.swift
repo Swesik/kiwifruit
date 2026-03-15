@@ -77,31 +77,106 @@ final class ChallengeEngine {
 
     // Compatibility helper used by ViewModel
     func recommend(limit: Int = 4, lat: Double = 37.7749, lon: Double = -122.4194, excludeIDs: Set<UUID> = []) async -> [Challenge] {
-        // Build explanations per challenge
-        var rec = await recommended(from: bank, latitude: lat, longitude: lon, excludeIDs: excludeIDs)
-            // If the engine returned fewer than requested, generate additional dynamic challenges to fill the gap
-            if rec.count < limit {
-                var attempts = 0
-                while rec.count < limit && attempts < 10 {
-                    let dyn = await DynamicChallengeService.shared.generateDynamicChallenge()
-                    if !excludeIDs.contains(dyn.id) && !rec.contains(where: { $0.title == dyn.title }) {
-                        rec.append(dyn)
+        // Aim to always return `limit` recommendations. Strategy:
+        // 1) include at most one strong weather-based bank item
+        // 2) include at least one word-based and one quote-based dynamic challenge when possible
+        // 3) fill remaining slots with additional dynamic generation
+        do {
+            let weather = try await weatherService.fetchWeather(lat: lat, lon: lon)
+
+            // Score bank and pick best weather match (if any)
+            let scored: [ChallengeScore] = bank.map { ch in
+                var c = ch
+                let score = computeScore(for: ch, weather: weather)
+                // attach a compact weather explanation for bank items
+                let weatherText = "\(weather.weatherCondition), \(Int(weather.temperature))°F"
+                c.recommendationExplanation = "Weather-based: \(weatherText); streak=\(streak)"
+                return ChallengeScore(challenge: c, score: score)
+            }.filter { !excludeIDs.contains($0.challenge.id) }
+
+            var results: [Challenge] = []
+
+            if let best = scored.max(by: { $0.score < $1.score }), best.score > 0.6 {
+                results.append(best.challenge)
+            }
+
+            // Helper to append unique challenges
+            func appendUnique(_ candidate: Challenge) {
+                if results.contains(where: { $0.id == candidate.id }) { return }
+                if results.contains(where: { $0.title == candidate.title }) { return }
+                if excludeIDs.contains(candidate.id) { return }
+                results.append(candidate)
+            }
+
+            // Ensure at least one word and one quote dynamic challenge when possible
+            var attempts = 0
+            var needWord = true
+            var needQuote = true
+            while results.count < limit && attempts < 20 {
+                attempts += 1
+                let dyn: Challenge
+                if needWord {
+                    dyn = await DynamicChallengeService.shared.generateRandomWordChallenge()
+                } else if needQuote {
+                    dyn = await DynamicChallengeService.shared.generateQuoteChallenge()
+                } else {
+                    // alternate generation for variety
+                    dyn = await DynamicChallengeService.shared.generateDynamicChallenge()
+                }
+
+                // simple classification and clearer explanation
+                var candidate = dyn
+                let titleLower = candidate.title.lowercased()
+                if titleLower.contains("explore a word") {
+                    // extract word from title (after ':') or from description
+                    let word: String
+                    if let idx = candidate.title.firstIndex(of: ":") {
+                        word = String(candidate.title[candidate.title.index(after: idx)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    } else if let found = candidate.description.components(separatedBy: ":").last {
+                        word = found.trimmingCharacters(in: .whitespacesAndNewlines)
+                    } else { word = "word" }
+                    candidate.recommendationExplanation = "Word-based: try books related to \"\(word)\""
+                    appendUnique(candidate)
+                    needWord = false
+                } else if titleLower.contains("quote") || titleLower.contains("inspired by") {
+                    // extract a short excerpt from description
+                    var excerpt = candidate.description
+                    let marker = "Read a book inspired by this quote: "
+                    if candidate.description.contains(marker), let range = candidate.description.range(of: marker) {
+                        excerpt = String(candidate.description[range.upperBound...])
                     }
-                    attempts += 1
+                    let snippet = excerpt.count > 80 ? String(excerpt.prefix(77)) + "..." : excerpt
+                    candidate.recommendationExplanation = "Quote-based: inspired by \"\(snippet)\""
+                    appendUnique(candidate)
+                    needQuote = false
+                } else {
+                    candidate.recommendationExplanation = "Dynamic suggestion"
+                    appendUnique(candidate)
                 }
             }
 
-            // Build explanations per challenge and trim to requested limit
-            let explained = rec.prefix(limit).map { ch -> Challenge in
-            var c = ch
-            let weatherText = "weather=\(c.recommendedConditions?.weather ?? "any"), tempRange=\(String(describing: c.recommendedConditions?.minTemperature))..\(String(describing: c.recommendedConditions?.maxTemperature))"
-            let randomnessNote = "random factor used"
-            let streakNote = "streak=\(streak)"
-            c.recommendationExplanation = "Recommended because of: \(weatherText); \(randomnessNote); \(streakNote)"
-            return c
-        }
+            // If still short, fill from remaining bank highest scores (non-excluded)
+            if results.count < limit {
+                let remainingBank = scored.map { $0 }.sorted(by: { $0.score > $1.score })
+                for s in remainingBank {
+                    if results.count >= limit { break }
+                    appendUnique(s.challenge)
+                }
+            }
 
-        return Array(explained)
+            // Ensure final size and return
+            return Array(results.prefix(limit))
+        } catch {
+            // On error, fall back to simple dynamic generation
+            var fallback: [Challenge] = []
+            var attempts = 0
+            while fallback.count < limit && attempts < 20 {
+                let d = await DynamicChallengeService.shared.generateDynamicChallenge()
+                if !fallback.contains(where: { $0.title == d.title }) { fallback.append(d) }
+                attempts += 1
+            }
+            return Array(fallback.prefix(limit))
+        }
     }
 
     private func computeScore(for challenge: Challenge, weather: WeatherInfo) -> Double {
