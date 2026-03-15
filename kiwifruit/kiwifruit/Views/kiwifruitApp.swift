@@ -6,14 +6,17 @@ struct kiwifruitApp: App {
     // observe the same source-of-truth instances.
     private let postsStore = PostsStore()
     private let sessionStore = SessionStore()
+    private let userPreferencesStore = UserPreferencesStore(
+        repository: UserDefaultsUserPreferencesRepository()
+    )
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(\.postsStore, postsStore)
                 .environment(\.sessionStore, sessionStore)
+                .environment(\.userPreferencesStore, userPreferencesStore)
         }
     }
 }
 
-// Removed debug-only MockAPIClient override so app uses REST client by default.
