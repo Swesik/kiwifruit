@@ -9,6 +9,7 @@ enum FocusSessionStatus {
     case completed
 }
 
+/// Manages the state and timing of a single in-app focus reading session.
 @Observable
 @MainActor
 final class FocusSessionStore {
@@ -24,9 +25,7 @@ final class FocusSessionStore {
         status = .active
         elapsedSeconds = 0
 
-        timerTask = Task { [weak self] in
-            guard let self else { return }
-
+        timerTask = Task {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
 
@@ -34,8 +33,8 @@ final class FocusSessionStore {
                     break
                 }
 
-                if self.status == .active {
-                    self.elapsedSeconds += 1
+                if status == .active {
+                    elapsedSeconds += 1
                 }
             }
         }
