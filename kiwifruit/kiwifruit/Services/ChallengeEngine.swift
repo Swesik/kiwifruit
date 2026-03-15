@@ -27,12 +27,35 @@ final class ChallengeEngine {
     func recommended(from bank: [Challenge], latitude: Double = 37.7749, longitude: Double = -122.4194) async -> [Challenge] {
         do {
             let weather = try await weatherService.fetchWeather(lat: latitude, lon: longitude)
-            let scored = bank.map { (challenge) -> ChallengeScore in
+            // compute detailed scoring and explanation for each challenge
+            let scoredWithExplanation: [ChallengeScore] = bank.map { challenge in
                 let score = computeScore(for: challenge, weather: weather)
-                return ChallengeScore(challenge: challenge, score: score)
+
+                var explanationParts: [String] = []
+                explanationParts.append("weather: \(weather.weatherCondition) (\(Int(weather.temperature))°F)")
+                if weather.rainProbability > 0.0 { explanationParts.append("rainProb: \(String(format: "%.2f", weather.rainProbability))") }
+                explanationParts.append("randomness included")
+                explanationParts.append("streak: \(streak)")
+
+                let explanation = "Recommended because " + explanationParts.joined(separator: ", ") + "."
+
+                var c = challenge
+                c.recommendationExplanation = explanation
+
+                return ChallengeScore(challenge: c, score: score)
             }
 
-            let top = scored.sorted { $0.score > $1.score }.prefix(5).map { $0.challenge }
+            var top = scoredWithExplanation.sorted { $0.score > $1.score }.prefix(5).map { $0.challenge }
+
+            // fill with dynamic challenges if fewer than requested
+            if top.count < 5 {
+                let need = 5 - top.count
+                for _ in 0..<need {
+                    let dyn = await DynamicChallengeService.shared.generateDynamicChallenge()
+                    top.append(dyn)
+                }
+            }
+
             return Array(top)
         } catch {
             return Array(bank.shuffled().prefix(4))
@@ -42,8 +65,17 @@ final class ChallengeEngine {
     // Compatibility helper used by ViewModel
     func recommend(limit: Int = 4, lat: Double = 37.7749, lon: Double = -122.4194) async -> [Challenge] {
         let rec = await recommended(from: bank, latitude: lat, longitude: lon)
-        // ensure we only return requested limit
-        return Array(rec.prefix(limit))
+        // Build explanations per challenge
+        let explained = rec.prefix(limit).map { ch -> Challenge in
+            var c = ch
+            let weatherText = "weather=\(c.recommendedConditions?.weather ?? "any"), tempRange=\(String(describing: c.recommendedConditions?.minTemperature))..\(String(describing: c.recommendedConditions?.maxTemperature))"
+            let randomnessNote = "random factor used"
+            let streakNote = "streak=\(streak)"
+            c.recommendationExplanation = "Recommended because of: \(weatherText); \(randomnessNote); \(streakNote)"
+            return c
+        }
+
+        return Array(explained)
     }
 
     private func computeScore(for challenge: Challenge, weather: WeatherInfo) -> Double {

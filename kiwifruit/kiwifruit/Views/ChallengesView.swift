@@ -4,14 +4,22 @@ struct ChallengesView: View {
     @State private var vm = ChallengeViewModel()
     @State private var selected: Challenge? = nil
     @State private var showDetail = false
+    @State private var showLimitAlert = false
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 12) {
-                HStack {
-                    Text("Challenges").font(.largeTitle).bold()
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading) {
+                        Text("Challenges").font(.largeTitle).bold()
+                        Text("Total Points: \(vm.totalPoints)").font(.subheadline).foregroundColor(.secondary)
+                    }
                     Spacer()
-                    Text("\(vm.streak) day streak").font(.footnote).padding(8).background(Capsule().fill(Color.blue.opacity(0.2)))
+                    VStack(alignment: .trailing) {
+                        Text("\(vm.streak) day streak").font(.footnote).padding(8).background(Capsule().fill(Color.blue.opacity(0.2)))
+                        Text("\(vm.totalPoints) XP").font(.caption2).padding(6).background(Capsule().fill(Color.orange.opacity(0.2)))
+                        NavigationLink("Completed", destination: CompletedChallengesView(viewModel: vm))
+                    }
                 }
                 .padding([.horizontal, .top])
 
@@ -22,10 +30,12 @@ struct ChallengesView: View {
                             Text("No active challenges. Explore Discover More below!").foregroundColor(.secondary).padding(.horizontal)
                         } else {
                             ForEach(vm.activeChallenges) { challenge in
-                                Button { selected = challenge; showDetail = true } label: {
-                                    ChallengeCardView(challenge: challenge, actionTitle: "View", action: {}, viewAction: {})
-                                }
-                                .buttonStyle(.plain)
+                                    ChallengeCardView(challenge: challenge) {
+                                        // action -> complete when accepted
+                                        vm.complete(challenge)
+                                    } viewAction: {
+                                        selected = challenge; showDetail = true
+                                    }
                                 .padding(.horizontal)
                             }
                         }
@@ -34,8 +44,10 @@ struct ChallengesView: View {
 
                         Text("Discover More").font(.title2).bold().padding(.horizontal)
                         ForEach(vm.recommended) { challenge in
-                            ChallengeCardView(challenge: challenge, actionTitle: "Join Now") {
-                                vm.join(challenge)
+                            ChallengeCardView(challenge: challenge) {
+                                // action -> accept
+                                let success = vm.accept(challenge)
+                                if !success { showLimitAlert = true }
                             } viewAction: {
                                 selected = challenge; showDetail = true
                             }
@@ -46,9 +58,14 @@ struct ChallengesView: View {
                 }
             }
             .navigationDestination(isPresented: $showDetail) {
-                if let c = selected { ChallengeDetailView(viewModel: vm, challenge: c) }
+                if let c = selected { ChallengeDetailView(viewModel: vm, challengeId: c.id) }
             }
             .onAppear { Task { await vm.loadRecommendations() } }
+            .alert("Maximum active challenges reached", isPresented: $showLimitAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("You can have up to 3 active challenges. Abandon an active challenge to accept a new one.")
+            }
         }
     }
 }

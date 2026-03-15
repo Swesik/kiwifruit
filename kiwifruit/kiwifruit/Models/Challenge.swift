@@ -1,5 +1,11 @@
 import Foundation
 
+enum ChallengeState: String, Codable {
+    case available
+    case accepted
+    case completed
+}
+
 struct RecommendedConditions: Codable, Equatable {
     var weather: String?
     var minTemperature: Double?
@@ -23,8 +29,10 @@ struct Challenge: Identifiable, Codable, Equatable {
     var progress: Double
     var rewardXP: Int
     var recommendedConditions: RecommendedConditions?
+    var state: ChallengeState
+    var recommendationExplanation: String?
 
-    init(id: UUID = UUID(), title: String, description: String, category: String = "general", difficulty: Int = 1, progress: Double = 0.0, rewardXP: Int = 10, recommendedConditions: RecommendedConditions? = nil) {
+    init(id: UUID = UUID(), title: String, description: String, category: String = "general", difficulty: Int = 1, progress: Double = 0.0, rewardXP: Int = 10, recommendedConditions: RecommendedConditions? = nil, state: ChallengeState = .available, recommendationExplanation: String? = nil) {
         self.id = id
         self.title = title
         self.description = description
@@ -33,5 +41,7 @@ struct Challenge: Identifiable, Codable, Equatable {
         self.progress = progress
         self.rewardXP = rewardXP
         self.recommendedConditions = recommendedConditions
+        self.state = state
+        self.recommendationExplanation = recommendationExplanation
     }
 }
