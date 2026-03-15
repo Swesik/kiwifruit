@@ -77,9 +77,8 @@ final class ChallengeEngine {
 
     // Compatibility helper used by ViewModel
     func recommend(limit: Int = 4, lat: Double = 37.7749, lon: Double = -122.4194, excludeIDs: Set<UUID> = []) async -> [Challenge] {
-        let rec = await recommended(from: bank, latitude: lat, longitude: lon, excludeIDs: excludeIDs)
         // Build explanations per challenge
-            var rec = await recommended(from: bank, latitude: lat, longitude: lon, excludeIDs: excludeIDs)
+        var rec = await recommended(from: bank, latitude: lat, longitude: lon, excludeIDs: excludeIDs)
             // If the engine returned fewer than requested, generate additional dynamic challenges to fill the gap
             if rec.count < limit {
                 var attempts = 0
