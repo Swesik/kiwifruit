@@ -6,12 +6,14 @@ struct kiwifruitApp: App {
     // observe the same source-of-truth instances.
     private let postsStore = PostsStore()
     private let sessionStore = SessionStore()
+    private let focusSessionStore = FocusSessionStore()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(\.postsStore, postsStore)
                 .environment(\.sessionStore, sessionStore)
+                .environment(\.focusSessionStore, focusSessionStore)
         }
     }
 }
