@@ -12,36 +12,57 @@ final class ChallengeViewModel {
     private let engine: ChallengeEngine = .shared
     private var bank: [Challenge] = []
     private let totalPointsKey = "kiwifruit.totalPoints"
-    private let completedIDsKey = "kiwifruit.completedChallengeIDs"
+    private let completedIDsKey = "kiwifruit.completedChallengeIDs" // legacy fallback
+    private let completedChallengesKey = "kiwifruit.completedChallenges_v1"
 
     init(streak: Int = 1) {
         self.streak = streak
         self.bank = Self.defaultBank()
         self.activeChallenges = []
-        // load persisted points and completed ids
+        // load persisted points and completed challenges (full objects preferred)
         if let pts = UserDefaults.standard.object(forKey: totalPointsKey) as? Int {
             totalPoints = pts
         }
-        if let ids = UserDefaults.standard.array(forKey: completedIDsKey) as? [String] {
+
+        let decoder = JSONDecoder()
+        if let data = UserDefaults.standard.data(forKey: completedChallengesKey), let decoded = try? decoder.decode([Challenge].self, from: data) {
+            completedChallenges = decoded
+            // ensure state/progress
+            for idx in completedChallenges.indices { completedChallenges[idx].state = .completed; completedChallenges[idx].progress = 1.0 }
+            // ensure totalPoints matches persisted or recompute
+            if totalPoints == 0 { totalPoints = completedChallenges.reduce(0) { $0 + $1.rewardXP } }
+        } else if let ids = UserDefaults.standard.array(forKey: completedIDsKey) as? [String] {
+            // legacy fallback: reconstruct from bank by IDs
             let uuidSet = Set(ids.compactMap { UUID(uuidString: $0) })
-            // mark completed in bank
             let completed = bank.filter { uuidSet.contains($0.id) }
             completedChallenges = completed.map { var c = $0; c.state = .completed; c.progress = 1.0; return c }
+            if totalPoints == 0 { totalPoints = completedChallenges.reduce(0) { $0 + $1.rewardXP } }
         }
     }
     
 
     func loadRecommendations() async {
         let rec = await engine.recommend(limit: 4)
-        // reconcile state with accepted/completed
-        var mapped = rec.map { (ch) -> Challenge in
+        // reconcile state with accepted/completed and filter out completed/active
+        let completedIDs = Set(completedChallenges.map { $0.id })
+        let activeIDs = Set(activeChallenges.map { $0.id })
+
+        var mapped = rec.compactMap { (ch) -> Challenge? in
+            if completedIDs.contains(ch.id) { return nil }
             var c = ch
-            if completedChallenges.contains(where: { $0.id == c.id }) { c.state = .completed; c.progress = 1.0 }
-            else if activeChallenges.contains(where: { $0.id == c.id }) { c.state = .accepted }
+            if activeIDs.contains(c.id) { c.state = .accepted }
             else { c.state = .available }
             return c
         }
+
+        // Ensure we don't show more than 4 recommended
+        if mapped.count > 4 { mapped = Array(mapped.prefix(4)) }
         self.recommended = mapped
+    }
+
+    /// Refresh recommendations explicitly (get a new set)
+    func refreshRecommendations() async {
+        await loadRecommendations()
     }
 
     /// Attempts to accept a challenge. Returns true on success, false if limit reached or already accepted.
@@ -64,6 +85,7 @@ final class ChallengeViewModel {
     }
 
     func abandon(_ challenge: Challenge) {
+        // only allow abandoning if currently active/accepted
         activeChallenges.removeAll { $0.id == challenge.id }
     }
 
@@ -83,12 +105,21 @@ final class ChallengeViewModel {
         totalPoints += c.rewardXP
         // persist
         persistTotals()
+        // remove from recommended/discover so it doesn't reappear
+        recommended.removeAll { $0.id == c.id }
     }
 
     private func persistTotals() {
         UserDefaults.standard.set(totalPoints, forKey: totalPointsKey)
-        let ids = completedChallenges.map { $0.id.uuidString }
-        UserDefaults.standard.set(ids, forKey: completedIDsKey)
+        // persist full completed challenge objects
+        let encoder = JSONEncoder()
+        if let data = try? encoder.encode(completedChallenges) {
+            UserDefaults.standard.set(data, forKey: completedChallengesKey)
+        } else {
+            // fallback to legacy ID storage
+            let ids = completedChallenges.map { $0.id.uuidString }
+            UserDefaults.standard.set(ids, forKey: completedIDsKey)
+        }
     }
 
     private static func defaultBank() -> [Challenge] {

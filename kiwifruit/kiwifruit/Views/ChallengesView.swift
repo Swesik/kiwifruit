@@ -42,7 +42,15 @@ struct ChallengesView: View {
 
                         Divider().padding(.vertical)
 
-                        Text("Discover More").font(.title2).bold().padding(.horizontal)
+                        HStack {
+                            Text("Discover More").font(.title2).bold()
+                            Spacer()
+                            Button(action: { Task { await vm.refreshRecommendations() } }) {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        .padding(.horizontal)
                         ForEach(vm.recommended) { challenge in
                             ChallengeCardView(challenge: challenge) {
                                 // action -> accept

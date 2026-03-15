@@ -38,12 +38,11 @@ struct ChallengeDetailView: View {
                         } else if challenge.state == .accepted {
                             Button { viewModel.complete(challenge) } label: { Text("Complete").frame(maxWidth: .infinity) }
                                 .buttonStyle(.borderedProminent)
+                            Button { viewModel.abandon(challenge) } label: { Text("Abandon").frame(maxWidth: .infinity) }
+                                .buttonStyle(.bordered)
                         } else {
                             Text("Already completed").frame(maxWidth: .infinity)
                         }
-
-                        Button { viewModel.abandon(challenge) } label: { Text("Abandon").frame(maxWidth: .infinity) }
-                            .buttonStyle(.bordered)
                     }
                 }
                 Spacer()
