@@ -1,21 +1,11 @@
 import SwiftUI
 
-enum FocusSessionStatus {
-    case idle
-    case active
-    case paused
-    case completed
-}
-
 struct FocusView: View {
-    @State private var sessionStatus: FocusSessionStatus = .idle
-    @State private var sessionSeconds = 0
-    @State private var completedSeconds = 0
-    @State private var timer: Timer?
-    
+    @Environment(\.focusSessionStore) private var sessionStore: FocusSessionStore
+
     var body: some View {
         VStack(spacing: 0) {
-            switch sessionStatus {
+            switch sessionStore.status {
             case .idle:
                 startSessionView
             case .active, .paused:
@@ -40,7 +30,7 @@ struct FocusView: View {
     
     private var startSessionButton: some View {
         Button(action: {
-            startSession()
+            sessionStore.startSession()
         }) {
             Text("Start\nSession")
                 .font(.largeTitle)
@@ -107,7 +97,7 @@ struct FocusView: View {
             Text(formattedTime)
                 .font(.system(size: 80, weight: .bold))
             
-            if sessionStatus == .paused {
+            if sessionStore.status == .paused {
                 Text("Get back to it!")
                     .font(.title3)
                     .foregroundColor(.secondary)
@@ -123,14 +113,14 @@ struct FocusView: View {
     private var sessionControls: some View {
         VStack(spacing: 16) {
             HStack(spacing: 20) {
-                Button(sessionStatus == .paused ? "Resume" : "Pause") {
-                    togglePause()
+                Button(sessionStore.status == .paused ? "Resume" : "Pause") {
+                    sessionStore.togglePause()
                 }
                 .buttonStyle(.bordered)
                 .frame(width: 140, height: 50)
                 
                 Button("Stop") {
-                    stopSession()
+                    sessionStore.stopSession()
                 }
                 .buttonStyle(.bordered)
                 .frame(width: 140, height: 50)
@@ -168,7 +158,7 @@ struct FocusView: View {
     private var completionHeader: some View {
         HStack {
             Button("close") {
-                closeCompletion()
+                sessionStore.closeCompletion()
             }
             .buttonStyle(.bordered)
             Spacer()
@@ -220,54 +210,15 @@ struct FocusView: View {
     }
     
     private var formattedTime: String {
-        let minutes = sessionSeconds / 60
-        let seconds = sessionSeconds % 60
+        let minutes = sessionStore.elapsedSeconds / 60
+        let seconds = sessionStore.elapsedSeconds % 60
         return String(format: "%d:%02d", minutes, seconds)
     }
     
     private var formattedCompletedTime: String {
-        let minutes = completedSeconds / 60
-        let seconds = completedSeconds % 60
+        let minutes = sessionStore.completedSeconds / 60
+        let seconds = sessionStore.completedSeconds % 60
         return String(format: "%d:%02d", minutes, seconds)
-    }
-    
-    private func startSession() {
-        sessionStatus = .active
-        sessionSeconds = 0
-        
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            sessionSeconds += 1
-        }
-    }
-    
-    private func togglePause() {
-        if sessionStatus == .paused {
-            // Resume the timer
-            sessionStatus = .active
-            timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-                sessionSeconds += 1
-            }
-        } else {
-            // Pause the timer
-            sessionStatus = .paused
-            timer?.invalidate()
-            timer = nil
-        }
-    }
-    
-    private func stopSession() {
-        timer?.invalidate()
-        timer = nil
-        
-        // Save the completed time and show completion view
-        completedSeconds = sessionSeconds
-        sessionStatus = .completed
-    }
-    
-    private func closeCompletion() {
-        sessionStatus = .idle
-        sessionSeconds = 0
-        completedSeconds = 0
     }
 }
 
