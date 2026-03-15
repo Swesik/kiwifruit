@@ -1,29 +1,32 @@
 import Foundation
+import Observation
 
-@MainActor
-final class ChallengeViewModel: ObservableObject {
-    @Published var activeChallenges: [Challenge] = []
-    @Published var recommended: [Challenge] = []
-    @Published var streak: Int = 1
+@Observable @MainActor
+final class ChallengeViewModel {
+    var activeChallenges: [Challenge] = []
+    var recommended: [Challenge] = []
+    var streak: Int = 1
 
-    private let engine: ChallengeEngine
+    private let engine: ChallengeEngine = .shared
     private var bank: [Challenge] = []
 
-    init(engine: ChallengeEngine = ChallengeEngine(), streak: Int = 1) {
-        self.engine = engine
+    init(streak: Int = 1) {
         self.streak = streak
         self.bank = Self.defaultBank()
         self.activeChallenges = []
     }
 
     func loadRecommendations() async {
-        let rec = await engine.recommended(from: bank)
-        DispatchQueue.main.async { self.recommended = rec }
+        let rec = await engine.recommend(limit: 4)
+        self.recommended = rec
     }
 
     func join(_ challenge: Challenge) {
         if !activeChallenges.contains(where: { $0.id == challenge.id }) {
-            activeChallenges.append(challenge)
+            var c = challenge
+            c.progress = 0.0
+            activeChallenges.append(c)
+            recommended.removeAll { $0.id == c.id }
         }
     }
 

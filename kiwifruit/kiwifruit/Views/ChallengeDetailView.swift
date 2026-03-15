@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ChallengeDetailView: View {
-    @ObservedObject var viewModel: ChallengeViewModel
+    @Bindable var viewModel: ChallengeViewModel
     var challenge: Challenge
 
     var body: some View {
