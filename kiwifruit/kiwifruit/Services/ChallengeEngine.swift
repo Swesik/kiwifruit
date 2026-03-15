@@ -164,7 +164,8 @@ final class ChallengeEngine {
                 }
             }
 
-            // Ensure final size and return
+            // Logging for diagnostics
+            print("[ChallengeEngine] returning \(results.count) recommendations: \(results.map { $0.title })")
             return Array(results.prefix(limit))
         } catch {
             // On error, fall back to simple dynamic generation
@@ -175,6 +176,7 @@ final class ChallengeEngine {
                 if !fallback.contains(where: { $0.title == d.title }) { fallback.append(d) }
                 attempts += 1
             }
+            print("[ChallengeEngine] fallback returning \(fallback.count) dynamic recommendations: \(fallback.map { $0.title })")
             return Array(fallback.prefix(limit))
         }
     }

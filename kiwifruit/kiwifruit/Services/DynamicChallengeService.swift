@@ -55,10 +55,13 @@ final class DynamicChallengeService {
         }
 
         let xp = randomXP()
-        let title = "Inspired by a quote"
+        // create a short excerpt for title so quote-based challenges have unique titles
+        let excerpt = quoteText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let short = excerpt.count > 30 ? String(excerpt.prefix(27)) + "..." : excerpt
+        let title = "Inspired: \"\(short)\""
         let desc = "Read a book inspired by this quote: \(quoteText). Dynamic XP: \(xp)."
         var c = Challenge(title: title, description: desc, category: "dynamic", difficulty: 1, progress: 0.0, rewardXP: xp, recommendedConditions: nil, state: .available)
-        c.recommendationExplanation = "Generated via Quotes API (excerpt)."
+        c.recommendationExplanation = "Quote-based suggestion"
         return c
     }
 

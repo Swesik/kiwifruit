@@ -46,28 +46,24 @@ final class ChallengeViewModel {
         let activeIDs = Set(activeChallenges.map { $0.id })
         let exclude = completedIDs.union(activeIDs)
 
-        let rec = await engine.recommend(limit: 4, excludeIDs: exclude)
+        // ask for extra candidates to increase chances of getting 4 after filtering
+        let rec = await engine.recommend(limit: 6, excludeIDs: exclude)
+        print("[ChallengeViewModel] excludeIDs=\(exclude.map { $0.uuidString })  engine returned \(rec.count) candidates")
+        print("[ChallengeViewModel] engine titles=\(rec.map { $0.title })")
         // reconcile state with accepted/completed and filter out completed/active
-        // avoid returning challenges that match completed or active content (title/description)
+        // avoid returning exact duplicates by id or title (be less aggressive than substring matching)
         let completedTitles = Set(completedChallenges.map { $0.title.lowercased() })
-        let completedDescs = completedChallenges.map { $0.description.lowercased() }
-
         let activeTitles = Set(activeChallenges.map { $0.title.lowercased() })
-        let activeDescs = activeChallenges.map { $0.description.lowercased() }
 
         var mapped = rec.compactMap { (ch) -> Challenge? in
             // exclude by id
             if completedIDs.contains(ch.id) { return nil }
             if activeIDs.contains(ch.id) { return nil }
 
-            // exclude by title or description match to avoid regenerated duplicates
+            // exclude exact title matches only (avoid over-filtering by description substrings)
             let titleLower = ch.title.lowercased()
-            let descLower = ch.description.lowercased()
             if completedTitles.contains(titleLower) { return nil }
-            if completedDescs.contains(where: { descLower.contains($0) || $0.contains(descLower) }) { return nil }
-
             if activeTitles.contains(titleLower) { return nil }
-            if activeDescs.contains(where: { descLower.contains($0) || $0.contains(descLower) }) { return nil }
 
             var c = ch
             if activeIDs.contains(c.id) { c.state = .accepted }
@@ -75,8 +71,21 @@ final class ChallengeViewModel {
             return c
         }
 
-        // Ensure we don't show more than 4 recommended
+        // If still short, generate additional dynamic challenges to fill to 4
+        if mapped.count < 4 {
+            var attempts = 0
+            while mapped.count < 4 && attempts < 20 {
+                let dyn = await DynamicChallengeService.shared.generateDynamicChallenge()
+                if exclude.contains(dyn.id) || mapped.contains(where: { $0.title == dyn.title }) { attempts += 1; continue }
+                var c = dyn
+                c.state = .available
+                mapped.append(c)
+                attempts += 1
+            }
+        }
+
         if mapped.count > 4 { mapped = Array(mapped.prefix(4)) }
+        print("[ChallengeViewModel] final recommended count=\(mapped.count) titles=\(mapped.map { $0.title })")
         self.recommended = mapped
     }
 
