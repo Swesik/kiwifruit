@@ -15,48 +15,51 @@ struct ChallengeDetailView: View {
     var body: some View {
         VStack(spacing: 16) {
             if let challenge = challenge {
-                Text(challenge.title).font(.largeTitle).bold()
-                Text(challenge.description).font(.body).foregroundColor(.secondary)
-                if let expl = challenge.recommendationExplanation {
-                    Text(expl).font(.caption).foregroundColor(.gray)
-                }
-
-                ProgressView(value: challenge.progress)
-                .padding()
-
-            Text(feedbackText()).font(.subheadline).padding().background(Color(UIColor.tertiarySystemBackground)).cornerRadius(8)
-
-            HStack(spacing: 16) {
-                if let challenge = challenge {
-                    if challenge.state == .available {
-                        Button(action: { viewModel.accept(challenge) }) { Text("Accept").frame(maxWidth: .infinity) }
-                            .buttonStyle(.borderedProminent)
-                    } else if challenge.state == .accepted {
-                        Button(action: { viewModel.complete(challenge) }) { Text("Complete").frame(maxWidth: .infinity) }
-                            .buttonStyle(.borderedProminent)
-                    } else {
-                        Text("Already completed").frame(maxWidth: .infinity)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(challenge.title).font(.largeTitle).bold()
+                    Text(challenge.description).font(.body).foregroundColor(.secondary)
+                    if let expl = challenge.recommendationExplanation {
+                        Text(expl).font(.caption).foregroundColor(.gray)
                     }
 
-                    Button(action: { viewModel.abandon(challenge) }) {
-                        Text("Abandon").frame(maxWidth: .infinity)
+                    ProgressView(value: challenge.progress)
+                        .padding()
+
+                    Text(feedbackText(for: challenge))
+                        .font(.subheadline)
+                        .padding()
+                        .background(Color(UIColor.tertiarySystemBackground))
+                        .cornerRadius(8)
+
+                    HStack(spacing: 16) {
+                        if challenge.state == .available {
+                            Button { viewModel.accept(challenge) } label: { Text("Accept").frame(maxWidth: .infinity) }
+                                .buttonStyle(.borderedProminent)
+                        } else if challenge.state == .accepted {
+                            Button { viewModel.complete(challenge) } label: { Text("Complete").frame(maxWidth: .infinity) }
+                                .buttonStyle(.borderedProminent)
+                        } else {
+                            Text("Already completed").frame(maxWidth: .infinity)
+                        }
+
+                        Button { viewModel.abandon(challenge) } label: { Text("Abandon").frame(maxWidth: .infinity) }
+                            .buttonStyle(.bordered)
                     }
-                    .buttonStyle(.bordered)
                 }
-            }
-            Spacer()
+                Spacer()
             } else {
                 Text("Challenge not found").foregroundColor(.secondary)
                 Spacer()
             }
+        }
         .padding()
     }
-
-    private func feedbackText() -> String {
+    private func feedbackText(for challenge: Challenge) -> String {
         if challenge.progress >= 1.0 { return "Nice! You've completed this challenge — claim your XP." }
         if challenge.progress > 0.5 { return "You're more than halfway there — keep the momentum!" }
         if challenge.progress > 0.0 { return "Good start — a little session each day adds up." }
-        return "This challenge fits your routine — try starting with a short session." }
+        return "This challenge fits your routine — try starting with a short session." 
+    }
 }
 
 struct ChallengeDetailView_Previews: PreviewProvider {
