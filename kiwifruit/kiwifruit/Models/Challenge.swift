@@ -1,6 +1,6 @@
 import Foundation
 
-struct RecommendedConditions: Codable {
+struct RecommendedConditions: Codable, Equatable {
     var weather: String?
     var minTemperature: Double?
     var maxTemperature: Double?
