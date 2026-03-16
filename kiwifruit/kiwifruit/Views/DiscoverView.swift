@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DiscoverView: View {
     @Bindable var bookSearchViewModel: BookSearchViewModel
+    @Bindable var bookScanViewModel: BookScanViewModel
 
     var body: some View {
         List {
@@ -28,12 +29,34 @@ struct DiscoverView: View {
                         bookSearchViewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     )
                 }
+                .listRowSeparator(.hidden)
 
-                if bookSearchViewModel.isSearching {
+                Button {
+                    bookScanViewModel.startCamera()
+                } label: {
+                    Label("Take Photo of Barcode/Title to Search", systemImage: "camera.fill")
+                        .font(.headline)
+                        .foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color(red: 0.78, green: 0.93, blue: 0.78))
+                .padding(.top, 10)
+
+                if bookSearchViewModel.isSearching || bookScanViewModel.isProcessing {
                     ProgressView()
                 }
 
                 if let msg = bookSearchViewModel.errorMessage {
+                    Text(msg)
+                }
+
+                if let msg = bookScanViewModel.errorMessage {
+                    Text(msg)
+                }
+
+                if let msg = bookScanViewModel.statusMessage {
                     Text(msg)
                 }
             }
@@ -66,5 +89,20 @@ struct DiscoverView: View {
             }
         }
         .navigationTitle("Discover")
+        .sheet(
+            isPresented: Binding(
+                get: { bookScanViewModel.isShowingCamera },
+                set: { bookScanViewModel.isShowingCamera = $0 }
+            )
+        ) {
+            CameraPickerView { image in
+                Task {
+                    if let capturedText = await bookScanViewModel.processCapturedImage(image) {
+                        bookSearchViewModel.query = capturedText
+                        await bookSearchViewModel.submit()
+                    }
+                }
+            }
+        }
     }
 }

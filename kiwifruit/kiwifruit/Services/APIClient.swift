@@ -26,6 +26,8 @@ protocol APIClientProtocol {
     func deleteComment(commentId: String) async throws -> Void
     func deletePost(_ postId: String) async throws -> Void
     func searchBooks(query: String) async throws -> [BookSearchResult]
+    func sendBookScan(barcode: String?, ocrText: String?) async throws -> BookScanResponse
+    
 }
 
 /// Simple in-memory/mock client used in previews and when no backend is configured.
@@ -82,6 +84,14 @@ final class MockAPIClient: APIClientProtocol {
                 isbn13: nil
             )
         ]
+    }
+    func sendBookScan(barcode: String?, ocrText: String?) async throws -> BookScanResponse {
+        try await Task.sleep(nanoseconds: 120 * 1_000_000)
+        return BookScanResponse(
+            status: "ok",
+            barcode: barcode,
+            ocrText: ocrText
+        )
     }
 }
 
@@ -349,10 +359,50 @@ final class RESTAPIClient: APIClientProtocol {
         decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode([BookSearchResult].self, from: data)
     }
+    func sendBookScan(barcode: String?, ocrText: String?) async throws -> BookScanResponse {
+        let url = baseURL.appendingPathComponent("/books/scan")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken {
+            req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        var body: [String: Any] = [:]
+        if let barcode {
+            body["barcode"] = barcode
+        }
+        if let ocrText {
+            body["ocrText"] = ocrText
+        }
+
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            let bodyText = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+            print("sendBookScan failed HTTP \(http.statusCode): \(bodyText)")
+            throw URLError(.badServerResponse)
+        }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(BookScanResponse.self, from: data)
+    }
 }
 
+//enum AppAPI {
+//    /// Default shared client. Swap to `RESTAPIClient(baseURL:)` when you have a backend.
+//    static var shared: APIClientProtocol = RESTAPIClient(baseURL: URL(string: "http://10.0.0.200:5001")!)
+//        //URL(string: "http://127.0.0.1:5001")!)
+//}
 enum AppAPI {
-    /// Default shared client. Swap to `RESTAPIClient(baseURL:)` when you have a backend.
-    static var shared: APIClientProtocol = RESTAPIClient(baseURL: URL(string: "http://127.0.0.1:5001")!)
+    static var shared: APIClientProtocol = {
+        let url = URL(string: "http://10.0.0.200:5001")!
+        print("AppAPI using =", url.absoluteString)
+        return RESTAPIClient(baseURL: url)
+    }()
 }
 
