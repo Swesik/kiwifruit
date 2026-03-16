@@ -393,16 +393,10 @@ final class RESTAPIClient: APIClientProtocol {
     }
 }
 
-//enum AppAPI {
-//    /// Default shared client. Swap to `RESTAPIClient(baseURL:)` when you have a backend.
-//    static var shared: APIClientProtocol = RESTAPIClient(baseURL: URL(string: "http://10.0.0.200:5001")!)
-//        //URL(string: "http://127.0.0.1:5001")!)
-//}
 enum AppAPI {
-    static var shared: APIClientProtocol = {
-        let url = URL(string: "http://10.0.0.200:5001")!
-        print("AppAPI using =", url.absoluteString)
-        return RESTAPIClient(baseURL: url)
-    }()
+    /// Default shared client. Swap to `RESTAPIClient(baseURL:)` when you have a backend.
+    static var shared: APIClientProtocol = RESTAPIClient(baseURL:
+        URL(string: "http://127.0.0.1:5001")!)
 }
+
 
