@@ -16,7 +16,8 @@ final class ChallengeViewModel {
 
     init(streak: Int = 1) {
         self.streak = streak
-        self.bank = Self.defaultBank()
+        // Use the engine's canonical bank so IDs and titles remain stable
+        self.bank = engine.bank
         self.activeChallenges = []
         // load persisted points and completed ids
         if let pts = UserDefaults.standard.object(forKey: totalPointsKey) as? Int {
@@ -24,7 +25,7 @@ final class ChallengeViewModel {
         }
         if let ids = UserDefaults.standard.array(forKey: completedIDsKey) as? [String] {
             let uuidSet = Set(ids.compactMap { UUID(uuidString: $0) })
-            // mark completed in bank
+            // mark completed in bank (match by id)
             let completed = bank.filter { uuidSet.contains($0.id) }
             completedChallenges = completed.map { var c = $0; c.state = .completed; c.progress = 1.0; return c }
         }
@@ -36,12 +37,16 @@ final class ChallengeViewModel {
         // reconcile state with accepted/completed
         var mapped = rec.map { (ch) -> Challenge in
             var c = ch
-            if completedChallenges.contains(where: { $0.id == c.id }) { c.state = .completed; c.progress = 1.0 }
-            else if activeChallenges.contains(where: { $0.id == c.id }) { c.state = .accepted }
+            // match by id or title to avoid duplicate/discrepant IDs between banks
+            if completedChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) { c.state = .completed; c.progress = 1.0 }
+            else if activeChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) { c.state = .accepted }
             else { c.state = .available }
             return c
         }
-        self.recommended = mapped
+        // Ensure recommended doesn't include already accepted ones (by id or title)
+        self.recommended = mapped.filter { candidate in
+            !activeChallenges.contains(where: { $0.id == candidate.id || $0.title == candidate.title })
+        }
     }
 
     func accept(_ challenge: Challenge) -> Bool {
@@ -54,7 +59,8 @@ final class ChallengeViewModel {
         c.state = .accepted
         c.progress = 0.0
         activeChallenges.append(c)
-        recommended.removeAll { $0.id == c.id }
+        // Remove any recommended entries that match by id or title to avoid duplication in Discover
+        recommended.removeAll { $0.id == c.id || $0.title == c.title }
         return true
     }
 
@@ -83,6 +89,8 @@ final class ChallengeViewModel {
         totalPoints += c.rewardXP
         // persist
         persistTotals()
+        // ensure completed challenge is not shown in recommendations
+        recommended.removeAll { $0.id == c.id || $0.title == c.title }
     }
 
     private func persistTotals() {
@@ -91,14 +99,5 @@ final class ChallengeViewModel {
         UserDefaults.standard.set(ids, forKey: completedIDsKey)
     }
 
-    private static func defaultBank() -> [Challenge] {
-        return [
-            Challenge(title: "Morning Momentum", description: "Read 10 pages before 10am", category: "time", difficulty: 1, rewardXP: 20, recommendedConditions: RecommendedConditions(timeOfDay: "morning")),
-            Challenge(title: "Outdoor Reading", description: "Read outside for 15 minutes", category: "outdoor", difficulty: 2, rewardXP: 35, recommendedConditions: RecommendedConditions(weather: "Clear", minTemperature: 60)),
-            Challenge(title: "Night Owl", description: "Read after 9pm for 20 minutes", category: "time", difficulty: 2, rewardXP: 30, recommendedConditions: RecommendedConditions(timeOfDay: "night")),
-            Challenge(title: "Sprint Reader", description: "Read 25 pages in one session", category: "sprint", difficulty: 3, rewardXP: 50, recommendedConditions: RecommendedConditions()),
-            Challenge(title: "Cozy Tea Read", description: "Read 20 pages with tea while it's raining", category: "indoor", difficulty: 1, rewardXP: 25, recommendedConditions: RecommendedConditions(weather: "Rain")),
-            Challenge(title: "Lunchtime Bite", description: "Read during lunch for 15 minutes", category: "time", difficulty: 1, rewardXP: 15, recommendedConditions: RecommendedConditions(timeOfDay: "afternoon"))
-        ]
-    }
+    
 }

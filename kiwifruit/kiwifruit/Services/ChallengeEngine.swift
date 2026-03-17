@@ -8,7 +8,8 @@ struct ChallengeScore {
 final class ChallengeEngine {
     static let shared = ChallengeEngine()
 
-    private let bank: [Challenge] = [
+    // Public canonical bank so IDs remain stable across recommendations
+    let bank: [Challenge] = [
         Challenge(title: "Morning Momentum", description: "Read 10 pages before 10am", category: "time", difficulty: 1, rewardXP: 20, recommendedConditions: RecommendedConditions(timeOfDay: "morning")),
         Challenge(title: "Outdoor Reading", description: "Read outside for 15 minutes", category: "outdoor", difficulty: 2, rewardXP: 35, recommendedConditions: RecommendedConditions(weather: "Clear", minTemperature: 60)),
         Challenge(title: "Night Owl", description: "Read after 9pm for 20 minutes", category: "time", difficulty: 2, rewardXP: 30, recommendedConditions: RecommendedConditions(timeOfDay: "night")),
@@ -82,7 +83,45 @@ final class ChallengeEngine {
             }
         }
 
-        return enriched
+        var result: [Challenge] = enriched
+
+        // Dynamically generate some on-the-fly challenges using ApiNinjas (quotes/riddles)
+        // These are separate from the canonical bank and are meant to provide fresh, ephemeral discoverables.
+        var dynamic: [Challenge] = []
+        await withTaskGroup(of: Challenge?.self) { dynGroup in
+            // try two quotes
+            for _ in 0..<2 {
+                dynGroup.addTask {
+                    do {
+                        let q = try await ApiNinjasService.shared.fetchRandomQuote()
+                        let title = "Quote Prompt"
+                        let desc = "Reflect: \"\(q.quote)\""
+                        return Challenge(title: title, description: desc, category: "prompt", difficulty: 1, rewardXP: 10, recommendedConditions: nil)
+                    } catch {
+                        return nil
+                    }
+                }
+            }
+            // one riddle for higher difficulty
+            dynGroup.addTask {
+                do {
+                    let r = try await ApiNinjasService.shared.fetchRiddle()
+                    let title = "Riddle Challenge"
+                    let desc = "Solve: \(r.question)"
+                    return Challenge(title: title, description: desc, category: "puzzle", difficulty: 3, rewardXP: 40, recommendedConditions: nil)
+                } catch {
+                    return nil
+                }
+            }
+
+            for await maybe in dynGroup {
+                if let c = maybe { dynamic.append(c) }
+            }
+        }
+
+        // append dynamic items to the recommended set, but limit to 'limit'
+        result.append(contentsOf: dynamic)
+        return Array(result.prefix(limit))
     }
 
     private func computeScore(for challenge: Challenge, weather: WeatherInfo) -> Double {
