@@ -125,6 +125,77 @@ def _extract_text_and_title(item, chapter_number):
     return text, chapter_title
 
 
+def _write_chapter_file(item, chapter_number, epubid, db):
+    """Parse a single epub document item, write its text to disk, and insert a DB row.
+
+    :param item: An ebooklib document item.
+    :param chapter_number: 1-based chapter index.
+    :param epubid: The database ID of the epub record.
+    :param db: An open SQLite connection.
+    :returns: The path of the written ``.txt`` file, or ``None`` if the item
+              had no readable text.
+    """
+    parsed = _extract_text_and_title(item, chapter_number)
+    if parsed is None:
+        return None
+
+    text, chapter_title = parsed
+
+    txt_filename = f"{uuid.uuid4().hex}.txt"
+    txt_filepath = os.path.join(UPLOAD_FOLDER, txt_filename)
+    with open(txt_filepath, 'w', encoding='utf-8') as f:
+        f.write(text)
+
+    db.execute(
+        'INSERT INTO epub_chapters (epubid, chapter_number, title, filename) '
+        'VALUES (?, ?, ?, ?)',
+        (epubid, chapter_number, chapter_title, txt_filename)
+    )
+
+    return txt_filepath
+
+
+def _process_epub_spine(book, epubid, db):
+    """Walk the epub spine, writing each chapter to disk and inserting DB rows.
+
+    :param book: A parsed ebooklib ``EpubBook``.
+    :param epubid: The database ID of the epub record.
+    :param db: An open SQLite connection.
+    :returns: List of ``.txt`` file paths written (used for cleanup on failure).
+    """
+    chapter_files = []
+    chapter_number = 0
+
+    for item_id, _ in book.spine:
+        item = book.get_item_with_id(item_id)
+        if item is None:
+            continue
+        if item.get_type() != ebooklib.ITEM_DOCUMENT:
+            continue
+        if isinstance(item, epub_lib.EpubNav):
+            continue
+
+        txt_filepath = _write_chapter_file(item, chapter_number + 1, epubid, db)
+        if txt_filepath is None:
+            continue
+
+        chapter_number += 1
+        chapter_files.append(txt_filepath)
+
+    if chapter_number == 0:
+        db.execute(
+            'UPDATE epubs SET status = ?, error_message = ? WHERE epubid = ?',
+            ('FAILED', 'No readable chapters found in epub', epubid)
+        )
+    else:
+        db.execute(
+            'UPDATE epubs SET status = ? WHERE epubid = ?',
+            ('PARSED', epubid)
+        )
+
+    return chapter_files, chapter_number
+
+
 def _parse_epub_chapters(epubid, filepath):
     """Parse epub chapters in a background thread.
 
@@ -137,55 +208,13 @@ def _parse_epub_chapters(epubid, filepath):
     :param filepath: Path to the epub file on disk.
     """
     db = None
-    chapter_files = []  # track written files for cleanup on failure
+    chapter_files = []
     try:
         db = sqlite3.connect(DB_PATH)
         db.row_factory = sqlite3.Row
 
         book = epub_lib.read_epub(filepath, options={'ignore_ncx': True})
-
-        spine_ids = [item_id for item_id, _ in book.spine]
-
-        chapter_number = 0
-        for item_id in spine_ids:
-            item = book.get_item_with_id(item_id)
-            if item is None:
-                continue
-            if item.get_type() != ebooklib.ITEM_DOCUMENT:
-                continue
-            # Skip navigation documents (table of contents)
-            if isinstance(item, epub_lib.EpubNav):
-                continue
-
-            parsed = _extract_text_and_title(item, chapter_number + 1)
-            if parsed is None:
-                continue
-
-            chapter_number += 1
-            text, chapter_title = parsed
-
-            txt_filename = f"{uuid.uuid4().hex}.txt"
-            txt_filepath = os.path.join(UPLOAD_FOLDER, txt_filename)
-            with open(txt_filepath, 'w', encoding='utf-8') as f:
-                f.write(text)
-            chapter_files.append(txt_filepath)
-
-            db.execute(
-                'INSERT INTO epub_chapters (epubid, chapter_number, title, filename) '
-                'VALUES (?, ?, ?, ?)',
-                (epubid, chapter_number, chapter_title, txt_filename)
-            )
-
-        if chapter_number == 0:
-            db.execute(
-                'UPDATE epubs SET status = ?, error_message = ? WHERE epubid = ?',
-                ('FAILED', 'No readable chapters found in epub', epubid)
-            )
-        else:
-            db.execute(
-                'UPDATE epubs SET status = ? WHERE epubid = ?',
-                ('PARSED', epubid)
-            )
+        chapter_files, chapter_number = _process_epub_spine(book, epubid, db)
 
         db.commit()
         logger.info('epub parsed: epubId=%s chapters=%d', epubid, chapter_number)
