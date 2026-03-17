@@ -122,8 +122,9 @@ struct DiscoverView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
                 .sketchShadow()
-            } else if let msg = bookScanViewModel.errorMessage ?? bookScanViewModel.statusMessage ?? bookSearchViewModel.errorMessage {
-                Text(msg)
+
+            } else if let errorMessage = bookScanViewModel.errorMessage ?? bookSearchViewModel.errorMessage {
+                Text(errorMessage)
                     .font(.subheadline).fontWeight(.bold)
                     .foregroundColor(DiscoverDesign.uiText.opacity(0.6))
                     .frame(maxWidth: .infinity)
@@ -132,7 +133,26 @@ struct DiscoverView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
                     .sketchShadow()
-            } else if bookSearchViewModel.results.isEmpty {
+
+            } else if !bookSearchViewModel.results.isEmpty {
+                VStack(spacing: 12) {
+                    ForEach(bookSearchViewModel.results) { book in
+                        resultRow(book)
+                    }
+                }
+
+            } else if let statusMessage = bookScanViewModel.statusMessage, !statusMessage.isEmpty {
+                Text(statusMessage)
+                    .font(.subheadline).fontWeight(.bold)
+                    .foregroundColor(DiscoverDesign.uiText.opacity(0.6))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 32)
+                    .background(Color(hex: "F9FAFB"))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
+                    .sketchShadow()
+
+            } else {
                 Text("no results")
                     .font(.subheadline).fontWeight(.bold)
                     .foregroundColor(DiscoverDesign.uiText.opacity(0.6))
@@ -142,12 +162,6 @@ struct DiscoverView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
                     .sketchShadow()
-            } else {
-                VStack(spacing: 12) {
-                    ForEach(bookSearchViewModel.results) { book in
-                        resultRow(book)
-                    }
-                }
             }
         }
     }
