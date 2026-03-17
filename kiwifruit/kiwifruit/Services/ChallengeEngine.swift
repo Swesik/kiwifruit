@@ -52,7 +52,37 @@ final class ChallengeEngine {
             return c
         }
 
-        return Array(explained)
+        // Enrich with personalized hints (quotes or riddles) using ApiNinjas
+        var enriched: [Challenge] = Array(explained)
+
+        await withTaskGroup(of: (Int, String?).self) { group in
+            for (idx, ch) in enriched.enumerated() {
+                group.addTask {
+                    // Choose source: harder challenges -> riddles, else quotes
+                    do {
+                        if ch.difficulty >= 3 {
+                            let r = try await ApiNinjasService.shared.fetchRiddle()
+                            return (idx, "Riddle: \(r.question)")
+                        } else {
+                            let q = try await ApiNinjasService.shared.fetchRandomQuote()
+                            let author = q.author ?? ""
+                            return (idx, "\(q.quote) \(author.isEmpty ? "" : "— \(author)")")
+                        }
+                    } catch {
+                        return (idx, nil)
+                    }
+                }
+            }
+
+            for await result in group {
+                let (idx, hint) = result
+                if let h = hint, enriched.indices.contains(idx) {
+                    enriched[idx].hint = h
+                }
+            }
+        }
+
+        return enriched
     }
 
     private func computeScore(for challenge: Challenge, weather: WeatherInfo) -> Double {

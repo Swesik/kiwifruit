@@ -29,6 +29,7 @@ struct Challenge: Identifiable, Codable, Equatable {
     var progress: Double
     var rewardXP: Int
     var recommendedConditions: RecommendedConditions?
+    var hint: String?
     var state: ChallengeState
     var recommendationExplanation: String?
 
@@ -41,6 +42,7 @@ struct Challenge: Identifiable, Codable, Equatable {
         self.progress = progress
         self.rewardXP = rewardXP
         self.recommendedConditions = recommendedConditions
+        self.hint = hint
         self.state = state
         self.recommendationExplanation = recommendationExplanation
     }
