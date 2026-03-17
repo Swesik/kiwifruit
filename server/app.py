@@ -99,6 +99,32 @@ def _extract_epub_metadata(filepath, fallback_name):
     return title, author
 
 
+def _extract_text_and_title(item, chapter_number):
+    """Extract plaintext and title from an epub document item.
+
+    :param item: An ebooklib document item.
+    :param chapter_number: Fallback chapter number used when no heading is found.
+    :returns: ``(text, title)`` tuple, or ``None`` if the item has no readable text.
+    """
+    html_content = item.get_content().decode('utf-8', errors='replace')
+    soup = BeautifulSoup(html_content, 'html.parser')
+    text = soup.get_text(separator='\n', strip=True)
+
+    if not text.strip():
+        return None
+
+    chapter_title = ''
+    for tag in ['h1', 'h2', 'h3']:
+        heading = soup.find(tag)
+        if heading:
+            chapter_title = heading.get_text(strip=True)[:512]
+            break
+    if not chapter_title:
+        chapter_title = f'Chapter {chapter_number}'
+
+    return text, chapter_title
+
+
 def _parse_epub_chapters(epubid, filepath):
     """Parse epub chapters in a background thread.
 
@@ -116,7 +142,7 @@ def _parse_epub_chapters(epubid, filepath):
         db = sqlite3.connect(DB_PATH)
         db.row_factory = sqlite3.Row
 
-        book = epub_lib.read_epub(filepath)
+        book = epub_lib.read_epub(filepath, options={'ignore_ncx': True})
 
         spine_ids = [item_id for item_id, _ in book.spine]
 
@@ -131,24 +157,12 @@ def _parse_epub_chapters(epubid, filepath):
             if isinstance(item, epub_lib.EpubNav):
                 continue
 
-            html_content = item.get_content().decode('utf-8', errors='replace')
-            soup = BeautifulSoup(html_content, 'html.parser')
-            text = soup.get_text(separator='\n', strip=True)
-
-            if not text.strip():
+            parsed = _extract_text_and_title(item, chapter_number + 1)
+            if parsed is None:
                 continue
 
             chapter_number += 1
-
-            # Extract chapter title from first heading
-            chapter_title = ''
-            for tag in ['h1', 'h2', 'h3']:
-                heading = soup.find(tag)
-                if heading:
-                    chapter_title = heading.get_text(strip=True)[:512]
-                    break
-            if not chapter_title:
-                chapter_title = f'Chapter {chapter_number}'
+            text, chapter_title = parsed
 
             txt_filename = f"{uuid.uuid4().hex}.txt"
             txt_filepath = os.path.join(UPLOAD_FOLDER, txt_filename)
@@ -182,8 +196,8 @@ def _parse_epub_chapters(epubid, filepath):
             try:
                 if os.path.exists(fpath):
                     os.remove(fpath)
-            except Exception:
-                pass
+            except Exception as cleanup_err:
+                logger.exception('failed to remove temp file %s: %s', fpath, cleanup_err)
         if db:
             try:
                 db.execute(
