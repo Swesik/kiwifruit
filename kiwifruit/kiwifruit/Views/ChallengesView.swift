@@ -39,14 +39,13 @@ struct ChallengesView: View {
                                 .padding(.horizontal)
                             }
                         }
-                        }
 
                         Divider().padding(.vertical)
 
                         HStack {
                             Text("Discover More").font(.title2).bold()
                             Spacer()
-                            Button(action: { Task { await vm.refreshRecommendations() } }) {
+                            Button(action: { Task { await vm.loadRecommendations() } }) {
                                 Image(systemName: "arrow.clockwise")
                             }
                             .buttonStyle(.bordered)
