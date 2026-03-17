@@ -211,5 +211,8 @@ struct DiscoverView: View {
 }
 
 #Preview {
-    DiscoverView(bookSearchViewModel: BookSearchViewModel(api: MockAPIClient()))
+    DiscoverView(
+        bookSearchViewModel: BookSearchViewModel(api: MockAPIClient()),
+        bookScanViewModel: BookScanViewModel(scannerService: VisionBookScannerService(), api: MockAPIClient())
+    )
 }
