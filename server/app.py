@@ -3,7 +3,7 @@ import uuid
 import hashlib
 import sqlite3
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from flask import Flask, request, jsonify, g, abort, send_from_directory, make_response
 from werkzeug.exceptions import HTTPException
 
@@ -71,6 +71,11 @@ def _to_iso(ts):
         return dt.replace(tzinfo=timezone.utc).isoformat()
     except Exception:
         return ts
+
+
+def _now_utc_iso():
+    """Return the current UTC time as an ISO8601 string."""
+    return datetime.now(timezone.utc).isoformat()
 
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
@@ -675,6 +680,176 @@ def capture_book_scan():
         'ocrText': ocr_text
     })
 
+
+@app.route('/reading-sessions', methods=['POST'])
+def create_reading_session():
+    """Create a summarized reading session row.
+
+    **POST** ``/reading-sessions``
+
+    Accepts a JSON payload with ``durationSeconds`` and ``completed`` plus
+    optional ``bookId``, ``startedAt``, ``endedAt``, and ``source`` fields.
+    The authenticated user is inferred from the bearer token or session cookie.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    body = request.get_json() or {}
+    try:
+        duration = int(body.get('durationSeconds', 0))
+    except (TypeError, ValueError):
+        duration = 0
+    completed = bool(body.get('completed', False))
+    book_id = body.get('bookId')
+    source = body.get('source')
+    started_at = body.get('startedAt')
+    ended_at = body.get('endedAt')
+
+    if duration < 0:
+        abort(400)
+
+    # Fill in timestamps if not provided, using UTC.
+    if not ended_at:
+        ended_at = _now_utc_iso()
+    if not started_at and duration:
+        try:
+            dt_end = datetime.fromisoformat(ended_at)
+            dt_start = dt_end - timedelta(seconds=duration)
+            started_at = dt_start.isoformat()
+        except Exception:
+            started_at = ended_at
+
+    db = get_db()
+    cur = db.execute(
+        'INSERT INTO reading_sessions (username, book_id, source, started_at, ended_at, duration_seconds, completed) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?)',
+        (username, book_id, source, started_at, ended_at, duration, 1 if completed else 0),
+    )
+    db.commit()
+    session_id = cur.lastrowid
+    row = db.execute(
+        'SELECT id, username, book_id, source, started_at, ended_at, duration_seconds, completed, created '
+        'FROM reading_sessions WHERE id = ?',
+        (session_id,),
+    ).fetchone()
+    payload = {
+        'id': row['id'],
+        'username': row['username'],
+        'bookId': row['book_id'],
+        'source': row['source'],
+        'startedAt': row['started_at'],
+        'endedAt': row['ended_at'],
+        'durationSeconds': row['duration_seconds'],
+        'completed': bool(row['completed']),
+        'createdAt': _to_iso(row['created']),
+    }
+    return jsonify(payload), 201
+
+
+@app.route('/mood-summaries', methods=['POST'])
+def create_mood_summary():
+    """Create a mood-map summary row for a reading session.
+
+    **POST** ``/mood-summaries``
+
+    Requires authentication and a ``readingSessionId`` that refers to an
+    existing ``reading_sessions`` row. Other fields are optional.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    body = request.get_json() or {}
+    reading_session_id = body.get('readingSessionId')
+    if not reading_session_id:
+        abort(400)
+
+    db = get_db()
+    # Ensure the session exists and belongs to the current user.
+    row = db.execute(
+        'SELECT username FROM reading_sessions WHERE id = ?',
+        (reading_session_id,),
+    ).fetchone()
+    if not row or row['username'] != username:
+        abort(403)
+
+    avg_valence = body.get('avgValence')
+    volatility = body.get('volatility')
+    dominant_emotion = body.get('dominantEmotion')
+    frames_observed = body.get('framesObserved')
+
+    cur = db.execute(
+        'INSERT INTO mood_summaries (reading_session_id, avg_valence, volatility, dominant_emotion, frames_observed) '
+        'VALUES (?, ?, ?, ?, ?)',
+        (reading_session_id, avg_valence, volatility, dominant_emotion, frames_observed),
+    )
+    db.commit()
+    mood_id = cur.lastrowid
+    row = db.execute(
+        'SELECT id, reading_session_id, avg_valence, volatility, dominant_emotion, frames_observed, created '
+        'FROM mood_summaries WHERE id = ?',
+        (mood_id,),
+    ).fetchone()
+    payload = {
+        'id': row['id'],
+        'readingSessionId': row['reading_session_id'],
+        'avgValence': row['avg_valence'],
+        'volatility': row['volatility'],
+        'dominantEmotion': row['dominant_emotion'],
+        'framesObserved': row['frames_observed'],
+        'createdAt': _to_iso(row['created']),
+    }
+    return jsonify(payload), 201
+
+
+@app.route('/recommendations', methods=['GET'])
+def get_recommendations():
+    """Return a small, rule-based recommendation list for the current user.
+
+    The initial implementation uses social signals only: posts created by
+    people the user follows, ranked by like count and recency. Each post is
+    surfaced as a pseudo-book with id ``post:<postid>``.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    db = get_db()
+    # Find followees for current user.
+    follow_rows = db.execute(
+        'SELECT followee FROM following WHERE follower = ?',
+        (username,),
+    ).fetchall()
+    followees = [r['followee'] for r in follow_rows]
+    if not followees:
+        return jsonify([])
+
+    placeholders = ','.join('?' for _ in followees)
+    query = (
+        'SELECT p.postid, p.caption, p.created, '
+        '       (SELECT COUNT(*) FROM likes l WHERE l.postid = p.postid) as like_count '
+        'FROM posts p '
+        f'WHERE p.owner IN ({placeholders}) '
+        'ORDER BY like_count DESC, p.created DESC '
+        'LIMIT 10'
+    )
+    rows = db.execute(query, followees).fetchall()
+
+    recs = []
+    for r in rows:
+        reason_tags = ['friends_reading']
+        if r['like_count'] and r['like_count'] > 0:
+            reason_tags.append('popular_recent')
+        recs.append(
+            {
+                'bookId': f'post:{r["postid"]}',
+                'title': r['caption'] or 'Friends reading update',
+                'reasonTags': reason_tags,
+                'score': float(r['like_count'] or 0),
+            }
+        )
+    return jsonify(recs)
+
 @app.errorhandler(HTTPException)
 def handle_http_exception(e: HTTPException):
     """Return a JSON error body for all HTTP exceptions.
@@ -733,6 +908,7 @@ try:
     app.add_url_rule('/api/posts/<post_id>', endpoint='post_detail_api', view_func=post_detail, methods=['GET', 'DELETE'])
     app.add_url_rule('/api/posts/<post_id>/like', endpoint='post_like_api', view_func=post_like, methods=['POST', 'DELETE'])
     app.add_url_rule('/api/books/search', endpoint='search_books_api', view_func=search_books, methods=['GET'])
+    app.add_url_rule('/api/recommendations', endpoint='get_recommendations_api', view_func=get_recommendations, methods=['GET'])
 except Exception:
     # if handlers are not defined yet during import-time, ignore
     pass

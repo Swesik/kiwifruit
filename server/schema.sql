@@ -59,3 +59,32 @@ CREATE TABLE sessions (
     created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
 );
+
+-- Reading sessions table capturing focused reading activity.
+-- Each row represents a single in-app reading session summary. this is filler I dont know what goes here yet - Anurag
+CREATE TABLE reading_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL CHECK (LENGTH(username) <= 20),
+    book_id TEXT,
+    source TEXT CHECK (LENGTH(source) <= 32),
+    started_at DATETIME,
+    ended_at DATETIME,
+    duration_seconds INTEGER NOT NULL CHECK (duration_seconds >= 0),
+    completed INTEGER NOT NULL DEFAULT 0 CHECK (completed IN (0, 1)),
+    created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
+);
+
+-- Optional mood-map summary table keyed by reading session.
+-- This keeps the schema ready for CV-derived mood features without
+-- requiring them for every session. this is filler I dont know what goes here yet - Anurag
+CREATE TABLE mood_summaries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    reading_session_id INTEGER NOT NULL,
+    avg_valence REAL,
+    volatility REAL,
+    dominant_emotion TEXT CHECK (LENGTH(dominant_emotion) <= 32),
+    frames_observed INTEGER,
+    created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (reading_session_id) REFERENCES reading_sessions (id) ON DELETE CASCADE
+);

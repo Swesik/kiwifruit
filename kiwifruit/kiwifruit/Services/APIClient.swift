@@ -27,7 +27,9 @@ protocol APIClientProtocol {
     func deletePost(_ postId: String) async throws -> Void
     func searchBooks(query: String) async throws -> [BookSearchResult]
     func sendBookScan(barcode: String?, ocrText: String?) async throws -> BookScanResponse
-    
+    func sendReadingSession(_ summary: ReadingSessionSummary) async throws -> ReadingSessionSummary
+    func sendMoodSummary(_ summary: MoodSummary) async throws -> MoodSummary
+    func fetchRecommendations() async throws -> [Recommendation]
 }
 
 /// Simple in-memory/mock client used in previews and when no backend is configured.
@@ -92,6 +94,28 @@ final class MockAPIClient: APIClientProtocol {
             barcode: barcode,
             ocrText: ocrText
         )
+    }
+
+    func sendReadingSession(_ summary: ReadingSessionSummary) async throws -> ReadingSessionSummary {
+        try await Task.sleep(nanoseconds: 120 * 1_000_000)
+        return summary
+    }
+
+    func sendMoodSummary(_ summary: MoodSummary) async throws -> MoodSummary {
+        try await Task.sleep(nanoseconds: 120 * 1_000_000)
+        return summary
+    }
+
+    func fetchRecommendations() async throws -> [Recommendation] {
+        try await Task.sleep(nanoseconds: 120 * 1_000_000)
+        return [
+            Recommendation(
+                bookId: "mock:1",
+                title: "Mock Recommendation",
+                reasonTags: ["friends_reading"],
+                score: 1.0
+            )
+        ]
     }
 }
 
@@ -390,6 +414,74 @@ final class RESTAPIClient: APIClientProtocol {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(BookScanResponse.self, from: data)
+    }
+
+    func sendReadingSession(_ summary: ReadingSessionSummary) async throws -> ReadingSessionSummary {
+        let url = baseURL.appendingPathComponent("/reading-sessions")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken {
+            req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        encoder.dateEncodingStrategy = .iso8601
+        req.httpBody = try encoder.encode(summary)
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            let bodyText = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+            print("sendReadingSession failed HTTP \(http.statusCode): \(bodyText)")
+            throw URLError(.badServerResponse)
+        }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(ReadingSessionSummary.self, from: data)
+    }
+
+    func sendMoodSummary(_ summary: MoodSummary) async throws -> MoodSummary {
+        let url = baseURL.appendingPathComponent("/mood-summaries")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken {
+            req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        encoder.dateEncodingStrategy = .iso8601
+        req.httpBody = try encoder.encode(summary)
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            let bodyText = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+            print("sendMoodSummary failed HTTP \(http.statusCode): \(bodyText)")
+            throw URLError(.badServerResponse)
+        }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(MoodSummary.self, from: data)
+    }
+
+    func fetchRecommendations() async throws -> [Recommendation] {
+        let url = baseURL.appendingPathComponent("/recommendations")
+        var req = URLRequest(url: url)
+        if let token = authToken {
+            req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            let bodyText = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+            print("fetchRecommendations failed HTTP \(http.statusCode): \(bodyText)")
+            throw URLError(.badServerResponse)
+        }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode([Recommendation].self, from: data)
     }
 }
 

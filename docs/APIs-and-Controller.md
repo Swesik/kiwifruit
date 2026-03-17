@@ -311,4 +311,110 @@ Planned additions:
 
 ---
 
-*Last Updated: February 2026*
+### 5. Reading Sessions and Mood Summaries
+
+#### Create Reading Session Summary
+```
+POST /reading-sessions
+```
+
+**Authentication**: required
+
+**Request Body:**
+```json
+{
+  "bookId": "optional-book-id-or-null",
+  "durationSeconds": 900,
+  "completed": true,
+  "startedAt": "2026-03-17T10:00:00Z",
+  "endedAt": "2026-03-17T10:15:00Z",
+  "source": "focus_view"
+}
+```
+
+All fields except `durationSeconds` and `completed` are optional. If `startedAt` or `endedAt` are omitted, the server may infer them from `durationSeconds` and current time.
+
+**Response:**
+```json
+{
+  "id": 42,
+  "username": "alice",
+  "bookId": "optional-book-id-or-null",
+  "durationSeconds": 900,
+  "completed": true,
+  "startedAt": "2026-03-17T10:00:00Z",
+  "endedAt": "2026-03-17T10:15:00Z",
+  "source": "focus_view",
+  "createdAt": "2026-03-17T10:15:01Z"
+}
+```
+
+#### Create Mood Summary (optional)
+```
+POST /mood-summaries
+```
+
+**Authentication**: required
+
+**Request Body:**
+```json
+{
+  "readingSessionId": 42,
+  "avgValence": 0.35,
+  "volatility": 0.12,
+  "dominantEmotion": "focused",
+  "framesObserved": 1200
+}
+```
+
+All fields except `readingSessionId` are optional. The server stores whatever subset is provided.
+
+**Response:**
+```json
+{
+  "id": 10,
+  "readingSessionId": 42,
+  "avgValence": 0.35,
+  "volatility": 0.12,
+  "dominantEmotion": "focused",
+  "framesObserved": 1200,
+  "createdAt": "2026-03-17T10:15:05Z"
+}
+```
+
+---
+
+### 6. Recommendations
+
+#### Get Recommendations
+```
+GET /recommendations
+```
+
+**Authentication**: required
+
+Returns a ranked list of recommended books or posts for the current user. The initial rule-based implementation uses social signals (friends and likes); future versions may incorporate reading sessions and mood data.
+
+**Response:**
+```json
+[
+  {
+    "bookId": "post:17",
+    "title": "Just finished reading 1984!",
+    "reasonTags": ["friends_reading", "popular_recent"],
+    "score": 0.92
+  },
+  {
+    "bookId": "post:12",
+    "title": "Cozy mystery night",
+    "reasonTags": ["friends_reading"],
+    "score": 0.75
+  }
+]
+```
+
+`bookId` is a string identifier for the recommended item. In the first version it may be a synthetic id like `"post:<postid>"`; later it can be a real `bookId` from your library model.
+
+---
+
+*Last Updated: March 2026*

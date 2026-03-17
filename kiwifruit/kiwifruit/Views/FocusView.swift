@@ -11,6 +11,7 @@ private enum FocusDesign {
 
 struct FocusView: View {
     @Environment(\.focusSessionStore) private var sessionStore: FocusSessionStore
+    @Environment(\.sessionStore) private var session: SessionStore
 
     var body: some View {
         VStack(spacing: 0) {
@@ -208,6 +209,9 @@ struct FocusView: View {
 
                 Button("Stop") {
                     sessionStore.stopSession()
+                    Task {
+                        await sendSessionSummary()
+                    }
                 }
                 .font(.headline)
                 .fontWeight(.bold)
@@ -360,6 +364,25 @@ struct FocusView: View {
         let minutes = sessionStore.completedSeconds / 60
         let seconds = sessionStore.completedSeconds % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    private func sendSessionSummary() async {
+        guard let _ = session.userId else { return }
+        let summary = ReadingSessionSummary(
+            id: nil,
+            bookId: nil,
+            durationSeconds: sessionStore.completedSeconds,
+            completed: true,
+            startedAt: nil,
+            endedAt: nil,
+            source: "focus_view",
+            createdAt: nil
+        )
+        do {
+            _ = try await AppAPI.shared.sendReadingSession(summary)
+        } catch {
+            print("FocusView: failed to send reading session summary: \(error)")
+        }
     }
 }
 

@@ -21,6 +21,7 @@ private let recommendationURLs: [URL?] = [
 struct DiscoverView: View {
     @Bindable var bookSearchViewModel: BookSearchViewModel
     @Bindable var bookScanViewModel: BookScanViewModel
+    @Environment(\.recommendationsStore) private var recommendations: RecommendationsStore
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -36,6 +37,9 @@ struct DiscoverView: View {
             .padding(.horizontal, 24)
             .padding(.top, 48)
             .padding(.bottom, 32)
+        }
+        .task {
+            await recommendations.load()
         }
         .background(Color.white)
         .toolbar(.hidden, for: .navigationBar)
@@ -208,17 +212,41 @@ struct DiscoverView: View {
                 .font(.title2).fontWeight(.black)
                 .foregroundColor(DiscoverDesign.uiText)
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
-                ForEach(Array(recommendationURLs.enumerated()), id: \.offset) { _, url in
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image { image.resizable().scaledToFill() }
-                        else { DiscoverDesign.tanLight }
-                    }
-                    .aspectRatio(2/3, contentMode: .fill)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(DiscoverDesign.border, lineWidth: 2))
-                    .sketchShadow(cornerRadius: 6)
+            if recommendations.isLoading {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
                 }
+                .padding(.vertical, 24)
+            } else if !recommendations.items.isEmpty {
+                VStack(spacing: 8) {
+                    ForEach(recommendations.items) { rec in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(rec.title)
+                                    .font(.subheadline).fontWeight(.black)
+                                    .foregroundColor(DiscoverDesign.uiText)
+                                    .lineLimit(2)
+                                if !rec.reasonTags.isEmpty {
+                                    Text(rec.reasonTags.joined(separator: ", "))
+                                        .font(.caption2).fontWeight(.bold)
+                                        .foregroundColor(DiscoverDesign.uiText.opacity(0.6))
+                                }
+                            }
+                            Spacer()
+                        }
+                        .padding(12)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
+                        .sketchShadow()
+                    }
+                }
+            } else {
+                Text("no recommendations yet")
+                    .font(.subheadline).fontWeight(.bold)
+                    .foregroundColor(DiscoverDesign.uiText.opacity(0.6))
             }
         }
     }
