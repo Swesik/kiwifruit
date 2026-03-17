@@ -170,12 +170,9 @@ struct PostRow: View {
     }
 }
 
-struct PostRow_Previews: PreviewProvider {
-    static var previews: some View {
-        NavigationStack {
-            PostRow(post: MockData.makePosts(count: 1, page: 0).first!)
-                .previewLayout(.sizeThatFits)
-                .padding()
-        }
+#Preview {
+    NavigationStack {
+        PostRow(post: MockData.makePosts(count: 1, page: 0).first!)
+            .padding()
     }
 }
