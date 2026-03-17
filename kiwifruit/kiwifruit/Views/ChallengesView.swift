@@ -30,14 +30,15 @@ struct ChallengesView: View {
                             Text("No active challenges. Explore Discover More below!").foregroundColor(.secondary).padding(.horizontal)
                         } else {
                             ForEach(vm.activeChallenges) { challenge in
-                                    ChallengeCardView(challenge: challenge, actionTitle: "Complete") {
-                                        // action -> complete when accepted
-                                        vm.complete(challenge)
-                                    } viewAction: {
-                                        selected = challenge; showDetail = true
-                                    }
+                                ChallengeCardView(challenge: challenge, action: {
+                                    // action -> complete when accepted
+                                    vm.complete(challenge)
+                                }, viewAction: {
+                                    selected = challenge; showDetail = true
+                                })
                                 .padding(.horizontal)
                             }
+                        }
                         }
 
                         Divider().padding(.vertical)
@@ -52,13 +53,13 @@ struct ChallengesView: View {
                         }
                         .padding(.horizontal)
                         ForEach(vm.recommended) { challenge in
-                            ChallengeCardView(challenge: challenge, actionTitle: "Join Now") {
+                            ChallengeCardView(challenge: challenge, action: {
                                 // action -> accept
                                 let success = vm.accept(challenge)
                                 if !success { showLimitAlert = true }
-                            } viewAction: {
+                            }, viewAction: {
                                 selected = challenge; showDetail = true
-                            }
+                            })
                             .padding(.horizontal)
                         }
                     }
