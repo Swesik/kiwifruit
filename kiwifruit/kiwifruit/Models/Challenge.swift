@@ -33,7 +33,7 @@ struct Challenge: Identifiable, Codable, Equatable {
     var state: ChallengeState
     var recommendationExplanation: String?
 
-    init(id: UUID = UUID(), title: String, description: String, category: String = "general", difficulty: Int = 1, progress: Double = 0.0, rewardXP: Int = 10, recommendedConditions: RecommendedConditions? = nil, state: ChallengeState = .available, recommendationExplanation: String? = nil) {
+    init(id: UUID = UUID(), title: String, description: String, category: String = "general", difficulty: Int = 1, progress: Double = 0.0, rewardXP: Int = 10, recommendedConditions: RecommendedConditions? = nil, hint: String? = nil, state: ChallengeState = .available, recommendationExplanation: String? = nil) {
         self.id = id
         self.title = title
         self.description = description
