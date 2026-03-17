@@ -12,19 +12,84 @@ private enum FocusDesign {
 struct FocusView: View {
     @Environment(\.focusSessionStore) private var sessionStore: FocusSessionStore
 
+    @State private var isSelectingBook = false
+    @State private var tempBookTitle = ""
+    @State private var selectedBookTitle: String? = nil
+
     var body: some View {
-        VStack(spacing: 0) {
-            switch sessionStore.status {
-            case .idle:
-                startSessionView
-            case .active, .paused:
-                activeSessionView
-            case .completed:
-                completionView
+        Group {
+            if isSelectingBook {
+                bookSelectionView
+            } else {
+                VStack(spacing: 0) {
+                    switch sessionStore.status {
+                    case .idle:
+                        startSessionView
+                    case .active, .paused:
+                        activeSessionView
+                    case .completed:
+                        completionView
+                    }
+                }
             }
         }
         .background(FocusDesign.uiBg)
         .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private var bookSelectionView: some View {
+        VStack(spacing: 32) {
+            Text("Choose a book to read")
+                .font(.system(size: 28, weight: .black))
+                .foregroundStyle(FocusDesign.handDrawnBorder)
+                .padding(.top, 48)
+
+            TextField("Book title", text: $tempBookTitle)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.white)
+                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
+                )
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(FocusDesign.handDrawnBorder)
+                        .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
+                )
+                .font(.title3)
+                .foregroundStyle(FocusDesign.handDrawnBorder)
+                .padding(.horizontal, 32)
+
+            Button(action: {
+                guard !tempBookTitle.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                selectedBookTitle = tempBookTitle
+                tempBookTitle = ""
+                sessionStore.startSession()
+                isSelectingBook = false
+            }) {
+                Text("Start session")
+                    .font(.system(size: 24, weight: .black))
+                    .foregroundStyle(FocusDesign.handDrawnBorder)
+                    .padding(.horizontal, 32)
+                    .padding(.vertical, 14)
+                    .background(
+                        Capsule()
+                            .fill(FocusDesign.kiwi)
+                            .overlay(Capsule().stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
+                    )
+                    .background(
+                        Capsule()
+                            .fill(FocusDesign.handDrawnBorder)
+                            .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
+                    )
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 24)
     }
 
     private var startSessionView: some View {
@@ -44,7 +109,7 @@ struct FocusView: View {
 
     private var startSessionButton: some View {
         Button(action: {
-            sessionStore.startSession()
+            isSelectingBook = true
         }) {
             Text("Start\nsession")
                 .font(.system(size: 36, weight: .black))
@@ -171,6 +236,13 @@ struct FocusView: View {
             Text(formattedTime)
                 .font(.system(size: 80, weight: .bold))
                 .foregroundStyle(FocusDesign.handDrawnBorder)
+
+            if let book = selectedBookTitle {
+                Text("You are reading \(book)")
+                    .font(.title2)
+                    .foregroundStyle(FocusDesign.uiTeal)
+                    .padding(.top, 8)
+            }
 
             if sessionStore.status == .paused {
                 Text("Get back to it!")
