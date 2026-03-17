@@ -66,7 +66,13 @@ struct ChallengesView: View {
                 }
             }
             .navigationDestination(isPresented: $showDetail) {
-                if let c = selected { ChallengeDetailView(viewModel: vm, challengeId: c.id) }
+                Group {
+                    if let c = selected {
+                        ChallengeDetailView(viewModel: vm, challengeId: c.id)
+                    } else {
+                        EmptyView()
+                    }
+                }
             }
             .onAppear { Task { await vm.loadRecommendations() } }
             .alert("Maximum active challenges reached", isPresented: $showLimitAlert) {
