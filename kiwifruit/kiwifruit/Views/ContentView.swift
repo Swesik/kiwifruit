@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.sessionStore) private var session: SessionStore
     @Environment(\.postsStore) private var postsStore: PostsStore
+    @Environment(\.focusSessionStore) private var focusSessionStore: FocusSessionStore
     // Show login while there is no validated session/user
     @State private var selection: Int = 0
     
@@ -44,7 +45,11 @@ struct ContentView: View {
             if new != nil { selection = 2; Task { await postsStore.loadInitial(force: true) } }
         }
         .onChange(of: session.isValidSession) { valid in
-            if valid && session.userId != nil { selection = 2; Task { await postsStore.loadInitial(force: true) } }
+            if valid && session.userId != nil {
+                selection = 2
+                Task { await postsStore.loadInitial(force: true) }
+                focusSessionStore.loadFriendSessions()
+            }
         }
         .fullScreenCover(isPresented: Binding(get: { !(session.isValidSession && session.userId != nil) }, set: { _ in })) {
             LoginView()

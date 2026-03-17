@@ -11,10 +11,10 @@ private enum FocusDesign {
 
 struct FocusView: View {
     @Environment(\.focusSessionStore) private var sessionStore: FocusSessionStore
+    @Environment(\.sessionStore) private var session: SessionStore
 
     @State private var isSelectingBook = false
     @State private var tempBookTitle = ""
-    @State private var selectedBookTitle: String? = nil
 
     var body: some View {
         Group {
@@ -35,6 +35,10 @@ struct FocusView: View {
         }
         .background(FocusDesign.uiBg)
         .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            // Refresh every time the tab is switched to, so elapsed times stay reasonably fresh.
+            sessionStore.loadFriendSessions()
+        }
     }
 
     private var bookSelectionView: some View {
@@ -62,10 +66,10 @@ struct FocusView: View {
                 .padding(.horizontal, 32)
 
             Button(action: {
-                guard !tempBookTitle.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-                selectedBookTitle = tempBookTitle
+                let title = tempBookTitle.trimmingCharacters(in: .whitespaces)
+                guard !title.isEmpty else { return }
                 tempBookTitle = ""
-                sessionStore.startSession()
+                sessionStore.startSession(bookTitle: title)
                 isSelectingBook = false
             }) {
                 Text("Start session")
@@ -161,15 +165,30 @@ struct FocusView: View {
                 .foregroundStyle(FocusDesign.handDrawnBorder)
                 .padding(.top, 48)
 
-            friendSessionRow(name: "Alice", duration: "30m")
-            friendSessionRow(name: "James", duration: "1hr")
+            if sessionStore.activeFriendSessions.isEmpty {
+                Text("No friends reading right now")
+                    .font(.subheadline)
+                    .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.4))
+                    .padding(.leading, 16)
+            } else {
+                ForEach(sessionStore.activeFriendSessions) { friendSession in
+                    friendSessionRow(friendSession: friendSession)
+                        .onTapGesture {
+                            sessionStore.joinSession(friendSession)
+                        }
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
     }
 
-    private func friendSessionRow(name: String, duration: String) -> some View {
-        Text(name)
+    private func friendSessionRow(friendSession: ActiveFriendSession) -> some View {
+        let name = friendSession.session.host.displayName ?? friendSession.session.host.username
+        let minutes = friendSession.hostElapsedSeconds / 60
+        let duration = minutes >= 60 ? "\(minutes / 60)hr" : "\(minutes)m"
+
+        return Text(name)
             .font(.system(size: 20, weight: .bold))
             .foregroundStyle(FocusDesign.handDrawnBorder)
             .frame(maxWidth: .infinity)
@@ -237,7 +256,7 @@ struct FocusView: View {
                 .font(.system(size: 80, weight: .bold))
                 .foregroundStyle(FocusDesign.handDrawnBorder)
 
-            if let book = selectedBookTitle {
+            if let book = sessionStore.bookTitle {
                 Text("You are reading \(book)")
                     .font(.title2)
                     .foregroundStyle(FocusDesign.uiTeal)
@@ -251,9 +270,64 @@ struct FocusView: View {
                     .padding(.top, 8)
             }
 
+            if !otherParticipants.isEmpty {
+                participantsRow
+                    .padding(.top, 24)
+            }
+
             Spacer()
 
             sessionControls
+        }
+    }
+
+    /// People to show in "Reading with":
+    /// - If you're the host: everyone who joined (excluding yourself).
+    /// - If you joined: the host + everyone else who joined (excluding yourself).
+    private var otherParticipants: [User] {
+        let myId = session.currentUser?.id
+        let joiners = sessionStore.participants.filter { $0.id != myId }
+        if sessionStore.isHost {
+            return joiners
+        } else {
+            // Prepend the host so joiners always see who they're reading with.
+            if let host = sessionStore.currentSession?.host {
+                return [host] + joiners
+            }
+            return joiners
+        }
+    }
+
+    private var participantsRow: some View {
+        VStack(spacing: 8) {
+            Text("Reading with")
+                .font(.subheadline)
+                .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.6))
+
+            HStack(spacing: -12) {
+                ForEach(otherParticipants) { user in
+                    Circle()
+                        .fill(Color.white)
+                        .overlay(Circle().stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
+                        .frame(width: 44, height: 44)
+                        .overlay(
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 18))
+                                .foregroundStyle(FocusDesign.handDrawnBorder)
+                        )
+                        .background(
+                            Circle()
+                                .fill(FocusDesign.handDrawnBorder)
+                                .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
+                        )
+                }
+            }
+
+            let names = otherParticipants.map { $0.displayName ?? $0.username }.joined(separator: ", ")
+            Text(names)
+                .font(.footnote)
+                .fontWeight(.bold)
+                .foregroundStyle(FocusDesign.handDrawnBorder)
         }
     }
 
