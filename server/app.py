@@ -95,6 +95,36 @@ def uploaded_file(filename):
         abort(404)
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
+@app.route('/sessions/me', methods=['GET'])
+def get_current_session():
+    """Return the authenticated user for the current token.
+
+    **GET** ``/sessions/me``
+
+    Used by the iOS client to validate a stored session token on startup.
+    Unlike ``GET /users/<username>``, this endpoint requires a valid token
+    and will return 403 if the token is missing or not in the sessions table.
+
+    :returns: JSON user object.
+    :status 200: Token is valid; user returned.
+    :status 403: Token missing or invalid.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    row = db.execute('SELECT username, fullname, filename FROM users WHERE username = ?', (username,)).fetchone()
+    if not row:
+        abort(403)
+    user = {
+        'id': row['username'],
+        'username': row['username'],
+        'displayName': row['fullname'],
+        'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (row['filename'] or 'default.jpg')
+    }
+    return jsonify(user)
+
+
 @app.route('/sessions', methods=['POST'])
 def create_session():
     """Create a new session (login).
@@ -638,6 +668,192 @@ def update_user(username):
     newrow = db.execute('SELECT username, fullname, filename FROM users WHERE username = ?', (username,)).fetchone()
     user = {'id': newrow['username'], 'username': newrow['username'], 'displayName': newrow['fullname'], 'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (newrow['filename'] or 'default.jpg')}
     return jsonify(user)
+
+
+def _user_dict(row, req):
+    """Build the standard user JSON object from a DB row with username/fullname/filename columns."""
+    return {
+        'id': row['username'],
+        'username': row['username'],
+        'displayName': row['fullname'],
+        'avatarURL': req.host_url.rstrip('/') + '/uploads/' + (row['filename'] or 'default.jpg')
+    }
+
+
+def _session_dict(session_row, host_row, participants, req):
+    """Build the ReadingSession JSON object the iOS client expects."""
+    return {
+        'id': session_row['session_id'],
+        'host': _user_dict(host_row, req),
+        'book_title': session_row['book_title'],
+        'started_at': _to_iso(session_row['started_at']),
+        'status': session_row['status'],
+        'participants': [_user_dict(p, req) for p in participants],
+    }
+
+
+@app.route('/reading-sessions', methods=['POST'])
+def create_reading_session():
+    """Start a new reading session.
+
+    **POST** ``/reading-sessions``
+
+    :json string book_title: Title of the book being read (required).
+    :returns: JSON ``ReadingSession`` object.
+    :status 201: Session created.
+    :status 400: Missing ``book_title``.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    data = request.get_json() or {}
+    book_title = (data.get('book_title') or '').strip()
+    if not book_title:
+        abort(400)
+    db = get_db()
+    # Close any existing active sessions for this user before creating a new one.
+    # This prevents stale 'active' rows from accumulating (e.g. after a crash or force-quit).
+    db.execute(
+        "UPDATE reading_sessions SET status = 'completed' WHERE host = ? AND status = 'active'",
+        (username,)
+    )
+    session_id = uuid.uuid4().hex
+    db.execute(
+        'INSERT INTO reading_sessions (session_id, host, book_title) VALUES (?, ?, ?)',
+        (session_id, username, book_title)
+    )
+    db.commit()
+    row = db.execute('SELECT * FROM reading_sessions WHERE session_id = ?', (session_id,)).fetchone()
+    host_row = db.execute('SELECT username, fullname, filename FROM users WHERE username = ?', (username,)).fetchone()
+    logger.info('reading_session created: session_id=%s host=%s book=%s', session_id, username, book_title)
+    return jsonify(_session_dict(row, host_row, [], request)), 201
+
+
+@app.route('/reading-sessions/<session_id>', methods=['PATCH'])
+def update_reading_session(session_id):
+    """End or update a reading session (host only).
+
+    **PATCH** ``/reading-sessions/<session_id>``
+
+    :json string status: New status, e.g. ``"completed"`` (optional).
+    :json int elapsed_seconds: Total seconds the user read (optional).
+    :returns: JSON ``{"status": "ok"}``.
+    :status 200: Session updated.
+    :status 403: Not authenticated or not the session host.
+    :status 404: Session not found.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    row = db.execute('SELECT host FROM reading_sessions WHERE session_id = ?', (session_id,)).fetchone()
+    if not row:
+        abort(404)
+    if row['host'] != username:
+        abort(403)
+    data = request.get_json() or {}
+    updates, params = [], []
+    if 'status' in data:
+        updates.append('status = ?'); params.append(data['status'])
+    if 'elapsed_seconds' in data:
+        updates.append('elapsed_seconds = ?'); params.append(int(data['elapsed_seconds']))
+    if updates:
+        params.append(session_id)
+        db.execute('UPDATE reading_sessions SET ' + ', '.join(updates) + ' WHERE session_id = ?', params)
+        db.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route('/reading-sessions/friends', methods=['GET'])
+def get_friend_reading_sessions():
+    """Return active reading sessions of users the current user follows.
+
+    **GET** ``/reading-sessions/friends``
+
+    :returns: JSON list of ``ActiveFriendSession`` objects, each containing a
+              ``session`` (ReadingSession) and ``host_elapsed_seconds`` (int).
+    :status 200: List returned (may be empty).
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    # Active sessions belonging to anyone the current user follows
+    rows = db.execute(
+        '''SELECT rs.*, u.username, u.fullname, u.filename,
+                  CAST((julianday('now') - julianday(rs.started_at)) * 86400 AS INTEGER) as elapsed
+           FROM reading_sessions rs
+           JOIN following f ON f.followee = rs.host AND f.follower = ?
+           JOIN users u ON u.username = rs.host
+           WHERE rs.status = 'active'
+           ORDER BY rs.started_at DESC''',
+        (username,)
+    ).fetchall()
+    result = []
+    for r in rows:
+        parts = db.execute(
+            'SELECT u.username, u.fullname, u.filename FROM session_participants sp JOIN users u ON u.username = sp.username WHERE sp.session_id = ?',
+            (r['session_id'],)
+        ).fetchall()
+        session_obj = _session_dict(r, r, parts, request)
+        result.append({'session': session_obj, 'host_elapsed_seconds': r['elapsed'] or 0})
+    return jsonify(result)
+
+
+@app.route('/reading-sessions/<session_id>/participants', methods=['POST'])
+def join_reading_session(session_id):
+    """Join a friend's active reading session.
+
+    **POST** ``/reading-sessions/<session_id>/participants``
+
+    :returns: JSON ``ReadingSession`` with updated participants list.
+    :status 200: Joined successfully.
+    :status 403: Not authenticated.
+    :status 404: Session not found or not active.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    row = db.execute('SELECT * FROM reading_sessions WHERE session_id = ? AND status = ?', (session_id, 'active')).fetchone()
+    if not row:
+        abort(404)
+    try:
+        db.execute('INSERT INTO session_participants (session_id, username) VALUES (?, ?)', (session_id, username))
+        db.commit()
+    except sqlite3.IntegrityError:
+        pass  # already a participant
+    host_row = db.execute('SELECT username, fullname, filename FROM users WHERE username = ?', (row['host'],)).fetchone()
+    parts = db.execute(
+        'SELECT u.username, u.fullname, u.filename FROM session_participants sp JOIN users u ON u.username = sp.username WHERE sp.session_id = ?',
+        (session_id,)
+    ).fetchall()
+    logger.info('reading_session joined: session_id=%s participant=%s', session_id, username)
+    return jsonify(_session_dict(row, host_row, parts, request))
+
+
+@app.route('/reading-sessions/<session_id>/participants', methods=['DELETE'])
+def leave_reading_session(session_id):
+    """Leave a reading session the current user previously joined.
+
+    **DELETE** ``/reading-sessions/<session_id>/participants``
+
+    Does not end the host's session.
+
+    :returns: JSON ``{"status": "ok"}``.
+    :status 200: Left successfully.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    db.execute('DELETE FROM session_participants WHERE session_id = ? AND username = ?', (session_id, username))
+    db.commit()
+    logger.info('reading_session left: session_id=%s participant=%s', session_id, username)
+    return jsonify({'status': 'ok'})
 
 
 @app.errorhandler(HTTPException)
