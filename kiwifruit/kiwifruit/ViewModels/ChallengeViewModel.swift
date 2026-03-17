@@ -44,14 +44,18 @@ final class ChallengeViewModel {
         self.recommended = mapped
     }
 
-    func accept(_ challenge: Challenge) {
-        // move to active/accepted
-        if activeChallenges.contains(where: { $0.id == challenge.id }) { return }
+    func accept(_ challenge: Challenge) -> Bool {
+        // Enforce a maximum number of active challenges (e.g., 3)
+        let maxActive = 3
+        if activeChallenges.contains(where: { $0.id == challenge.id }) { return true }
+        if activeChallenges.count >= maxActive { return false }
+
         var c = challenge
         c.state = .accepted
         c.progress = 0.0
         activeChallenges.append(c)
         recommended.removeAll { $0.id == c.id }
+        return true
     }
 
     func join(_ challenge: Challenge) {
