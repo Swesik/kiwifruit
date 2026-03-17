@@ -9,6 +9,7 @@ struct kiwifruitApp: App {
     private let userPreferencesStore = UserPreferencesStore(
         repository: UserDefaultsUserPreferencesRepository()
     )
+    private let focusSessionStore = FocusSessionStore()
 
     var body: some Scene {
         WindowGroup {
@@ -16,6 +17,7 @@ struct kiwifruitApp: App {
                 .environment(\.postsStore, postsStore)
                 .environment(\.sessionStore, sessionStore)
                 .environment(\.userPreferencesStore, userPreferencesStore)
+                .environment(\.focusSessionStore, focusSessionStore)
         }
     }
 }
