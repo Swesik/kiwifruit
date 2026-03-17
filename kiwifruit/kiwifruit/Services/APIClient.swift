@@ -26,6 +26,18 @@ protocol APIClientProtocol {
     func deleteComment(commentId: String) async throws -> Void
     func deletePost(_ postId: String) async throws -> Void
     func searchBooks(query: String) async throws -> [BookSearchResult]
+
+    // MARK: - Reading Sessions
+    /// Creates a new reading session for the current user and returns the persisted session object.
+    func startReadingSession(bookTitle: String) async throws -> ReadingSession
+    /// Marks the session as completed and records how many seconds the user actually read.
+    func endReadingSession(sessionId: String, elapsedSeconds: Int) async throws -> Void
+    /// Returns all active sessions belonging to users the current user follows.
+    func fetchActiveFriendSessions() async throws -> [ActiveFriendSession]
+    /// Adds the current user as a participant of the given session.
+    func joinReadingSession(sessionId: String) async throws -> ReadingSession
+    /// Removes the current user from a session they joined (does not end the host's session).
+    func leaveReadingSession(sessionId: String) async throws -> Void
 }
 
 /// Simple in-memory/mock client used in previews and when no backend is configured.
@@ -77,12 +89,49 @@ final class MockAPIClient: APIClientProtocol {
         return [
             BookSearchResult(
                 id: UUID().uuidString,
-                title: "Mock result for “\(trimmed)”",
+                title: "Mock result for \"\(trimmed)\"",
                 authors: ["Kiwi Fruit"],
                 isbn13: nil
             )
         ]
     }
+
+    func startReadingSession(bookTitle: String) async throws -> ReadingSession {
+        try await Task.sleep(nanoseconds: 120 * 1_000_000)
+        return ReadingSession(
+            id: UUID().uuidString,
+            host: MockData.sampleUser,
+            bookTitle: bookTitle,
+            startedAt: Date(),
+            status: "active",
+            participants: []
+        )
+    }
+
+    func endReadingSession(sessionId: String, elapsedSeconds: Int) async throws { try await Task.sleep(nanoseconds: 80 * 1_000_000) }
+
+    func fetchActiveFriendSessions() async throws -> [ActiveFriendSession] {
+        try await Task.sleep(nanoseconds: 100 * 1_000_000)
+        let alice = User(id: "alice-id", username: "alice", displayName: "Alice", avatarURL: nil)
+        let james = User(id: "james-id", username: "james", displayName: "James", avatarURL: nil)
+        return [
+            ActiveFriendSession(
+                session: ReadingSession(id: "s1", host: alice, bookTitle: "Dune", startedAt: Date().addingTimeInterval(-1800), status: "active", participants: []),
+                hostElapsedSeconds: 1800
+            ),
+            ActiveFriendSession(
+                session: ReadingSession(id: "s2", host: james, bookTitle: "1984", startedAt: Date().addingTimeInterval(-3600), status: "active", participants: []),
+                hostElapsedSeconds: 3600
+            ),
+        ]
+    }
+
+    func joinReadingSession(sessionId: String) async throws -> ReadingSession {
+        try await Task.sleep(nanoseconds: 100 * 1_000_000)
+        return ReadingSession(id: sessionId, host: MockData.sampleUser, bookTitle: "Mock Book", startedAt: Date().addingTimeInterval(-600), status: "active", participants: [MockData.sampleUser])
+    }
+
+    func leaveReadingSession(sessionId: String) async throws { try await Task.sleep(nanoseconds: 80 * 1_000_000) }
 }
 
 /// A simple REST API client implementation using URLSession and async/await.
@@ -321,7 +370,80 @@ final class RESTAPIClient: APIClientProtocol {
 
     // Helper to normalize postid value if needed
     private func postidValue(_ id: String) -> String { return id }
-    
+
+    private var jsonDecoder: JSONDecoder {
+        let d = JSONDecoder()
+        d.keyDecodingStrategy = .convertFromSnakeCase
+        d.dateDecodingStrategy = .iso8601
+        return d
+    }
+
+    func startReadingSession(bookTitle: String) async throws -> ReadingSession {
+        let url = baseURL.appendingPathComponent("/reading-sessions")
+        var req = URLRequest(url: url); req.httpMethod = "POST"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["book_title": bookTitle])
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("startReadingSession failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+        return try jsonDecoder.decode(ReadingSession.self, from: data)
+    }
+
+    func endReadingSession(sessionId: String, elapsedSeconds: Int) async throws {
+        let url = baseURL.appendingPathComponent("/reading-sessions/\(sessionId)")
+        var req = URLRequest(url: url); req.httpMethod = "PATCH"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["status": "completed", "elapsed_seconds": elapsedSeconds])
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("endReadingSession failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+    }
+
+    func fetchActiveFriendSessions() async throws -> [ActiveFriendSession] {
+        let url = baseURL.appendingPathComponent("/reading-sessions/friends")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("fetchActiveFriendSessions failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+        return try jsonDecoder.decode([ActiveFriendSession].self, from: data)
+    }
+
+    func joinReadingSession(sessionId: String) async throws -> ReadingSession {
+        let url = baseURL.appendingPathComponent("/reading-sessions/\(sessionId)/participants")
+        var req = URLRequest(url: url); req.httpMethod = "POST"
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("joinReadingSession failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+        return try jsonDecoder.decode(ReadingSession.self, from: data)
+    }
+
+    func leaveReadingSession(sessionId: String) async throws {
+        let url = baseURL.appendingPathComponent("/reading-sessions/\(sessionId)/participants")
+        var req = URLRequest(url: url); req.httpMethod = "DELETE"
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (_, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+    }
+
     func searchBooks(query: String) async throws -> [BookSearchResult] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return [] }
