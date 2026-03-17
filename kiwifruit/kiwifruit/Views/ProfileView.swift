@@ -1,218 +1,267 @@
 import SwiftUI
 
+private struct RecentUpdateItem: Identifiable {
+    let id = UUID()
+    let kind: String
+    let timeAgo: String
+    let quote: String
+    let imageURL: URL?
+}
+
+private enum ProfileDesign {
+    static let kiwiLight = Color(hex: "E6F0DC")
+    static let kiwi = Color(hex: "A3C985")
+    static let tanLight = Color(hex: "F5E6D3")
+    static let cardBackground = Color(hex: "CFE6EC") // uiTeal #88C0D0 at 40% on white
+    static let uiText = Color(hex: "2D3748")
+    static let uiBorder = Color(hex: "E2E8F0")
+    static let border = Color(hex: "2D3748")
+}
+
 struct ProfileView: View {
     let user: User
 
-    @Environment(\.postsStore) private var postsStore: PostsStore
-    // Show posts authored by this user from the shared posts store
-    private var posts: [Post] { postsStore.posts(for: user) }
+    @State private var showingSettings = false
 
-    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
-    @Environment(\.sessionStore) private var session: SessionStore
-    @State private var showingLogin = false
-    @State private var showingCreate = false
-    @State private var followers: [User] = []
-    @State private var following: [User] = []
-    @State private var isFollowing: Bool = false
-    @State private var followPending: Bool = false
-    @State private var showingFollowersSheet = false
-    @State private var showingFollowingSheet = false
+    private let recentUpdates: [RecentUpdateItem] = [
+        RecentUpdateItem(
+            kind: "Reading Status", timeAgo: "2h ago",
+            quote: "Just hit chapter 15! The plot twist was absolutely mind-blowing. Can't wait to see what happens next.",
+            imageURL: URL(string: "https://images.unsplash.com/photo-1614113489855-66422ad300a4?auto=format&fit=crop&q=80&w=200&h=300")
+        ),
+        RecentUpdateItem(
+            kind: "Finished", timeAgo: "Yesterday",
+            quote: "Finally finished this masterpiece. 5/5 stars. Highly recommend to anyone who loves deep world-building.",
+            imageURL: URL(string: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=200&h=300")
+        )
+    ]
+
+    private let libraryURLs: [URL?] = [
+        URL(string: "https://images.unsplash.com/photo-1589829085413-56de8ae18c73?auto=format&fit=crop&q=80&w=200&h=300"),
+        URL(string: "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=200&h=300"),
+        URL(string: "https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&q=80&w=200&h=300")
+    ]
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 16) {
-                    AsyncImage(url: user.avatarURL) { phase in
-                        if let image = phase.image {
-                            image.resizable().scaledToFill()
-                        } else if phase.error != nil {
-                            Image(systemName: "person.crop.circle.fill")
-                                .resizable()
-                        } else {
-                            ProgressView()
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 0) {
+                profileHeaderSection
+                recentUpdatesSection
+                myLibrarySection
+            }
+        }
+        .background(Color.white)
+        .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $showingSettings) {
+            NavigationStack {
+                Text("Settings")
+                    .navigationTitle("Settings")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { showingSettings = false }
                         }
                     }
-                    .frame(width: 80, height: 80)
-                    .clipShape(Circle())
+            }
+        }
+    }
 
-                    VStack(alignment: .leading) {
+    // MARK: - Header
+
+    private var profileHeaderSection: some View {
+        VStack(spacing: 0) {
+            ProfileDesign.kiwiLight
+                .frame(maxWidth: .infinity)
+                .frame(height: 128)
+                .overlay(alignment: .bottom) {
+                    avatarCircle.offset(y: 48)
+                }
+                .overlay(alignment: .topTrailing) {
+                    Button("Settings") { showingSettings = true }
+                        .font(.subheadline).fontWeight(.black)
+                        .foregroundColor(ProfileDesign.uiText)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(ProfileDesign.border, lineWidth: 2))
+                        .sketchShadow()
+                        .padding(.trailing, 16).padding(.top, 16)
+                }
+                .padding(.bottom, 48)
+
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(user.displayName ?? user.username)
-                            .font(.title2)
-                            .bold()
-                        Text("@\(user.username)")
-                            .foregroundColor(.secondary)
+                            .font(.title2).fontWeight(.black)
+                            .foregroundColor(ProfileDesign.uiText)
+                        Text("Avid Reader • Sci-Fi Lover")
+                            .font(.subheadline).fontWeight(.bold)
+                            .foregroundColor(ProfileDesign.uiText.opacity(0.9))
                     }
-
                     Spacer()
+                    Button("Edit") {}
+                        .font(.subheadline).fontWeight(.black)
+                        .foregroundColor(ProfileDesign.uiText)
+                        .padding(.horizontal, 16).padding(.vertical, 6)
+                        .background(ProfileDesign.kiwi)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(ProfileDesign.border, lineWidth: 2))
+                        .sketchShadow()
                 }
+                .padding(.horizontal, 24).padding(.top, 16)
 
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading) {
-                        Button(action: { showingFollowersSheet = true }) {
-                            Text("Followers: \(followers.count)")
-                        }
-                        .buttonStyle(.plain)
-                        Button(action: { showingFollowingSheet = true }) {
-                            Text("Following: \(following.count)")
-                        }
-                        .buttonStyle(.plain)
-                    }
+                Text("\"Currently lost in a galaxy far, far away. Goal: 50 books this year!\"")
+                    .font(.subheadline).fontWeight(.medium)
+                    .foregroundColor(ProfileDesign.uiText)
+                    .lineSpacing(4)
+                    .padding(.horizontal, 24).padding(.top, 16).padding(.bottom, 24)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white)
+        }
+    }
 
+    private var avatarCircle: some View {
+        AsyncImage(url: user.avatarURL) { phase in
+            if let image = phase.image { image.resizable().scaledToFill() }
+            else if phase.error != nil { Image(systemName: "person.crop.circle.fill").resizable().foregroundStyle(.secondary) }
+            else { ProgressView() }
+        }
+        .frame(width: 96, height: 96)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(ProfileDesign.border, lineWidth: 2))
+        .background(Circle().fill(Color.white))
+        .sketchShadowCircle()
+    }
+
+    // MARK: - Recent Updates
+
+    private var recentUpdatesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Recent Updates")
+                .font(.title2).fontWeight(.black)
+                .foregroundColor(ProfileDesign.uiText)
+                .padding(.horizontal, 20).padding(.top, 20)
+
+            ForEach(recentUpdates) { recentUpdateCard($0).padding(.horizontal, 20) }
+
+            Button("LOAD MORE") {}
+                .font(.subheadline).fontWeight(.black)
+                .foregroundColor(ProfileDesign.uiText)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(ProfileDesign.kiwiLight)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(ProfileDesign.border, lineWidth: 2))
+                .sketchShadow()
+                .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 20)
+        }
+        .background(Color.white)
+    }
+
+    private func recentUpdateCard(_ item: RecentUpdateItem) -> some View {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Text(item.kind.uppercased())
+                        .font(.caption2).fontWeight(.black)
+                        .foregroundColor(ProfileDesign.uiText)
                     Spacer()
-
-                    if session.userId == nil {
-                        Button("Sign In") { showingLogin = true }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.green)
-                    } else if session.userId == user.id {
-                        HStack(spacing: 8) {
-                            Button(action: { showingCreate = true }) {
-                                Image(systemName: "plus.app")
-                                Text("New Post")
-                            }
-                            .buttonStyle(.borderedProminent)
-
-                            Button("Sign Out") { session.clear() }
-                                .buttonStyle(.bordered)
-                        }
-                    } else {
-                        if isFollowing {
-                            Button(action: { Task { await toggleFollow() } }) {
-                                Text("Unfollow")
-                            }
-                            .disabled(followPending)
-                            .buttonStyle(.bordered)
-                        } else {
-                            Button(action: { Task { await toggleFollow() } }) {
-                                Text("Follow")
-                            }
-                            .disabled(followPending)
-                            .buttonStyle(.borderedProminent)
-                        }
-                    }
+                    Text(item.timeAgo)
+                        .font(.caption2).fontWeight(.bold)
+                        .foregroundColor(ProfileDesign.uiText.opacity(0.85))
                 }
+                Text("\"\(item.quote)\"")
+                    .font(.subheadline).fontWeight(.bold)
+                    .foregroundColor(ProfileDesign.uiText)
+                    .lineSpacing(4).padding(.bottom, 8)
 
-                Text("Posts")
-                    .font(.headline)
+                Button("Edit") {}
+                    .font(.caption2).fontWeight(.black)
+                    .foregroundColor(ProfileDesign.uiText)
+                    .padding(.horizontal, 12).padding(.vertical, 4)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(ProfileDesign.border, lineWidth: 2))
+                    .sketchShadow(cornerRadius: 6)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-                LazyVGrid(columns: columns, spacing: 8) {
-                    ForEach(posts) { post in
-                        AsyncImage(url: post.imageURL) { phase in
-                            switch phase {
-                            case .empty:
-                                ZStack { Color(.systemGray5); ProgressView() }
-                            case .success(let image):
-                                image.resizable().scaledToFill()
-                            case .failure:
-                                ZStack { Color(.systemGray4); Image(systemName: "photo") }
-                            @unknown default:
-                                EmptyView()
-                            }
-                        }
-                        .frame(height: 140)
-                        .clipped()
-                        .cornerRadius(6)
-                    }
-                }
-            }
-            .padding()
+            bookCoverImage(url: item.imageURL)
+                .frame(width: 80, height: 112)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(ProfileDesign.border, lineWidth: 2))
+                .sketchShadow(cornerRadius: 6)
         }
-        .navigationTitle(user.displayName ?? user.username)
-        .sheet(isPresented: $showingLogin) {
-            LoginView()
-        }
-        .sheet(isPresented: $showingCreate) {
-            CreatePostView(isPresented: $showingCreate) { post in
-                postsStore.prepend(post)
-            }
-            .environment(\.postsStore, postsStore)
-        }
-        .sheet(isPresented: $showingFollowersSheet) {
-            NavigationStack {
-                List(followers) { u in
-                    HStack {
-                        AsyncImage(url: u.avatarURL) { ph in
-                            if let image = ph.image {
-                                image.resizable().scaledToFill()
-                            } else {
-                                Image(systemName: "person.crop.circle.fill")
-                            }
-                        }
-                        .frame(width: 36, height: 36)
-                        .clipShape(Circle())
-                        Text(u.displayName ?? u.username)
-                    }
-                }
-                .navigationTitle("Followers")
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { showingFollowersSheet = false } } }
-            }
-        }
-        .sheet(isPresented: $showingFollowingSheet) {
-            NavigationStack {
-                List(following) { u in
-                    HStack {
-                        AsyncImage(url: u.avatarURL) { ph in
-                            if let image = ph.image {
-                                image.resizable().scaledToFill()
-                            } else {
-                                Image(systemName: "person.crop.circle.fill")
-                            }
-                        }
-                        .frame(width: 36, height: 36)
-                        .clipShape(Circle())
-                        Text(u.displayName ?? u.username)
-                    }
-                }
-                .navigationTitle("Following")
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { showingFollowingSheet = false } } }
-            }
-        }
-        .task {
-            await loadFollowLists()
-        }
+        .padding(16)
+        .background(ProfileDesign.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(ProfileDesign.border, lineWidth: 2))
+        .sketchShadow()
     }
 
-    // Load followers/following lists and compute following state
-    private func loadFollowLists() async {
-        do {
-            let f = try await AppAPI.shared.fetchFollowers(username: user.username)
-            let fo = try await AppAPI.shared.fetchFollowing(username: user.username)
-            DispatchQueue.main.async {
-                self.followers = f
-                self.following = fo
-                if let cur = session.userId {
-                    self.isFollowing = f.contains(where: { $0.id == cur })
-                } else {
-                    self.isFollowing = false
+    // MARK: - My Library
+
+    private var myLibrarySection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("My Library")
+                    .font(.title2).fontWeight(.black)
+                    .foregroundColor(ProfileDesign.uiText)
+                Spacer()
+                Button("Add") {}
+                    .font(.subheadline).fontWeight(.black)
+                    .foregroundColor(ProfileDesign.uiText)
+                    .padding(.horizontal, 16).padding(.vertical, 6)
+                    .background(ProfileDesign.kiwi)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(ProfileDesign.border, lineWidth: 2))
+                    .sketchShadow()
+            }
+            .padding(.horizontal, 20).padding(.top, 32)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(Array(libraryURLs.enumerated()), id: \.offset) { _, url in
+                        bookCoverImage(url: url)
+                            .frame(width: 96, height: 144)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(ProfileDesign.border, lineWidth: 2))
+                            .sketchShadow(cornerRadius: 6)
+                    }
+                    addBookPlaceholder
                 }
+                .padding(.horizontal, 20).padding(.bottom, 8)
             }
-        } catch {
-            print("loadFollowLists failed: \(error)")
+            .padding(.bottom, 24)
         }
+        .background(Color.white)
     }
 
-    private func toggleFollow() async {
-        guard let cur = session.userId else { return }
-        followPending = true
-        defer { followPending = false }
-        do {
-            if isFollowing {
-                try await AppAPI.shared.unfollowUser(user.username)
-            } else {
-                try await AppAPI.shared.followUser(user.username)
-            }
-            await loadFollowLists()
-        } catch {
-            print("toggleFollow failed: \(error)")
+    private var addBookPlaceholder: some View {
+        VStack(spacing: 4) {
+            Text("+").font(.title).fontWeight(.black).foregroundColor(ProfileDesign.uiText)
+            Text("Add Book").font(.caption2).fontWeight(.bold).foregroundColor(ProfileDesign.uiText)
         }
+        .frame(width: 96, height: 144)
+        .background(ProfileDesign.tanLight.opacity(0.4))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(ProfileDesign.border, lineWidth: 2))
+        .sketchShadow(cornerRadius: 6)
     }
 
+    @ViewBuilder
+    private func bookCoverImage(url: URL?) -> some View {
+        AsyncImage(url: url) { phase in
+            if let image = phase.image { image.resizable().scaledToFill() }
+            else if phase.error != nil { ProfileDesign.uiBorder.overlay(Image(systemName: "book.closed")) }
+            else { ProfileDesign.uiBorder.overlay(ProgressView()) }
+        }
+    }
 }
 
-struct ProfileView_Previews: PreviewProvider {
-    static var previews: some View {
-        NavigationStack {
-            ProfileView(user: MockData.sampleUser)
-        }
+#Preview {
+    NavigationStack {
+        ProfileView(user: MockData.sampleUser)
     }
 }

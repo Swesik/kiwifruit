@@ -57,8 +57,6 @@ struct CommentsView: View {
     }
 }
 
-struct CommentsView_Previews: PreviewProvider {
-    static var previews: some View {
-        CommentsView(post: MockData.makePosts(count: 1, page: 0).first!)
-    }
+#Preview {
+    CommentsView(post: MockData.makePosts(count: 1, page: 0).first!)
 }
