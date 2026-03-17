@@ -20,6 +20,7 @@ private let recommendationURLs: [URL?] = [
 
 struct DiscoverView: View {
     @Bindable var bookSearchViewModel: BookSearchViewModel
+    @Bindable var bookScanViewModel: BookScanViewModel
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -38,6 +39,21 @@ struct DiscoverView: View {
         }
         .background(Color.white)
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(
+            isPresented: Binding(
+                get: { bookScanViewModel.isShowingCamera },
+                set: { bookScanViewModel.isShowingCamera = $0 }
+            )
+        ) {
+            CameraPickerView { image in
+                Task {
+                    if let capturedText = await bookScanViewModel.processCapturedImage(image) {
+                        bookSearchViewModel.query = capturedText
+                        await bookSearchViewModel.submit()
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Search
@@ -69,7 +85,7 @@ struct DiscoverView: View {
             }
 
             Button {
-                // barcode / title scan
+                bookScanViewModel.startCamera()
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "barcode")
@@ -95,7 +111,7 @@ struct DiscoverView: View {
                 .font(.title2).fontWeight(.black)
                 .foregroundColor(DiscoverDesign.uiText)
 
-            if bookSearchViewModel.isSearching {
+            if bookSearchViewModel.isSearching || bookScanViewModel.isProcessing {
                 HStack {
                     Spacer()
                     ProgressView()
@@ -106,7 +122,7 @@ struct DiscoverView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
                 .sketchShadow()
-            } else if let msg = bookSearchViewModel.errorMessage {
+            } else if let msg = bookScanViewModel.errorMessage ?? bookScanViewModel.statusMessage ?? bookSearchViewModel.errorMessage {
                 Text(msg)
                     .font(.subheadline).fontWeight(.bold)
                     .foregroundColor(DiscoverDesign.uiText.opacity(0.6))
@@ -195,5 +211,8 @@ struct DiscoverView: View {
 }
 
 #Preview {
-    DiscoverView(bookSearchViewModel: BookSearchViewModel(api: MockAPIClient()))
+    DiscoverView(
+        bookSearchViewModel: BookSearchViewModel(api: MockAPIClient()),
+        bookScanViewModel: BookScanViewModel(scannerService: VisionBookScannerService(), api: MockAPIClient())
+    )
 }

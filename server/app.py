@@ -639,6 +639,41 @@ def update_user(username):
     user = {'id': newrow['username'], 'username': newrow['username'], 'displayName': newrow['fullname'], 'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (newrow['filename'] or 'default.jpg')}
     return jsonify(user)
 
+@app.route('/books/scan', methods=['POST'])
+def capture_book_scan():
+    """Receive a camera-derived book scan payload for later processing.
+
+    **POST** ``/books/scan``
+
+    Accepts JSON containing either:
+    - ``barcode``: detected EAN-13 string
+    - ``ocrText``: OCR-extracted candidate title/author text
+
+    At least one payload field must be present.
+
+    :json string barcode: Detected EAN-13 barcode value (optional).
+    :json string ocrText: OCR candidate text payload (optional).
+    :returns: JSON echoing the accepted payload.
+    :status 200: Payload accepted.
+    :status 400: Missing both barcode and OCR text.
+    """
+    data = request.get_json() or {}
+    barcode = data.get('barcode')
+    ocr_text = data.get('ocrText')
+
+    if not barcode and not ocr_text:
+        return jsonify({
+            'message': 'Missing scan payload',
+            'status_code': 400
+        }), 400
+
+    logger.info('book scan captured: barcode=%s ocr_present=%s', barcode, bool(ocr_text))
+
+    return jsonify({
+        'status': 'ok',
+        'barcode': barcode,
+        'ocrText': ocr_text
+    })
 
 @app.errorhandler(HTTPException)
 def handle_http_exception(e: HTTPException):
