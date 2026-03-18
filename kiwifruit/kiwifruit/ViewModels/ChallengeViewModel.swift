@@ -147,7 +147,8 @@ final class ChallengeViewModel {
             // Build a natural title/description combining weather and a reading task
             let temp = w.temp ?? 0.0
             let desc = w.description ?? ""
-            let details = "Temp: \(Int(temp))°F. Wind: \(String(format: \"%.1f\", w.wind_speed ?? 0.0)) mph. \(desc)"
+            let windStr = String(format: "%.1f", w.wind_speed ?? 0.0)
+            let details = "Temp: \(Int(temp))°F. Wind: \(windStr) mph. \(desc)"
             var title = "Weather Read"
             var description = "Based on local weather (\(details)). Read a short piece that matches the mood for 20 minutes."
             // Set a reasonable XP and difficulty based on conditions
