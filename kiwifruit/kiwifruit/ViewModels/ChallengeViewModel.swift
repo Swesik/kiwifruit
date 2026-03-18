@@ -104,6 +104,18 @@ final class ChallengeViewModel {
         Task { await loadRecommendations() }
     }
 
+    // Create a weather-driven challenge using external API and add as accepted with zeroed progress
+    func createWeatherChallenge(lat: Double, lon: Double) async {
+        // Generate a weather-based challenge; fall back to a simple dynamic item if generation fails
+        var c = await DynamicChallengeService.shared.generateDynamicChallenge(lat: lat, lon: lon, streak: self.streak)
+        c.state = .accepted
+        c.progress = 0.0
+        // Add to user's active challenges and persist
+        activeChallenges.append(c)
+        persistActiveDynamicChallenges()
+        Task { await loadRecommendations() }
+    }
+
     // Log progress for a custom challenge: amount is in the unit matching goalUnit (e.g., pages, minutes, books)
     func logProgress(challengeId: UUID, amount: Int) {
         guard let idx = activeChallenges.firstIndex(where: { $0.id == challengeId }) else { return }

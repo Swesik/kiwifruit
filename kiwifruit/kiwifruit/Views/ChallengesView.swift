@@ -6,9 +6,12 @@ struct ChallengesView: View {
     @State private var showDetail = false
     @State private var showLimitAlert = false
     @State private var newType: String = "pages"
-    @State private var pagesPerWeek: String = ""
-    @State private var minutesPerWeek: String = ""
-    @State private var booksCount: String = ""
+    @State private var pagesPerWeekVal: Double = 50
+    @State private var minutesPerWeekVal: Double = 120
+    @State private var booksCountVal: Double = 2
+    @State private var weatherToggle: Bool = false
+    @State private var latText: String = ""
+    @State private var lonText: String = ""
 
     var body: some View {
         NavigationStack {
@@ -16,41 +19,6 @@ struct ChallengesView: View {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading) {
                         Text("Challenges").font(.largeTitle).bold()
-                        Text("Total Points: \(vm.totalPoints)").font(.subheadline).foregroundColor(.secondary)
-                        // Create challenge form
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Create Challenge").font(.subheadline).bold()
-                            Picker("Type", selection: $newType) {
-                                Text("Pages/week").tag("pages")
-                                Text("Minutes/week").tag("minutes")
-                                Text("Books/month").tag("books")
-                            }
-                            .pickerStyle(.segmented)
-
-                            if newType == "pages" {
-                                TextField("Pages per week", text: $pagesPerWeek).keyboardType(.numberPad).textFieldStyle(.roundedBorder).frame(width: 180)
-                            } else if newType == "minutes" {
-                                TextField("Minutes per week", text: $minutesPerWeek).keyboardType(.numberPad).textFieldStyle(.roundedBorder).frame(width: 180)
-                            } else if newType == "books" {
-                                TextField("Books this month", text: $booksCount).keyboardType(.numberPad).textFieldStyle(.roundedBorder).frame(width: 180)
-                            }
-
-                            Button("Create and Add") {
-                                if newType == "pages" {
-                                    let val = Int(pagesPerWeek) ?? 0
-                                    vm.createChallenge(type: "pages", pagesPerWeek: val)
-                                } else if newType == "minutes" {
-                                    let val = Int(minutesPerWeek) ?? 0
-                                    vm.createChallenge(type: "minutes", minutesPerWeek: val)
-                                } else {
-                                    let val = Int(booksCount) ?? 0
-                                    vm.createChallenge(type: "books", booksCount: val)
-                                }
-                                // clear inputs
-                                pagesPerWeek = ""; minutesPerWeek = ""; booksCount = ""
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
                     }
                     Spacer()
                     VStack(alignment: .trailing) {
@@ -78,13 +46,75 @@ struct ChallengesView: View {
                             }
                         }
 
+                        // Create Challenge section (placed after user's active challenges)
+                        Divider().padding(.vertical)
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Create Challenge").font(.title3).bold().padding(.horizontal)
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Picker("Type", selection: $newType) {
+                                        Text("Pages/week").tag("pages")
+                                        Text("Minutes/week").tag("minutes")
+                                        Text("Books/month").tag("books")
+                                    }
+                                    .pickerStyle(.segmented)
+
+                                    Toggle("Weather-driven challenge", isOn: $weatherToggle)
+
+                                    if weatherToggle {
+                                        VStack(alignment: .leading, spacing: 6) {
+                                            TextField("Latitude", text: $latText).textFieldStyle(.roundedBorder).keyboardType(.decimalPad).frame(width: 180)
+                                            TextField("Longitude", text: $lonText).textFieldStyle(.roundedBorder).keyboardType(.decimalPad).frame(width: 180)
+                                            Button("Create Weather Challenge") {
+                                                if let lat = Double(latText), let lon = Double(lonText) {
+                                                    Task { await vm.createWeatherChallenge(lat: lat, lon: lon) }
+                                                    latText = ""; lonText = ""
+                                                }
+                                            }
+                                            .buttonStyle(.borderedProminent)
+                                        }
+                                    } else {
+                                        if newType == "pages" {
+                                            VStack(alignment: .leading) {
+                                                Text("Pages per week: \(Int(pagesPerWeekVal))")
+                                                Slider(value: $pagesPerWeekVal, in: 0...500, step: 5)
+                                            }
+                                        } else if newType == "minutes" {
+                                            VStack(alignment: .leading) {
+                                                Text("Minutes per week: \(Int(minutesPerWeekVal))")
+                                                Slider(value: $minutesPerWeekVal, in: 0...600, step: 5)
+                                            }
+                                        } else if newType == "books" {
+                                            VStack(alignment: .leading) {
+                                                Text("Books this month: \(Int(booksCountVal))")
+                                                Slider(value: $booksCountVal, in: 0...20, step: 1)
+                                            }
+                                        }
+
+                                        Button("Create and Add") {
+                                            if newType == "pages" {
+                                                vm.createChallenge(type: "pages", pagesPerWeek: Int(pagesPerWeekVal))
+                                            } else if newType == "minutes" {
+                                                vm.createChallenge(type: "minutes", minutesPerWeek: Int(minutesPerWeekVal))
+                                            } else {
+                                                vm.createChallenge(type: "books", booksCount: Int(booksCountVal))
+                                            }
+                                        }
+                                        .buttonStyle(.borderedProminent)
+                                    }
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal)
+                        }
+
                         Divider().padding(.vertical)
 
                         HStack {
                             Text("Discover More").font(.title2).bold()
                             Spacer()
                             Button(action: { Task { await vm.refreshRecommendations() } }) {
-                                Text("Generate new challenge")
+                                Image(systemName: "arrow.clockwise")
                             }
                             .buttonStyle(.bordered)
                         }

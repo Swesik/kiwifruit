@@ -29,10 +29,7 @@ struct ChallengeCardView: View {
                             .foregroundColor(.blue)
                     }
 
-                    Text("\(challenge.rewardXP) XP")
-                    .font(.caption2).bold()
-                    .padding(6)
-                    .background(Capsule().fill(Color.yellow.opacity(0.9)))
+                    // XP is shown in the header only; remove per-card XP to reduce duplication
                 }
             }
 
