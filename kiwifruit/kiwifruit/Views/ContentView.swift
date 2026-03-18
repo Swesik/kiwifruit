@@ -8,6 +8,10 @@ struct ContentView: View {
     @State private var selection: Int = 0
     
     @State private var bookSearchViewModel = BookSearchViewModel(api: AppAPI.shared)
+    @State private var bookScanViewModel = BookScanViewModel(
+        scannerService: VisionBookScannerService(),
+        api: AppAPI.shared
+    )
 
     private var currentUser: User {
         if let user = session.currentUser { return user }
@@ -22,9 +26,14 @@ struct ContentView: View {
             NavigationStack { FeedView() }
                 .tabItem { Label("Home", systemImage: "house.fill") }
                 .tag(0)
-            NavigationStack { DiscoverView(bookSearchViewModel: bookSearchViewModel) }
-                .tabItem { Label("Discover", systemImage: "sparkles") }
-                .tag(1)
+            NavigationStack {
+                DiscoverView(
+                    bookSearchViewModel: bookSearchViewModel,
+                    bookScanViewModel: bookScanViewModel
+                )
+            }
+            .tabItem { Label("Discover", systemImage: "sparkles") }
+            .tag(1)
 
             NavigationStack { ProfileView(user: currentUser) }
                 .tabItem { Label("Profile", systemImage: "person.crop.circle") }

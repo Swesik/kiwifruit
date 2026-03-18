@@ -26,7 +26,6 @@ protocol APIClientProtocol {
     func deleteComment(commentId: String) async throws -> Void
     func deletePost(_ postId: String) async throws -> Void
     func searchBooks(query: String) async throws -> [BookSearchResult]
-
     // MARK: - Reading Sessions
     /// Creates a new reading session for the current user and returns the persisted session object.
     func startReadingSession(bookTitle: String) async throws -> ReadingSession
@@ -38,6 +37,8 @@ protocol APIClientProtocol {
     func joinReadingSession(sessionId: String) async throws -> ReadingSession
     /// Removes the current user from a session they joined (does not end the host's session).
     func leaveReadingSession(sessionId: String, elapsedSeconds: Int, pagesRead: Int?, bookTitle: String?) async throws -> Void
+    func sendBookScan(barcode: String?, ocrText: String?) async throws -> BookScanResponse
+    
 }
 
 /// Simple in-memory/mock client used in previews and when no backend is configured.
@@ -132,6 +133,14 @@ final class MockAPIClient: APIClientProtocol {
     }
 
     func leaveReadingSession(sessionId: String, elapsedSeconds: Int, pagesRead: Int?, bookTitle: String?) async throws { try await Task.sleep(nanoseconds: 80 * 1_000_000) }
+    func sendBookScan(barcode: String?, ocrText: String?) async throws -> BookScanResponse {
+        try await Task.sleep(nanoseconds: 120 * 1_000_000)
+        return BookScanResponse(
+            status: "ok",
+            barcode: barcode,
+            ocrText: ocrText
+        )
+    }
 }
 
 /// A simple REST API client implementation using URLSession and async/await.
@@ -478,10 +487,44 @@ final class RESTAPIClient: APIClientProtocol {
         decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode([BookSearchResult].self, from: data)
     }
+    func sendBookScan(barcode: String?, ocrText: String?) async throws -> BookScanResponse {
+        let url = baseURL.appendingPathComponent("/books/scan")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken {
+            req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        var body: [String: Any] = [:]
+        if let barcode {
+            body["barcode"] = barcode
+        }
+        if let ocrText {
+            body["ocrText"] = ocrText
+        }
+
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            let bodyText = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+            print("sendBookScan failed HTTP \(http.statusCode): \(bodyText)")
+            throw URLError(.badServerResponse)
+        }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(BookScanResponse.self, from: data)
+    }
 }
 
 enum AppAPI {
     /// Default shared client. Swap to `RESTAPIClient(baseURL:)` when you have a backend.
-    static var shared: APIClientProtocol = RESTAPIClient(baseURL: URL(string: "http://127.0.0.1:5001")!)
+    static var shared: APIClientProtocol = RESTAPIClient(baseURL:
+        URL(string: "http://127.0.0.1:5001")!)
 }
+
 
