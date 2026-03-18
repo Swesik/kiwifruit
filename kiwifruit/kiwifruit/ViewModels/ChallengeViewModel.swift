@@ -106,11 +106,43 @@ final class ChallengeViewModel {
 
     // Create a weather-driven challenge using external API and add as accepted with zeroed progress
     func createWeatherChallenge(lat: Double, lon: Double) async {
-        // Generate a weather-based challenge; fall back to a simple dynamic item if generation fails
+        // Try to fetch weather and build a combined reading challenge from it
+        do {
+            let w = try await ApiNinjasWeatherService.shared.fetchWeather(lat: lat, lon: lon)
+            // Build a natural title/description combining weather and a reading task
+            let temp = w.temp ?? 0.0
+            let desc = w.description ?? ""
+            let details = "Temp: \(Int(temp))°F. \(desc)"
+            var title = "Weather Read"
+            var description = "Based on local weather (\(details)). Read a short piece that matches the mood for 20 minutes."
+            // Set a reasonable XP and difficulty based on conditions
+            let difficulty = difficultyForStreak(self.streak)
+            let xp = rewardForDifficulty(10 + difficulty * 5, streak: self.streak)
+
+            var c = Challenge(title: title, description: description, category: "weather", difficulty: difficulty, progress: 0.0, rewardXP: xp, recommendedConditions: nil, hint: nil, goalCount: nil, goalUnit: nil, state: .accepted)
+            c.recommendationExplanation = "Generated from ApiNinjas weather: \(details)"
+            c.hint = "Try a short story or essay that reflects the current weather."
+
+            // Ask OpenAI to refine the title/description/hint for UX polish
+            if let enhanced = await OpenAIService.shared.enhanceChallenge(c, context: "weather: \(details)") {
+                if let t = enhanced.title { c.title = t }
+                if let d = enhanced.description { c.description = d }
+                if let h = enhanced.hint { c.hint = h }
+            }
+
+            // Add to user's active challenges and persist
+            activeChallenges.append(c)
+            persistActiveDynamicChallenges()
+            Task { await loadRecommendations() }
+            return
+        } catch {
+            // On error, fall back to a dynamic item
+        }
+
+        // Fallback: use the dynamic generator
         var c = await DynamicChallengeService.shared.generateDynamicChallenge(lat: lat, lon: lon, streak: self.streak)
         c.state = .accepted
         c.progress = 0.0
-        // Add to user's active challenges and persist
         activeChallenges.append(c)
         persistActiveDynamicChallenges()
         Task { await loadRecommendations() }

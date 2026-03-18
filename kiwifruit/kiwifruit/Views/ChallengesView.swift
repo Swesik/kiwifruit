@@ -24,29 +24,13 @@ struct ChallengesView: View {
                     VStack(alignment: .trailing) {
                         Text("\(vm.streak) day streak").font(.footnote).padding(8).background(Capsule().fill(Color.blue.opacity(0.2)))
                         Text("\(vm.totalPoints) XP").font(.caption2).padding(6).background(Capsule().fill(Color.orange.opacity(0.2)))
-                        NavigationLink("Completed", destination: CompletedChallengesView(viewModel: vm))
                     }
                 }
                 .padding([.horizontal, .top])
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("Your Challenges").font(.title2).bold().padding(.horizontal)
-                        if vm.activeChallenges.isEmpty {
-                            Text("No active challenges. Explore Discover More below!").foregroundColor(.secondary).padding(.horizontal)
-                        } else {
-                            ForEach(vm.activeChallenges) { challenge in
-                                ChallengeCardView(challenge: challenge, action: {
-                                    // action -> complete when accepted
-                                    vm.complete(challenge)
-                                }, viewAction: {
-                                    selected = challenge; showDetail = true
-                                })
-                                .padding(.horizontal)
-                            }
-                        }
-
-                        // Create Challenge section (placed after user's active challenges)
+                        // Create Challenge section (moved above user's challenges)
                         Divider().padding(.vertical)
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Create Challenge").font(.title3).bold().padding(.horizontal)
@@ -59,7 +43,7 @@ struct ChallengesView: View {
                                     }
                                     .pickerStyle(.segmented)
 
-                                    Toggle("Weather-driven challenge", isOn: $weatherToggle)
+                                    Toggle("Generate challenge from weather (use lat/lon)", isOn: $weatherToggle)
 
                                     if weatherToggle {
                                         VStack(alignment: .leading, spacing: 6) {
@@ -108,7 +92,22 @@ struct ChallengesView: View {
                             .padding(.horizontal)
                         }
 
-                        Divider().padding(.vertical)
+                        Text("Your Challenges").font(.title2).bold().padding(.horizontal)
+                        if vm.activeChallenges.isEmpty {
+                            Text("No active challenges. Explore Discover More below!").foregroundColor(.secondary).padding(.horizontal)
+                        } else {
+                            ForEach(vm.activeChallenges) { challenge in
+                                ChallengeCardView(challenge: challenge, action: {
+                                    // action -> complete when accepted
+                                    vm.complete(challenge)
+                                }, viewAction: {
+                                    selected = challenge; showDetail = true
+                                })
+                                .padding(.horizontal)
+                            }
+                        }
+
+                        // (create section was moved above)
 
                         HStack {
                             Text("Discover More").font(.title2).bold()
@@ -121,7 +120,7 @@ struct ChallengesView: View {
                         .padding(.horizontal)
                         ForEach(vm.recommended) { challenge in
                             ChallengeCardView(challenge: challenge, action: {
-                                // action -> accept
+                                // action -> join (alias to accept) keeping success handling
                                 let success = vm.accept(challenge)
                                 if !success { showLimitAlert = true }
                             }, viewAction: {
@@ -146,7 +145,7 @@ struct ChallengesView: View {
             .alert("Maximum active challenges reached", isPresented: $showLimitAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text("You can have up to 3 active challenges. Abandon an active challenge to accept a new one.")
+                Text("You can have up to 3 active challenges. Abandon an active challenge to join a new one.")
             }
         }
     }

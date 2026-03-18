@@ -37,7 +37,7 @@ struct ChallengeCardView: View {
 
             HStack {
                 if challenge.state == .available {
-                    Button("Accept") { action() }
+                    Button("Join") { action() }
                         .buttonStyle(.borderedProminent)
                 } else if challenge.state == .accepted {
                     Button("Complete") { action() }
