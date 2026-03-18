@@ -147,7 +147,6 @@ final class ChallengeViewModel {
         if let dynamics = try? decoder.decode([Challenge].self, from: data) {
             for var c in dynamics {
                 c.state = .accepted
-                c.progress = c.progress // keep stored progress
                 // avoid duplicates
                 if !activeChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) {
                     activeChallenges.append(c)
