@@ -583,28 +583,30 @@ def reading_sessions_handler():
             })
         return jsonify(out)
 
-    # POST - create
-    username = get_username_from_token(request)
-    if not username:
-        abort(403)
-    data = request.get_json() or {}
-    session_id = data.get('session_id') or uuid.uuid4().hex
-    host = data.get('host') or username
-    book_title = data.get('book_title')
-    elapsed = data.get('elapsed_seconds')
-    status = data.get('status') or 'active'
-    if not host or not book_title:
-        abort(400)
-    try:
-        db.execute('INSERT OR REPLACE INTO reading_sessions (session_id, host, book_title, started_at, status, elapsed_seconds) VALUES (?, ?, datetime('now'), ?, ?, ?)', (session_id, host, book_title, status, status, elapsed))
-        db.commit()
-    except Exception as e:
-        logger.exception('failed to insert reading_session: %s', e)
-        abort(500)
-    return jsonify({'status': 'ok', 'session_id': session_id})
+    if request.method == 'POST':
+        # Create a new reading session. Requires authentication.
+        username = get_username_from_token(request)
+        if not username:
+            abort(403)
+        data = request.get_json() or {}
+        session_id = data.get('session_id') or uuid.uuid4().hex
+        host = data.get('host') or username
+        book_title = data.get('book_title')
+        elapsed = data.get('elapsed_seconds')
+        status = data.get('status') or 'active'
+        if not host or not book_title:
+            abort(400)
+        try:
+            # Use datetime('now') for started_at while passing the other params in order
+            db.execute("INSERT OR REPLACE INTO reading_sessions (session_id, host, book_title, started_at, status, elapsed_seconds) VALUES (?, ?, ?, datetime('now'), ?, ?)", (session_id, host, book_title, status, elapsed))
+            db.commit()
+        except Exception as e:
+            logger.exception('failed to insert reading_session: %s', e)
+            abort(500)
+        return jsonify({'status': 'ok', 'session_id': session_id})
 
-    # PUT - update
     if request.method == 'PUT':
+        # Update an existing session (e.g., mark completed). Requires authentication and session_id.
         username = get_username_from_token(request)
         if not username:
             abort(403)
