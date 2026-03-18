@@ -140,7 +140,7 @@ final class ChallengeViewModel {
     }
 
     // Create a weather-driven challenge using external API and add as accepted with zeroed progress
-    func createWeatherChallenge(lat: Double, lon: Double) async {
+    func createWeatherChallenge(lat: Double, lon: Double, placeName: String? = nil) async {
         // Try to fetch weather and build a combined reading challenge from it
         do {
             let w = try await ApiNinjasWeatherService.shared.fetchWeather(lat: lat, lon: lon)
@@ -159,18 +159,37 @@ final class ChallengeViewModel {
             c.recommendationExplanation = "Generated from ApiNinjas weather: \(details)"
             c.hint = "Try a short story or essay that reflects the current weather."
 
-            // Ask OpenAI to refine the title/description/hint for UX polish
-            if let enhanced = await OpenAIService.shared.enhanceChallenge(c, context: "weather: \(details)") {
+            // Build richer context including temperature and place for the LLM
+            let placeContext = (placeName?.isEmpty == false) ? "location='\(placeName!)'" : "lat=\(String(format: "%.2f", lat)), lon=\(String(format: "%.2f", lon))"
+            let userContext = "Temperature=\(Int(temp))F; wind=\(windStr)mph; humidity=\(Int(w.humidity ?? 0)); \(placeContext); date=\(Date()). Create a short, mobile-friendly reading challenge title, description (one-sentence), and a hint specifically tailored to the temperature. Respond with JSON {\"title\", \"description\", \"hint\"}."
+            if let enhanced = await OpenAIService.shared.enhanceChallenge(c, context: userContext) {
                 if let t = enhanced.title { c.title = t }
                 if let d = enhanced.description { c.description = d }
                 if let h = enhanced.hint { c.hint = h }
+            } else {
+                // Fallback: adapt description by temperature
+                if temp > 75 {
+                    c.description = "It's warm — take a 20-minute outdoor reading session that suits the weather."
+                    c.hint = "Find a short, bright story or essay to enjoy outside."
+                } else if temp < 50 {
+                    c.description = "It's cool — cozy up indoors and read for 25 minutes."
+                    c.hint = "Choose a comforting essay or short story."
+                } else if (w.humidity ?? 0) > 80 || (desc.lowercased().contains("rain")) {
+                    c.description = "Rainy or humid — make a cozy 25-minute indoor reading plan."
+                    c.hint = "Pick a short, contemplative piece and a warm drink."
+                } else {
+                    c.description = "A moderate day — read a short piece for 20 minutes that matches the local mood."
+                    c.hint = "Try a short story or poem reflecting the scene."
+                }
             }
 
             // Add to user's active challenges and persist
             c.generatedLat = lat
             c.generatedLon = lon
             c.generatedLocationIsRandom = false
-            if let geo = try? await GeoService.shared.reverseGeocode(lat: lat, lon: lon) {
+            if let pn = placeName, !pn.isEmpty {
+                c.generatedLocationName = pn
+            } else if let geo = try? await GeoService.shared.reverseGeocode(lat: lat, lon: lon) {
                 c.generatedLocationName = geo.displayName ?? geo.country
             }
             activeChallenges.append(c)
