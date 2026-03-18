@@ -13,6 +13,7 @@ final class ChallengeViewModel {
     private var bank: [Challenge] = []
     private let totalPointsKey = "kiwifruit.totalPoints"
     private let completedIDsKey = "kiwifruit.completedChallengeIDs"
+    private let persistedDynamicKey = "kiwifruit.persistedActiveDynamicChallenges"
 
     init(streak: Int = 1) {
         self.streak = streak
@@ -29,6 +30,8 @@ final class ChallengeViewModel {
             let completed = bank.filter { uuidSet.contains($0.id) }
             completedChallenges = completed.map { var c = $0; c.state = .completed; c.progress = 1.0; return c }
         }
+        // restore any previously-accepted dynamic challenges
+        loadPersistedDynamicChallenges()
     }
     
 
@@ -44,16 +47,19 @@ final class ChallengeViewModel {
             else { c.state = .available }
             return c
         }
-        // Ensure recommended doesn't include already accepted ones (by id or title)
+        // Ensure recommended doesn't include already accepted or completed ones (by id or title)
         var filtered = mapped.filter { candidate in
-            !activeChallenges.contains(where: { $0.id == candidate.id || $0.title == candidate.title })
+            let isActive = activeChallenges.contains(where: { $0.id == candidate.id || $0.title == candidate.title })
+            let isCompleted = completedChallenges.contains(where: { $0.id == candidate.id || $0.title == candidate.title })
+            return !isActive && !isCompleted
         }
 
         // If we have fewer than desired, generate dynamic fill-ins
         while filtered.count < desired {
             let dyn = await DynamicChallengeService.shared.generateDynamicChallenge()
             // avoid duplicates by title
-            if !filtered.contains(where: { $0.title == dyn.title }) && !activeChallenges.contains(where: { $0.title == dyn.title }) {
+            let isCompleted = completedChallenges.contains(where: { $0.title == dyn.title })
+            if !filtered.contains(where: { $0.title == dyn.title }) && !activeChallenges.contains(where: { $0.title == dyn.title }) && !isCompleted {
                 filtered.append(dyn)
             }
             // safety: break if we loop too many times
@@ -75,6 +81,8 @@ final class ChallengeViewModel {
         activeChallenges.append(c)
         // Remove any recommended entries that match by id or title to avoid duplication in Discover
         recommended.removeAll { $0.id == c.id || $0.title == c.title }
+        // persist accepted dynamic challenges so they survive app restarts
+        persistActiveDynamicChallenges()
         // refill discover asynchronously so user sees 4 items consistently
         Task { await loadRecommendations() }
         return true
@@ -87,6 +95,7 @@ final class ChallengeViewModel {
 
     func abandon(_ challenge: Challenge) {
         activeChallenges.removeAll { $0.id == challenge.id }
+        persistActiveDynamicChallenges()
         Task { await loadRecommendations() }
     }
 
@@ -110,12 +119,41 @@ final class ChallengeViewModel {
         recommended.removeAll { $0.id == c.id || $0.title == c.title }
         // refill discover asynchronously to maintain constant discover size
         Task { await loadRecommendations() }
+        // persist removal of any dynamic challenges no longer active
+        persistActiveDynamicChallenges()
     }
 
     private func persistTotals() {
         UserDefaults.standard.set(totalPoints, forKey: totalPointsKey)
         let ids = completedChallenges.map { $0.id.uuidString }
         UserDefaults.standard.set(ids, forKey: completedIDsKey)
+    }
+
+    // Persist currently active dynamic challenges to UserDefaults
+    private func persistActiveDynamicChallenges() {
+        let dynamics = activeChallenges.filter { $0.category == "dynamic" }
+        let encoder = JSONEncoder()
+        if let data = try? encoder.encode(dynamics) {
+            UserDefaults.standard.set(data, forKey: persistedDynamicKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: persistedDynamicKey)
+        }
+    }
+
+    // Load previously persisted dynamic challenges and restore them as accepted
+    private func loadPersistedDynamicChallenges() {
+        guard let data = UserDefaults.standard.data(forKey: persistedDynamicKey) else { return }
+        let decoder = JSONDecoder()
+        if let dynamics = try? decoder.decode([Challenge].self, from: data) {
+            for var c in dynamics {
+                c.state = .accepted
+                c.progress = c.progress // keep stored progress
+                // avoid duplicates
+                if !activeChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) {
+                    activeChallenges.append(c)
+                }
+            }
+        }
     }
 
     
