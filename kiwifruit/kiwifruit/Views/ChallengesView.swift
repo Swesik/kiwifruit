@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ChallengesView: View {
-    @State private var vm = ChallengeViewModel()
+    @StateObject private var vm = ChallengeViewModel()
     @State private var selected: Challenge? = nil
     @State private var showDetail = false
     @State private var showLimitAlert = false

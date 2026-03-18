@@ -33,7 +33,8 @@ final class ChallengeViewModel {
     
 
     func loadRecommendations() async {
-        let rec = await engine.recommend(limit: 6)
+        let desired = 4
+        var rec = await engine.recommend(limit: desired)
         // reconcile state with accepted/completed
         var mapped = rec.map { (ch) -> Challenge in
             var c = ch
@@ -44,9 +45,22 @@ final class ChallengeViewModel {
             return c
         }
         // Ensure recommended doesn't include already accepted ones (by id or title)
-        self.recommended = mapped.filter { candidate in
+        var filtered = mapped.filter { candidate in
             !activeChallenges.contains(where: { $0.id == candidate.id || $0.title == candidate.title })
         }
+
+        // If we have fewer than desired, generate dynamic fill-ins
+        while filtered.count < desired {
+            let dyn = await DynamicChallengeService.shared.generateDynamicChallenge()
+            // avoid duplicates by title
+            if !filtered.contains(where: { $0.title == dyn.title }) && !activeChallenges.contains(where: { $0.title == dyn.title }) {
+                filtered.append(dyn)
+            }
+            // safety: break if we loop too many times
+            if filtered.count >= desired { break }
+        }
+
+        self.recommended = Array(filtered.prefix(desired))
     }
 
     func accept(_ challenge: Challenge) -> Bool {
@@ -61,6 +75,8 @@ final class ChallengeViewModel {
         activeChallenges.append(c)
         // Remove any recommended entries that match by id or title to avoid duplication in Discover
         recommended.removeAll { $0.id == c.id || $0.title == c.title }
+        // refill discover asynchronously so user sees 4 items consistently
+        Task { await loadRecommendations() }
         return true
     }
 
@@ -71,6 +87,7 @@ final class ChallengeViewModel {
 
     func abandon(_ challenge: Challenge) {
         activeChallenges.removeAll { $0.id == challenge.id }
+        Task { await loadRecommendations() }
     }
 
     func updateProgress(challenge: Challenge, progress: Double) {
@@ -91,6 +108,8 @@ final class ChallengeViewModel {
         persistTotals()
         // ensure completed challenge is not shown in recommendations
         recommended.removeAll { $0.id == c.id || $0.title == c.title }
+        // refill discover asynchronously to maintain constant discover size
+        Task { await loadRecommendations() }
     }
 
     private func persistTotals() {

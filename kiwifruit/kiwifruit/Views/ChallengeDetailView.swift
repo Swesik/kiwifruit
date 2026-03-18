@@ -3,6 +3,7 @@ import SwiftUI
 struct ChallengeDetailView: View {
     @Bindable var viewModel: ChallengeViewModel
     let challengeId: UUID
+    @State private var showLimitAlert = false
 
     private var challenge: Challenge? {
         // Prefer active -> recommended -> completed -> bank
@@ -33,7 +34,10 @@ struct ChallengeDetailView: View {
 
                     HStack(spacing: 16) {
                         if challenge.state == .available {
-                            Button { viewModel.accept(challenge) } label: { Text("Accept").frame(maxWidth: .infinity) }
+                            Button {
+                                let success = viewModel.accept(challenge)
+                                if !success { showLimitAlert = true }
+                            } label: { Text("Accept").frame(maxWidth: .infinity) }
                                 .buttonStyle(.borderedProminent)
                         } else if challenge.state == .accepted {
                             Button { viewModel.complete(challenge) } label: { Text("Complete").frame(maxWidth: .infinity) }
@@ -52,6 +56,11 @@ struct ChallengeDetailView: View {
             }
         }
         .padding()
+        .alert("Maximum active challenges reached", isPresented: $showLimitAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("You can have up to 3 active challenges. Abandon an active challenge to accept a new one.")
+        }
     }
     private func feedbackText(for challenge: Challenge) -> String {
         if challenge.progress >= 1.0 { return "Nice! You've completed this challenge — claim your XP." }
