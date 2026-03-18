@@ -30,10 +30,13 @@ struct Challenge: Identifiable, Codable, Equatable {
     var rewardXP: Int
     var recommendedConditions: RecommendedConditions?
     var hint: String?
+    // Optional numeric goal associated with the challenge (e.g., number of books)
+    var goalCount: Int?
+    var goalUnit: String?
     var state: ChallengeState
     var recommendationExplanation: String?
 
-    init(id: UUID = UUID(), title: String, description: String, category: String = "general", difficulty: Int = 1, progress: Double = 0.0, rewardXP: Int = 10, recommendedConditions: RecommendedConditions? = nil, hint: String? = nil, state: ChallengeState = .available, recommendationExplanation: String? = nil) {
+    init(id: UUID = UUID(), title: String, description: String, category: String = "general", difficulty: Int = 1, progress: Double = 0.0, rewardXP: Int = 10, recommendedConditions: RecommendedConditions? = nil, hint: String? = nil, goalCount: Int? = nil, goalUnit: String? = nil, state: ChallengeState = .available, recommendationExplanation: String? = nil) {
         self.id = id
         self.title = title
         self.description = description
@@ -43,6 +46,8 @@ struct Challenge: Identifiable, Codable, Equatable {
         self.rewardXP = rewardXP
         self.recommendedConditions = recommendedConditions
         self.hint = hint
+        self.goalCount = goalCount
+        self.goalUnit = goalUnit
         self.state = state
         self.recommendationExplanation = recommendationExplanation
     }

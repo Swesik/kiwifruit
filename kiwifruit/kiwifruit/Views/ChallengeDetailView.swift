@@ -4,6 +4,7 @@ struct ChallengeDetailView: View {
     @Bindable var viewModel: ChallengeViewModel
     let challengeId: UUID
     @State private var showLimitAlert = false
+    @State private var logAmount: String = ""
 
     private var challenge: Challenge? {
         // Prefer active -> recommended -> completed -> bank
@@ -19,8 +20,11 @@ struct ChallengeDetailView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(challenge.title).font(.largeTitle).bold()
                     Text(challenge.description).font(.body).foregroundColor(.secondary)
-                    if let expl = challenge.recommendationExplanation {
-                        Text(expl).font(.caption).foregroundColor(.gray)
+                    // show goal UI for custom challenges
+                    if challenge.category == "custom" {
+                        if let unit = challenge.goalUnit, let goal = challenge.goalCount {
+                            Text("Goal: \(goal) \(unit)").font(.caption).foregroundColor(.secondary)
+                        }
                     }
 
                     ProgressView(value: challenge.progress)
@@ -42,6 +46,28 @@ struct ChallengeDetailView: View {
                         } else if challenge.state == .accepted {
                             Button { viewModel.complete(challenge) } label: { Text("Complete").frame(maxWidth: .infinity) }
                                 .buttonStyle(.borderedProminent)
+                            // progress logging controls for custom challenges
+                            if challenge.category == "custom" {
+                                VStack(spacing: 8) {
+                                    if challenge.goalUnit == "books/month" {
+                                        Button("Mark book read") {
+                                            viewModel.logProgress(challengeId: challenge.id, amount: 1)
+                                        }
+                                        .buttonStyle(.bordered)
+                                    } else {
+                                        HStack {
+                                            TextField("Amount", text: $logAmount).keyboardType(.numberPad).textFieldStyle(.roundedBorder).frame(width: 100)
+                                            Button("Log") {
+                                                let val = Int(logAmount) ?? 0
+                                                viewModel.logProgress(challengeId: challenge.id, amount: val)
+                                                logAmount = ""
+                                            }
+                                            .buttonStyle(.bordered)
+                                        }
+                                    }
+                                }
+                                .padding(.leading, 8)
+                            }
                             Button { viewModel.abandon(challenge) } label: { Text("Abandon").frame(maxWidth: .infinity) }
                                 .buttonStyle(.bordered)
                         } else {

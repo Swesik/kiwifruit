@@ -104,6 +104,26 @@ final class DynamicChallengeService {
         return results
     }
 
+    /// Generate N random challenges using available APIs. Always prefer live API content; never return static generic bank items.
+    func generateRandomChallenges(count: Int) async -> [Challenge] {
+        var results: [Challenge] = []
+        for i in 0..<count {
+            // Attempt weather-driven challenge occasionally, otherwise quote/word driven
+            if Bool.random() {
+                let (lat, lon) = randomCoordinate()
+                let c = await generateDynamicChallenge(lat: lat, lon: lon, streak: 1)
+                results.append(c)
+            } else if i % 2 == 0 {
+                let c = await generateRandomWordChallenge()
+                results.append(c)
+            } else {
+                let c = await generateQuoteChallenge()
+                results.append(c)
+            }
+        }
+        return results
+    }
+
     private func difficultyForStreak(_ streak: Int) -> Int {
         // Increase difficulty slowly with streak (every 5 days increases difficulty)
         return min(5, 1 + (streak / 5))

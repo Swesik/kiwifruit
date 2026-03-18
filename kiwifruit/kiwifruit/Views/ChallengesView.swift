@@ -5,8 +5,10 @@ struct ChallengesView: View {
     @State private var selected: Challenge? = nil
     @State private var showDetail = false
     @State private var showLimitAlert = false
-    @State private var inputLat: String = ""
-    @State private var inputLon: String = ""
+    @State private var newType: String = "pages"
+    @State private var pagesPerWeek: String = ""
+    @State private var minutesPerWeek: String = ""
+    @State private var booksCount: String = ""
 
     var body: some View {
         NavigationStack {
@@ -15,24 +17,39 @@ struct ChallengesView: View {
                     VStack(alignment: .leading) {
                         Text("Challenges").font(.largeTitle).bold()
                         Text("Total Points: \(vm.totalPoints)").font(.subheadline).foregroundColor(.secondary)
-                        if let loc = vm.lastLocationSummary {
-                            Text(loc).font(.caption).foregroundColor(.secondary)
-                        }
-                        HStack {
-                            TextField("Lat", text: $inputLat)
-                                .keyboardType(.decimalPad)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 120)
-                            TextField("Lon", text: $inputLon)
-                                .keyboardType(.decimalPad)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 120)
-                            Button("Set location") {
-                                if let lat = Double(inputLat), let lon = Double(inputLon) {
-                                    Task { await vm.setLocation(lat: lat, lon: lon) }
-                                }
+                        // Create challenge form
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Create Challenge").font(.subheadline).bold()
+                            Picker("Type", selection: $newType) {
+                                Text("Pages/week").tag("pages")
+                                Text("Minutes/week").tag("minutes")
+                                Text("Books/month").tag("books")
                             }
-                            .buttonStyle(.bordered)
+                            .pickerStyle(.segmented)
+
+                            if newType == "pages" {
+                                TextField("Pages per week", text: $pagesPerWeek).keyboardType(.numberPad).textFieldStyle(.roundedBorder).frame(width: 180)
+                            } else if newType == "minutes" {
+                                TextField("Minutes per week", text: $minutesPerWeek).keyboardType(.numberPad).textFieldStyle(.roundedBorder).frame(width: 180)
+                            } else if newType == "books" {
+                                TextField("Books this month", text: $booksCount).keyboardType(.numberPad).textFieldStyle(.roundedBorder).frame(width: 180)
+                            }
+
+                            Button("Create and Add") {
+                                if newType == "pages" {
+                                    let val = Int(pagesPerWeek) ?? 0
+                                    vm.createChallenge(type: "pages", pagesPerWeek: val)
+                                } else if newType == "minutes" {
+                                    let val = Int(minutesPerWeek) ?? 0
+                                    vm.createChallenge(type: "minutes", minutesPerWeek: val)
+                                } else {
+                                    let val = Int(booksCount) ?? 0
+                                    vm.createChallenge(type: "books", booksCount: val)
+                                }
+                                // clear inputs
+                                pagesPerWeek = ""; minutesPerWeek = ""; booksCount = ""
+                            }
+                            .buttonStyle(.borderedProminent)
                         }
                     }
                     Spacer()

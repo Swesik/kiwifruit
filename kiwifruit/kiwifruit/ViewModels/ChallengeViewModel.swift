@@ -9,9 +9,8 @@ final class ChallengeViewModel {
     var completedChallenges: [Challenge] = []
     var totalPoints: Int = 0
     // ambient location summary for the last refresh (e.g., "Iceland — Reykjavik (pop: 131k) — GMT")
+    // simplified product: no location or rationale tracking in the core skeletal product
     var lastLocationSummary: String? = nil
-    var lastLat: Double? = nil
-    var lastLon: Double? = nil
 
     // Set an explicit location for subsequent generation. This will attempt to resolve a place/country and update lastLocationSummary, then refresh recommendations.
     func setLocation(lat: Double, lon: Double) async {
@@ -81,110 +80,82 @@ final class ChallengeViewModel {
     
 
     func loadRecommendations() async {
+        // Always generate API-driven random challenges for Discover
         let desired = 4
-        var rec = await engine.recommend(limit: desired)
-        // reconcile state with accepted/completed
-        var mapped = rec.map { (ch) -> Challenge in
-            var c = ch
-            // match by id or title to avoid duplicate/discrepant IDs between banks
+        let generated = await DynamicChallengeService.shared.generateRandomChallenges(count: desired)
+        // mark states appropriately and filter out active/completed
+        var filtered: [Challenge] = []
+        for var c in generated {
             if completedChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) { c.state = .completed; c.progress = 1.0 }
             else if activeChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) { c.state = .accepted }
             else { c.state = .available }
-            return c
-        }
-        // Ensure recommended doesn't include already accepted or completed ones (by id or title)
-        var filtered = mapped.filter { candidate in
-            let isActive = activeChallenges.contains(where: { $0.id == candidate.id || $0.title == candidate.title })
-            let isCompleted = completedChallenges.contains(where: { $0.id == candidate.id || $0.title == candidate.title })
-            return !isActive && !isCompleted
-        }
-
-        // If we have fewer than desired, generate dynamic fill-ins
-        while filtered.count < desired {
-            let dyn = await DynamicChallengeService.shared.generateDynamicChallenge()
-            // avoid duplicates by title
-            let isCompleted = completedChallenges.contains(where: { $0.title == dyn.title })
-            if !filtered.contains(where: { $0.title == dyn.title }) && !activeChallenges.contains(where: { $0.title == dyn.title }) && !isCompleted {
-                filtered.append(dyn)
+            if !activeChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) && !completedChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) {
+                filtered.append(c)
             }
-            // safety: break if we loop too many times
-            if filtered.count >= desired { break }
         }
-
         self.recommended = Array(filtered.prefix(desired))
     }
 
     // Force-refresh: generate entirely new dynamic challenges (useful for "refresh" action)
     func refreshRecommendations() async {
         let desired = 4
-        // Use an explicit location if set; otherwise pick a random coordinate for ambient consistency
-        let lat: Double
-        let lon: Double
-        if let l = self.lastLat, let o = self.lastLon {
-            lat = l; lon = o
-        } else {
-            let coord = DynamicChallengeService.shared.randomCoordinatePublic()
-            lat = coord.0; lon = coord.1
-        }
-
-        // Try to fetch timezone and population for the chosen location to create a coherent ambiance
-        var tz: String? = nil
-        var pop: String? = nil
-        do {
-            tz = try await ApiNinjasTimezoneService.shared.fetchTimezone(lat: lat, lon: lon)
-        } catch {
-            tz = nil
-        }
-        do {
-            pop = try await ApiNinjasPopulationService.shared.fetchPopulation(lat: lat, lon: lon)
-        } catch {
-            pop = nil
-        }
-
-        // Build a readable summary
-        var summaryParts: [String] = []
-        if let pop = pop { summaryParts.append(pop) }
-        if let tz = tz { summaryParts.append(tz) }
-        let summary = summaryParts.joined(separator: " — ")
-            let formattedLat = String(format: "%.2f", lat)
-            let formattedLon = String(format: "%.2f", lon)
-            self.lastLocationSummary = summary.isEmpty ? "Lat: \(formattedLat), Lon: \(formattedLon)" : summary
-        self.lastLat = lat
-        self.lastLon = lon
-
-        var generated = await DynamicChallengeService.shared.generateDynamicChallengesForLocation(lat: lat, lon: lon, streak: streak, count: desired)
-
-        // Attach location summary to each generated challenge's explanation/hint
-        for i in 0..<generated.count {
-            var g = generated[i]
-                let locnote = summary.isEmpty ? "Location: (\(formattedLat), \(formattedLon))" : summary
-            if var expl = g.recommendationExplanation {
-                expl += " | \(locnote)"
-                g.recommendationExplanation = expl
-            } else {
-                g.recommendationExplanation = locnote
-            }
-            if g.hint == nil { g.hint = locnote }
-            generated[i] = g
-        }
-
-        // Filter out any that clash with active/completed
-        generated.removeAll { c in
-            activeChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) ||
-            completedChallenges.contains(where: { $0.id == c.id || $0.title == c.title })
-        }
-
-        // If we have fewer than desired after filtering, fill using engine
-        if generated.count < desired {
-            let remaining = desired - generated.count
-            let rec = await engine.recommend(limit: remaining)
-            for r in rec where !activeChallenges.contains(where: { $0.id == r.id }) && !completedChallenges.contains(where: { $0.id == r.id }) {
-                generated.append(r)
-                if generated.count >= desired { break }
+        let generated = await DynamicChallengeService.shared.generateRandomChallenges(count: desired)
+        var filtered: [Challenge] = []
+        for var c in generated {
+            if completedChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) { c.state = .completed; c.progress = 1.0 }
+            else if activeChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) { c.state = .accepted }
+            else { c.state = .available }
+            if !activeChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) && !completedChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) {
+                filtered.append(c)
             }
         }
+        self.recommended = Array(filtered.prefix(desired))
+    }
 
-        self.recommended = Array(generated.prefix(desired))
+    // Create a new user-defined challenge and add it to activeChallenges (zeroed progress)
+    func createChallenge(type: String, pagesPerWeek: Int? = nil, minutesPerWeek: Int? = nil, booksCount: Int? = nil) {
+        var title = "Custom Challenge"
+        var desc = ""
+        var goal: Int? = nil
+        var unit: String? = nil
+        switch type {
+        case "pages":
+            title = "Read \(pagesPerWeek ?? 0) pages per week"
+            desc = "Read at least \(pagesPerWeek ?? 0) pages each week."
+            goal = pagesPerWeek
+            unit = "pages/week"
+        case "minutes":
+            title = "Read \(minutesPerWeek ?? 0) minutes per week"
+            desc = "Read at least \(minutesPerWeek ?? 0) minutes each week."
+            goal = minutesPerWeek
+            unit = "minutes/week"
+        case "books":
+            title = "Finish \(booksCount ?? 0) books this month"
+            desc = "Complete \(booksCount ?? 0) books within a month."
+            goal = booksCount
+            unit = "books/month"
+        default:
+            title = "Custom Reading Challenge"
+        }
+
+        var c = Challenge(title: title, description: desc, category: "custom", difficulty: 1, progress: 0.0, rewardXP: 10, recommendedConditions: nil, hint: nil, goalCount: goal, goalUnit: unit, state: .accepted)
+        // persist and add
+        activeChallenges.append(c)
+        persistActiveDynamicChallenges()
+        Task { await loadRecommendations() }
+    }
+
+    // Log progress for a custom challenge: amount is in the unit matching goalUnit (e.g., pages, minutes, books)
+    func logProgress(challengeId: UUID, amount: Int) {
+        guard let idx = activeChallenges.firstIndex(where: { $0.id == challengeId }) else { return }
+        var c = activeChallenges[idx]
+        guard c.category == "custom" else { return }
+        let goal = max(1, c.goalCount ?? 1)
+        let delta = Double(amount) / Double(goal)
+        c.progress = min(1.0, c.progress + delta)
+        activeChallenges[idx] = c
+        if c.progress >= 1.0 { complete(c) }
+        persistActiveDynamicChallenges()
     }
 
     func accept(_ challenge: Challenge) -> Bool {
@@ -249,9 +220,10 @@ final class ChallengeViewModel {
 
     // Persist currently active dynamic challenges to UserDefaults
     private func persistActiveDynamicChallenges() {
-        let dynamics = activeChallenges.filter { $0.category == "dynamic" }
+        // persist active custom and dynamically-generated challenges
+        let toPersist = activeChallenges.filter { $0.category == "dynamic" || $0.category == "custom" }
         let encoder = JSONEncoder()
-        if let data = try? encoder.encode(dynamics) {
+        if let data = try? encoder.encode(toPersist) {
             UserDefaults.standard.set(data, forKey: persistedDynamicKey)
         } else {
             UserDefaults.standard.removeObject(forKey: persistedDynamicKey)
