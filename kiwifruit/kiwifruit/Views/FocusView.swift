@@ -1,5 +1,4 @@
 import SwiftUI
-import Combine
 
 private enum FocusDesign {
     static let kiwi = Color(hex: "A3C985")
@@ -115,8 +114,7 @@ struct FocusView: View {
                 .foregroundStyle(FocusDesign.handDrawnBorder)
                 .padding(.horizontal, 32)
 
-            let canStart = !tempBookTitle.trimmingCharacters(in: .whitespaces).isEmpty
-                        && Int(tempStartingPage.trimmingCharacters(in: .whitespaces)) != nil
+            let canStart = sessionStore.canStartSession(bookTitle: tempBookTitle, startingPage: tempStartingPage)
 
             Button(action: {
                 let title = tempBookTitle.trimmingCharacters(in: .whitespaces)
@@ -153,8 +151,7 @@ struct FocusView: View {
 
     private func joinSelectionView(for friendSession: ActiveFriendSession) -> some View {
         let hostName = friendSession.session.host.displayName ?? friendSession.session.host.username
-        let canJoin = !tempJoinBookTitle.trimmingCharacters(in: .whitespaces).isEmpty
-                   && Int(tempJoinStartingPage.trimmingCharacters(in: .whitespaces)) != nil
+        let canJoin = sessionStore.canJoinSession(bookTitle: tempJoinBookTitle, startingPage: tempJoinStartingPage)
 
         return VStack(spacing: 32) {
             HStack {
@@ -267,8 +264,11 @@ struct FocusView: View {
             .padding(.top, 48)
             .padding(.bottom, 24)
         }
-        .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { _ in
-            sessionStore.loadFriendSessions()
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                sessionStore.loadFriendSessions()
+            }
         }
     }
 
@@ -433,7 +433,7 @@ struct FocusView: View {
                     .padding(.top, 8)
             }
 
-            if !otherParticipants.isEmpty {
+            if !sessionStore.otherParticipants(currentUserId: session.currentUser?.id).isEmpty {
                 participantsRow
                     .padding(.top, 24)
             }
@@ -449,12 +449,7 @@ struct FocusView: View {
 
     private var endPageSheet: some View {
         let endPage = Int(tempEndingPage.trimmingCharacters(in: .whitespaces))
-        let canSubmit: Bool
-        if let end = endPage, let start = sessionStore.startingPage {
-            canSubmit = end > start
-        } else {
-            canSubmit = endPage != nil
-        }
+        let canSubmit = sessionStore.canSubmitEndPage(tempEndingPage)
 
         return VStack(spacing: 32) {
             HStack {
@@ -534,23 +529,6 @@ struct FocusView: View {
         .interactiveDismissDisabled(true)
     }
 
-    /// People to show in "Reading with":
-    /// - If you're the host: everyone who joined (excluding yourself).
-    /// - If you joined: the host + everyone else who joined (excluding yourself).
-    private var otherParticipants: [User] {
-        let myId = session.currentUser?.id
-        let joiners = sessionStore.participants.filter { $0.id != myId }
-        if sessionStore.isHost {
-            return joiners
-        } else {
-            // Prepend the host so joiners always see who they're reading with.
-            if let host = sessionStore.currentSession?.host {
-                return [host] + joiners
-            }
-            return joiners
-        }
-    }
-
     private var participantsRow: some View {
         VStack(spacing: 8) {
             Text("Reading with")
@@ -558,7 +536,7 @@ struct FocusView: View {
                 .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.6))
 
             HStack(spacing: -12) {
-                ForEach(otherParticipants) { user in
+                ForEach(sessionStore.otherParticipants(currentUserId: session.currentUser?.id)) { user in
                     Circle()
                         .fill(Color.white)
                         .overlay(Circle().stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
@@ -576,7 +554,7 @@ struct FocusView: View {
                 }
             }
 
-            let names = otherParticipants.map { $0.displayName ?? $0.username }.joined(separator: ", ")
+            let names = sessionStore.otherParticipants(currentUserId: session.currentUser?.id).map { $0.displayName ?? $0.username }.joined(separator: ", ")
             Text(names)
                 .font(.footnote)
                 .fontWeight(.bold)

@@ -191,6 +191,30 @@ final class FocusSessionStore {
         }
     }
 
+    // MARK: - Validation helpers
+
+    func canStartSession(bookTitle: String, startingPage: String) -> Bool {
+        !bookTitle.trimmingCharacters(in: .whitespaces).isEmpty
+            && Int(startingPage.trimmingCharacters(in: .whitespaces)) != nil
+    }
+
+    func canJoinSession(bookTitle: String, startingPage: String) -> Bool {
+        canStartSession(bookTitle: bookTitle, startingPage: startingPage)
+    }
+
+    func canSubmitEndPage(_ endingPage: String) -> Bool {
+        guard let end = Int(endingPage.trimmingCharacters(in: .whitespaces)) else { return false }
+        if let start = startingPage { return end > start }
+        return true
+    }
+
+    func otherParticipants(currentUserId: String?) -> [User] {
+        let joiners = participants.filter { $0.id != currentUserId }
+        if isHost { return joiners }
+        if let host = currentSession?.host { return [host] + joiners }
+        return joiners
+    }
+
     // MARK: - Private helpers
 
     private func startTimer() {
