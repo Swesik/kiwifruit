@@ -233,6 +233,15 @@ final class ChallengeViewModel {
         }
     }
 
+    // Match DynamicChallengeService logic for difficulty/reward so ViewModel can compute values locally
+    private func difficultyForStreak(_ streak: Int) -> Int {
+        return min(5, 1 + (streak / 5))
+    }
+
+    private func rewardForDifficulty(_ base: Int, streak: Int) -> Int {
+        return Int(Double(base) * (1.0 + Double(min(20, streak)) / 20.0))
+    }
+
     // Load previously persisted dynamic challenges and restore them as accepted
     private func loadPersistedDynamicChallenges() {
         guard let data = UserDefaults.standard.data(forKey: persistedDynamicKey) else { return }
