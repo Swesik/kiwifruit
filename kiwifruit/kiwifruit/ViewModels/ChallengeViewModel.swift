@@ -42,8 +42,10 @@ final class ChallengeViewModel {
         if let t = tz { parts.append(t) }
 
         let summary = parts.joined(separator: " — ")
-        if summary.isEmpty {
-            self.lastLocationSummary = "Lat: \(String(format: \"%.2f\", lat)), Lon: \(String(format: \"%.2f\", lon))"
+            if summary.isEmpty {
+                let formattedLat = String(format: "%.2f", lat)
+                let formattedLon = String(format: "%.2f", lon)
+                self.lastLocationSummary = "Lat: \(formattedLat), Lon: \(formattedLon)"
         } else {
             self.lastLocationSummary = summary
         }
@@ -144,7 +146,9 @@ final class ChallengeViewModel {
         if let pop = pop { summaryParts.append(pop) }
         if let tz = tz { summaryParts.append(tz) }
         let summary = summaryParts.joined(separator: " — ")
-        self.lastLocationSummary = summary.isEmpty ? "Lat: \(String(format: "%.2f", lat)), Lon: \(String(format: "%.2f", lon))" : summary
+            let formattedLat = String(format: "%.2f", lat)
+            let formattedLon = String(format: "%.2f", lon)
+            self.lastLocationSummary = summary.isEmpty ? "Lat: \(formattedLat), Lon: \(formattedLon)" : summary
         self.lastLat = lat
         self.lastLon = lon
 
@@ -153,7 +157,7 @@ final class ChallengeViewModel {
         // Attach location summary to each generated challenge's explanation/hint
         for i in 0..<generated.count {
             var g = generated[i]
-            let locnote = summary.isEmpty ? "Location: (\(String(format: "%.2f", lat)), \(String(format: "%.2f", lon)))" : summary
+                let locnote = summary.isEmpty ? "Location: (\(formattedLat), \(formattedLon))" : summary
             if var expl = g.recommendationExplanation {
                 expl += " | \(locnote)"
                 g.recommendationExplanation = expl
