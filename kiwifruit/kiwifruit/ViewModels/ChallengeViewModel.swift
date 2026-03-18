@@ -8,50 +8,7 @@ final class ChallengeViewModel {
     var streak: Int = 1
     var completedChallenges: [Challenge] = []
     var totalPoints: Int = 0
-    // ambient location summary for the last refresh (e.g., "Iceland — Reykjavik (pop: 131k) — GMT")
-    // simplified product: no location or rationale tracking in the core skeletal product
-    var lastLocationSummary: String? = nil
-
-    // Set an explicit location for subsequent generation. This will attempt to resolve a place/country and update lastLocationSummary, then refresh recommendations.
-    func setLocation(lat: Double, lon: Double) async {
-        self.lastLat = lat
-        self.lastLon = lon
-
-        // try to resolve place via ReverseGeocodeService first, fall back to OpenAI
-        var placeName: String? = nil
-        var countryName: String? = nil
-        if let rg = await ReverseGeocodeService.shared.reverse(lat: lat, lon: lon) {
-            placeName = rg.place
-            countryName = rg.country
-        } else if let place = await OpenAIService.shared.lookupPlace(lat: lat, lon: lon) {
-            placeName = place.place
-            countryName = place.country
-        }
-
-        // timezone and population fetch as before
-        var tz: String? = nil
-        var pop: String? = nil
-        do { tz = try await ApiNinjasTimezoneService.shared.fetchTimezone(lat: lat, lon: lon) } catch { tz = nil }
-        do { pop = try await ApiNinjasPopulationService.shared.fetchPopulation(lat: lat, lon: lon) } catch { pop = nil }
-
-        var parts: [String] = []
-        if let p = placeName { parts.append(p) }
-        if let c = countryName { parts.append(c) }
-        if let p = pop { parts.append(p) }
-        if let t = tz { parts.append(t) }
-
-        let summary = parts.joined(separator: " — ")
-            if summary.isEmpty {
-                let formattedLat = String(format: "%.2f", lat)
-                let formattedLon = String(format: "%.2f", lon)
-                self.lastLocationSummary = "Lat: \(formattedLat), Lon: \(formattedLon)"
-        } else {
-            self.lastLocationSummary = summary
-        }
-
-        // refresh recommendations to use this locked location
-        Task { await self.refreshRecommendations() }
-    }
+    // Core challenge lists and state (no location tracking in skeletal product)
 
     private let engine: ChallengeEngine = .shared
     private var bank: [Challenge] = []
@@ -76,6 +33,8 @@ final class ChallengeViewModel {
         }
         // restore any previously-accepted dynamic challenges
         loadPersistedDynamicChallenges()
+
+        // no persisted location info in skeletal product
     }
     
 

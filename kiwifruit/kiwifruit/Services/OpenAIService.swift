@@ -17,11 +17,6 @@ final class OpenAIService {
         let hint: String?
     }
 
-    struct PlaceResult: Codable {
-        let country: String?
-        let place: String?
-    }
-
     /// Ask the LLM to rewrite/generate natural-sounding title/description/hint for a challenge.
     func enhanceChallenge(_ challenge: Challenge, context: String) async -> LLMResult? {
         guard let key = apiKey else { return nil }
@@ -93,55 +88,5 @@ final class OpenAIService {
         return nil
     }
 
-    /// Ask the LLM to infer a nearby place and country for a latitude/longitude.
-    func lookupPlace(lat: Double, lon: Double) async -> PlaceResult? {
-        guard let key = apiKey else { return nil }
-        let url = URL(string: "https://api.openai.com/v1/chat/completions")!
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let system = "You are a helpful geolocation assistant. Given latitude and longitude, return a JSON object with keys 'country' and 'place' (nearest city or region). Respond with JSON only, no commentary."
-        let examples = """
-        Example: lat=40.71, lon=-74.00 -> {"country":"United States","place":"New York City"}
-        Example: lat=35.68, lon=139.69 -> {"country":"Japan","place":"Tokyo"}
-        """
-        let coords = String(format: "lat=%.6f, lon=%.6f", lat, lon)
-        let user = "Coordinates: \(coords). Examples:\n" + examples + "\nReturn JSON: {\"country\":..., \"place\":...}"
-
-        let body: [String: Any] = [
-            "model": "gpt-4o-mini",
-            "messages": [["role": "system", "content": system], ["role": "user", "content": user]],
-            "temperature": 0.0,
-            "max_tokens": 80
-        ]
-
-        do {
-            req.httpBody = try JSONSerialization.data(withJSONObject: body)
-            let (data, response) = try await URLSession.shared.data(for: req)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
-
-            if let top = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let choices = top["choices"] as? [[String: Any]],
-               let first = choices.first,
-               let message = first["message"] as? [String: Any],
-               let content = message["content"] as? String {
-                // Try to decode JSON directly
-                if let jsonData = content.data(using: .utf8), let decoded = try? JSONDecoder().decode(PlaceResult.self, from: jsonData) {
-                    return decoded
-                }
-                // Try to extract between braces
-                if let start = content.firstIndex(of: "{"), let end = content.lastIndex(of: "}") {
-                    let sub = String(content[start...end])
-                    if let subData = sub.data(using: .utf8), let decoded2 = try? JSONDecoder().decode(PlaceResult.self, from: subData) {
-                        return decoded2
-                    }
-                }
-            }
-        } catch {
-            return nil
-        }
-        return nil
-    }
+    // Note: place lookup removed in skeletal product; only enhanceChallenge is used for text refinement.
 }
