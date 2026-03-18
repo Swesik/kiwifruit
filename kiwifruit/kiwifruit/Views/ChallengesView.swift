@@ -12,6 +12,7 @@ struct ChallengesView: View {
     @State private var weatherToggle: Bool = false
     @State private var latText: String = ""
     @State private var lonText: String = ""
+    @State private var lookedUpPlace: String = ""
 
     var body: some View {
         NavigationStack {
@@ -38,26 +39,41 @@ struct ChallengesView: View {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Toggle("Generate challenge from weather (use lat/lon)", isOn: $weatherToggle)
 
-                                    Picker("Type", selection: $newType) {
-                                        Text("Pages/week").tag("pages")
-                                        Text("Minutes/week").tag("minutes")
-                                        Text("Books/month").tag("books")
-                                    }
-                                    .pickerStyle(.segmented)
-
                                     if weatherToggle {
                                         VStack(alignment: .leading, spacing: 6) {
                                             TextField("Latitude", text: $latText).textFieldStyle(.roundedBorder).keyboardType(.decimalPad).frame(width: 180)
                                             TextField("Longitude", text: $lonText).textFieldStyle(.roundedBorder).keyboardType(.decimalPad).frame(width: 180)
-                                            Button("Create Weather Challenge") {
-                                                if let lat = Double(latText), let lon = Double(lonText) {
-                                                    Task { await vm.createWeatherChallenge(lat: lat, lon: lon) }
-                                                    latText = ""; lonText = ""
+                                            HStack(spacing: 8) {
+                                                Button("Lookup Place") {
+                                                    if let lat = Double(latText), let lon = Double(lonText) {
+                                                        Task {
+                                                            let geo = await GeoService.shared.reverseGeocode(lat: lat, lon: lon)
+                                                            lookedUpPlace = geo.displayName ?? (geo.country ?? "Unknown location")
+                                                        }
+                                                    }
                                                 }
+                                                .buttonStyle(.bordered)
+
+                                                Button("Create Weather Challenge") {
+                                                    if let lat = Double(latText), let lon = Double(lonText) {
+                                                        Task { await vm.createWeatherChallenge(lat: lat, lon: lon, placeName: lookedUpPlace) }
+                                                        latText = ""; lonText = ""; lookedUpPlace = ""
+                                                    }
+                                                }
+                                                .buttonStyle(.borderedProminent)
                                             }
-                                            .buttonStyle(.borderedProminent)
+                                            if !lookedUpPlace.isEmpty {
+                                                Text("Place: \(lookedUpPlace)").font(.caption).foregroundColor(.secondary)
+                                            }
                                         }
                                     } else {
+                                        Picker("Type", selection: $newType) {
+                                            Text("Pages/week").tag("pages")
+                                            Text("Minutes/week").tag("minutes")
+                                            Text("Books/month").tag("books")
+                                        }
+                                        .pickerStyle(.segmented)
+
                                         if newType == "pages" {
                                             VStack(alignment: .leading) {
                                                 Text("Pages per week: \(Int(pagesPerWeekVal))")
