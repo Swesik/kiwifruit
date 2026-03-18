@@ -36,14 +36,14 @@ struct ChallengesView: View {
                             Text("Create Challenge").font(.title3).bold().padding(.horizontal)
                             HStack(alignment: .top) {
                                 VStack(alignment: .leading, spacing: 8) {
+                                    Toggle("Generate challenge from weather (use lat/lon)", isOn: $weatherToggle)
+
                                     Picker("Type", selection: $newType) {
                                         Text("Pages/week").tag("pages")
                                         Text("Minutes/week").tag("minutes")
                                         Text("Books/month").tag("books")
                                     }
                                     .pickerStyle(.segmented)
-
-                                    Toggle("Generate challenge from weather (use lat/lon)", isOn: $weatherToggle)
 
                                     if weatherToggle {
                                         VStack(alignment: .leading, spacing: 6) {

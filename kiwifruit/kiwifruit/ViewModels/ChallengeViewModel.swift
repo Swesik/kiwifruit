@@ -139,10 +139,11 @@ final class ChallengeViewModel {
             // On error, fall back to a dynamic item
         }
 
-        // Fallback: use the dynamic generator
+        // Fallback: use the dynamic generator and mark as fallback for diagnostics
         var c = await DynamicChallengeService.shared.generateDynamicChallenge(lat: lat, lon: lon, streak: self.streak)
         c.state = .accepted
         c.progress = 0.0
+        c.recommendationExplanation = (c.recommendationExplanation ?? "") + " (fallback: weather fetch failed)"
         activeChallenges.append(c)
         persistActiveDynamicChallenges()
         Task { await loadRecommendations() }
