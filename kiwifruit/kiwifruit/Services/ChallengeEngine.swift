@@ -49,6 +49,12 @@ final class ChallengeEngine {
             let weatherText = "weather=\(c.recommendedConditions?.weather ?? "any"), tempRange=\(String(describing: c.recommendedConditions?.minTemperature))..\(String(describing: c.recommendedConditions?.maxTemperature))"
             let randomnessNote = "random factor used"
             let streakNote = "streak=\(streak)"
+            // mark generation source
+            if let rc = c.recommendedConditions, rc.weather != nil {
+                c.generatedBy = .weather
+            } else {
+                c.generatedBy = .engine
+            }
             c.recommendationExplanation = "Recommended because of: \(weatherText); \(randomnessNote); \(streakNote)"
             return c
         }

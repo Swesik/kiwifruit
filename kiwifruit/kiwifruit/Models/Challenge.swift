@@ -6,6 +6,13 @@ enum ChallengeState: String, Codable {
     case completed
 }
 
+enum ChallengeGenerationSource: String, Codable {
+    case weather
+    case onTheFly
+    case engine
+    case manual
+}
+
 struct RecommendedConditions: Codable, Equatable {
     var weather: String?
     var minTemperature: Double?
@@ -35,6 +42,7 @@ struct Challenge: Identifiable, Codable, Equatable {
     var goalUnit: String?
     var state: ChallengeState
     var recommendationExplanation: String?
+    var generatedBy: ChallengeGenerationSource?
 
     init(id: UUID = UUID(), title: String, description: String, category: String = "general", difficulty: Int = 1, progress: Double = 0.0, rewardXP: Int = 10, recommendedConditions: RecommendedConditions? = nil, hint: String? = nil, goalCount: Int? = nil, goalUnit: String? = nil, state: ChallengeState = .available, recommendationExplanation: String? = nil) {
         self.id = id

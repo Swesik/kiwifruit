@@ -8,6 +8,7 @@ final class ChallengeViewModel {
     var streak: Int = 1
     var completedChallenges: [Challenge] = []
     var totalPoints: Int = 0
+    var manualAdjustments: [String: Double] = [:]
     // Core challenge lists and state (no location tracking in skeletal product)
 
     private let engine: ChallengeEngine = .shared
@@ -15,6 +16,8 @@ final class ChallengeViewModel {
     private let totalPointsKey = "kiwifruit.totalPoints"
     private let completedIDsKey = "kiwifruit.completedChallengeIDs"
     private let persistedDynamicKey = "kiwifruit.persistedActiveDynamicChallenges"
+    private let recommendedCacheKey = "kiwifruit.recommendedCache"
+    private let adjustmentsKey = "kiwifruit.challengeAdjustments"
 
     init(streak: Int = 1) {
         self.streak = streak
@@ -34,6 +37,11 @@ final class ChallengeViewModel {
         // restore any previously-accepted dynamic challenges
         loadPersistedDynamicChallenges()
 
+        // load manual adjustments
+        if let dict = UserDefaults.standard.dictionary(forKey: adjustmentsKey) as? [String:Double] {
+            manualAdjustments = dict
+        }
+
         // no persisted location info in skeletal product
     }
     
@@ -41,6 +49,31 @@ final class ChallengeViewModel {
     func loadRecommendations() async {
         // Always generate API-driven random challenges for Discover
         let desired = 4
+        // Try cached recommendations first
+        if let data = UserDefaults.standard.data(forKey: recommendedCacheKey), let cached = try? JSONDecoder().decode([Challenge].self, from: data) {
+            self.recommended = cached
+            // fetch fresh in background
+            Task.detached { [weak self] in
+                guard let self = self else { return }
+                let generated = await DynamicChallengeService.shared.generateRandomChallenges(count: desired)
+                var filtered: [Challenge] = []
+                for var c in generated {
+                    if self.completedChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) { c.state = .completed; c.progress = 1.0 }
+                    else if self.activeChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) { c.state = .accepted }
+                    else { c.state = .available }
+                    if !self.activeChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) && !self.completedChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) {
+                        filtered.append(c)
+                    }
+                }
+                let final = Array(filtered.prefix(desired))
+                await MainActor.run {
+                    self.recommended = final
+                    if let enc = try? JSONEncoder().encode(final) { UserDefaults.standard.set(enc, forKey: self.recommendedCacheKey) }
+                }
+            }
+            return
+        }
+
         let generated = await DynamicChallengeService.shared.generateRandomChallenges(count: desired)
         // mark states appropriately and filter out active/completed
         var filtered: [Challenge] = []
@@ -52,7 +85,9 @@ final class ChallengeViewModel {
                 filtered.append(c)
             }
         }
-        self.recommended = Array(filtered.prefix(desired))
+        let final = Array(filtered.prefix(desired))
+        self.recommended = final
+        if let enc = try? JSONEncoder().encode(final) { UserDefaults.standard.set(enc, forKey: recommendedCacheKey) }
     }
 
     // Force-refresh: generate entirely new dynamic challenges (useful for "refresh" action)
@@ -255,6 +290,117 @@ final class ChallengeViewModel {
                     activeChallenges.append(c)
                 }
             }
+        }
+    }
+
+    // MARK: - Manual adjustments
+
+    func setManualAdjustment(for challengeId: UUID, adjustment: Double) {
+        manualAdjustments[challengeId.uuidString] = adjustment
+        UserDefaults.standard.set(manualAdjustments, forKey: adjustmentsKey)
+        Task { await updateChallengeProgress() }
+    }
+
+    func removeManualAdjustment(for challengeId: UUID) {
+        manualAdjustments.removeValue(forKey: challengeId.uuidString)
+        UserDefaults.standard.set(manualAdjustments, forKey: adjustmentsKey)
+        Task { await updateChallengeProgress() }
+    }
+
+    func manualAdjustment(for challengeId: UUID) -> Double {
+        return manualAdjustments[challengeId.uuidString] ?? 0.0
+    }
+
+    // MARK: - Reading sessions integration
+
+    private struct ReadingSession: Decodable {
+        let session_id: String?
+        let host: String?
+        let book_title: String?
+        let started_at: String?
+        let status: String?
+        let elapsed_seconds: Int?
+    }
+
+    private func fetchCompletedReadingSessions(host: String = "local") async throws -> [ReadingSession] {
+        guard let url = URL(string: "http://127.0.0.1:5000/reading_sessions?host=\(host)") else { return [] }
+        let (data, _) = try await URLSession.shared.data(from: url)
+        let decoder = JSONDecoder()
+        let sessions = try decoder.decode([ReadingSession].self, from: data)
+        return sessions
+    }
+
+    // Sum total completed minutes across sessions (elapsed_seconds -> minutes)
+    func calculateMinutes(host: String = "local") async -> Int {
+        do {
+            let sessions = try await fetchCompletedReadingSessions(host: host)
+            let totalSeconds = sessions.compactMap { $0.elapsed_seconds }.reduce(0, +)
+            return Int(totalSeconds / 60)
+        } catch {
+            return 0
+        }
+    }
+
+    // Count unique completed book titles
+    func calculateBooks(host: String = "local") async -> Int {
+        do {
+            let sessions = try await fetchCompletedReadingSessions(host: host)
+            let titles = sessions.compactMap { $0.book_title?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            let unique = Set(titles)
+            return unique.count
+        } catch {
+            return 0
+        }
+    }
+
+    // Update active challenge progress by reconciling server reading_sessions and manual adjustments
+    func updateChallengeProgress(host: String = "local") async {
+        // gather server metrics once
+        let minutes = await calculateMinutes(host: host)
+        let books = await calculateBooks(host: host)
+
+        await MainActor.run {
+            for idx in activeChallenges.indices {
+                var c = activeChallenges[idx]
+                let manual = manualAdjustments[c.id.uuidString] ?? 0.0
+                var newProgress: Double = c.progress
+
+                if let unit = c.goalUnit {
+                    let lower = unit.lowercased()
+                    if lower.contains("minute") {
+                        if let goal = c.goalCount, goal > 0 {
+                            let serverProgress = Double(minutes) / Double(goal)
+                            newProgress = min(1.0, serverProgress + manual)
+                        } else {
+                            newProgress = min(1.0, manual)
+                        }
+                    } else if lower.contains("book") {
+                        if let goal = c.goalCount, goal > 0 {
+                            let serverProgress = Double(books) / Double(goal)
+                            newProgress = min(1.0, serverProgress + manual)
+                        } else {
+                            newProgress = min(1.0, manual)
+                        }
+                    } else if lower.contains("page") {
+                        // pages aren't tracked in reading_sessions; rely on manual adjustments
+                        newProgress = min(1.0, manual)
+                    } else {
+                        newProgress = min(1.0, manual)
+                    }
+                } else {
+                    newProgress = min(1.0, manual)
+                }
+
+                // only update if meaningfully changed
+                if abs(newProgress - c.progress) > 0.0001 {
+                    activeChallenges[idx].progress = newProgress
+                    if newProgress >= 1.0 {
+                        complete(activeChallenges[idx])
+                    }
+                }
+            }
+            // persist any changes to active dynamic challenges
+            persistActiveDynamicChallenges()
         }
     }
 
