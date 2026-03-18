@@ -107,7 +107,8 @@ final class OpenAIService {
         Example: lat=40.71, lon=-74.00 -> {"country":"United States","place":"New York City"}
         Example: lat=35.68, lon=139.69 -> {"country":"Japan","place":"Tokyo"}
         """
-        let user = "Coordinates: lat=\(String(format: \"%.6f\", lat)), lon=\(String(format: \"%.6f\", lon)). Examples:\n\(examples)\nReturn JSON: {\"country\":..., \"place\":...}"
+        let coords = String(format: "lat=%.6f, lon=%.6f", lat, lon)
+        let user = "Coordinates: \(coords). Examples:\n" + examples + "\nReturn JSON: {\"country\":..., \"place\":...}"
 
         let body: [String: Any] = [
             "model": "gpt-4o-mini",

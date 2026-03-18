@@ -42,7 +42,11 @@ final class ChallengeViewModel {
         if let t = tz { parts.append(t) }
 
         let summary = parts.joined(separator: " — ")
-        self.lastLocationSummary = summary.isEmpty ? "Lat: \(String(format: \"%.2f\", lat)), Lon: \(String(format: \"%.2f\", lon))" : summary
+        if summary.isEmpty {
+            self.lastLocationSummary = "Lat: \(String(format: \"%.2f\", lat)), Lon: \(String(format: \"%.2f\", lon))"
+        } else {
+            self.lastLocationSummary = summary
+        }
 
         // refresh recommendations to use this locked location
         Task { await self.refreshRecommendations() }
