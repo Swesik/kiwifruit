@@ -26,7 +26,7 @@ The backend is a Flask application managing data persistence and API endpoints.
 * **app.py:** The entry point for the Flask application.
 * **Database:** Uses SQLite (kiwifruit.db) with a defined schema (schema.sql).
 * **Uploads:** Stores user-generated content and placeholder images.
-* **Utilities:** Includes scripts like reset_db_and_uploads.sh for database initialization.
+* **Utilities:** Includes seed_db.py for seeding the database with test users and focus sessions.
 
 ## Key Features
 
@@ -63,18 +63,32 @@ The backend is a Flask application managing data persistence and API endpoints.
     ```bash
     cd server
     ```
-2.  Install dependencies:
+2.  Create a virtual environment and install dependencies:
     ```bash
+    python3 -m venv .venv
+    source .venv/bin/activate
     pip install -r requirements.txt
     ```
-3.  Initialize the database:
+3.  Seed the database with test users and focus sessions:
     ```bash
-    ./reset_db_and_uploads.sh
+    python3 seed_db.py
     ```
 4.  Run the application:
     ```bash
-    python app.py
+    python3 app.py
     ```
+5.  Open the iOS app and **log in** (do not create a new account) with:
+    - Username: `alice` — Password: `password`
+
+> To reset the database at any time, re-run `python3 seed_db.py` then restart the server.
+
+**Test accounts** (all use password `password`):
+
+| Username |
+| :--- |
+| `alice` |
+| `grace` |
+| `frank` |
 
 ### iOS Client Setup
 1.  Navigate to the project directory:
