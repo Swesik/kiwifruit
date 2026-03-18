@@ -43,6 +43,8 @@ def main():
         ('carol', 'Carol Carter', 'carol@example.com'),
         ('dave', 'Dave Dawson', 'dave@example.com'),
         ('eve', 'Eve Evans', 'eve@example.com'),
+        ('frank', 'Frank Foster', 'frank@example.com'),
+        ('grace', 'Grace Green', 'grace@example.com'),
     ]
     for u, fullname, email in users:
         cur.execute('INSERT INTO users (username, fullname, email, filename, password) VALUES (?, ?, ?, ?, ?)', (u, fullname, email, 'default.jpg', 'password'))
@@ -79,7 +81,7 @@ def main():
                 cur.execute('INSERT INTO comments (owner, postid, text, created) VALUES (?, ?, ?, ?)', (u, pid, f'Nice post {pid} by {u}', now))
 
     # Following relationships
-    follows = [('alice', 'bob'), ('alice', 'carol'), ('bob', 'alice'), ('carol', 'dave'), ('eve', 'alice')]
+    follows = [('alice', 'bob'), ('alice', 'carol'), ('alice', 'dave'), ('alice', 'eve'), ('bob', 'alice'), ('carol', 'dave'), ('eve', 'alice'), ('grace', 'bob')]
     for f in follows:
         try:
             cur.execute('INSERT INTO following (follower, followee, created) VALUES (?, ?, ?)', (f[0], f[1], now))
@@ -106,13 +108,29 @@ def main():
         (bob_session_id, 'carol', carol_joined)
     )
 
+    dave_session_id = uuid.uuid4().hex
+    dave_started = (now_utc - timedelta(minutes=20)).strftime('%Y-%m-%d %H:%M:%S')
+    cur.execute(
+        'INSERT INTO reading_sessions (session_id, host, book_title, started_at, status) VALUES (?, ?, ?, ?, ?)',
+        (dave_session_id, 'dave', 'The Great Gatsby', dave_started, 'active')
+    )
+
+    eve_session_id = uuid.uuid4().hex
+    eve_started = (now_utc - timedelta(minutes=2)).strftime('%Y-%m-%d %H:%M:%S')
+    cur.execute(
+        'INSERT INTO reading_sessions (session_id, host, book_title, started_at, status) VALUES (?, ?, ?, ?, ?)',
+        (eve_session_id, 'eve', '1984', eve_started, 'active')
+    )
+
     conn.commit()
     conn.close()
     print(f"Seeded database created at: {DB_PATH}")
     print()
     print("Focus session test accounts:")
     print("  Login as: alice / password")
-    print("  alice follows bob — bob's session (Dune, ~45min, carol already inside) appears in the Join feed")
+    print("  alice follows bob (~45min, carol inside), dave (~20min), eve (~2min) — all appear in the Join feed")
+    print("  frank / password  — no follows, Join feed is empty")
+    print("  grace / password  — follows bob, sees bob's Dune session (~45min) in the Join feed")
 
 if __name__ == '__main__':
     main()

@@ -31,13 +31,13 @@ protocol APIClientProtocol {
     /// Creates a new reading session for the current user and returns the persisted session object.
     func startReadingSession(bookTitle: String) async throws -> ReadingSession
     /// Marks the session as completed and records how many seconds the user actually read.
-    func endReadingSession(sessionId: String, elapsedSeconds: Int) async throws -> Void
+    func endReadingSession(sessionId: String, elapsedSeconds: Int, pagesRead: Int?) async throws -> Void
     /// Returns all active sessions belonging to users the current user follows.
     func fetchActiveFriendSessions() async throws -> [ActiveFriendSession]
     /// Adds the current user as a participant of the given session.
     func joinReadingSession(sessionId: String) async throws -> ReadingSession
     /// Removes the current user from a session they joined (does not end the host's session).
-    func leaveReadingSession(sessionId: String) async throws -> Void
+    func leaveReadingSession(sessionId: String, elapsedSeconds: Int, pagesRead: Int?, bookTitle: String?) async throws -> Void
 }
 
 /// Simple in-memory/mock client used in previews and when no backend is configured.
@@ -108,7 +108,7 @@ final class MockAPIClient: APIClientProtocol {
         )
     }
 
-    func endReadingSession(sessionId: String, elapsedSeconds: Int) async throws { try await Task.sleep(nanoseconds: 80 * 1_000_000) }
+    func endReadingSession(sessionId: String, elapsedSeconds: Int, pagesRead: Int?) async throws { try await Task.sleep(nanoseconds: 80 * 1_000_000) }
 
     func fetchActiveFriendSessions() async throws -> [ActiveFriendSession] {
         try await Task.sleep(nanoseconds: 100 * 1_000_000)
@@ -131,7 +131,7 @@ final class MockAPIClient: APIClientProtocol {
         return ReadingSession(id: sessionId, host: MockData.sampleUser, bookTitle: "Mock Book", startedAt: Date().addingTimeInterval(-600), status: "active", participants: [MockData.sampleUser])
     }
 
-    func leaveReadingSession(sessionId: String) async throws { try await Task.sleep(nanoseconds: 80 * 1_000_000) }
+    func leaveReadingSession(sessionId: String, elapsedSeconds: Int, pagesRead: Int?, bookTitle: String?) async throws { try await Task.sleep(nanoseconds: 80 * 1_000_000) }
 }
 
 /// A simple REST API client implementation using URLSession and async/await.
@@ -393,12 +393,14 @@ final class RESTAPIClient: APIClientProtocol {
         return try jsonDecoder.decode(ReadingSession.self, from: data)
     }
 
-    func endReadingSession(sessionId: String, elapsedSeconds: Int) async throws {
+    func endReadingSession(sessionId: String, elapsedSeconds: Int, pagesRead: Int?) async throws {
         let url = baseURL.appendingPathComponent("/reading-sessions/\(sessionId)")
         var req = URLRequest(url: url); req.httpMethod = "PATCH"
         req.addValue("application/json", forHTTPHeaderField: "Content-Type")
         if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["status": "completed", "elapsed_seconds": elapsedSeconds])
+        var body: [String: Any] = ["status": "completed", "elapsed_seconds": elapsedSeconds]
+        if let pages = pagesRead { body["pages_read"] = pages }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
         debugLogRequest(req)
         let (data, resp) = try await session.data(for: req)
         if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
@@ -433,10 +435,15 @@ final class RESTAPIClient: APIClientProtocol {
         return try jsonDecoder.decode(ReadingSession.self, from: data)
     }
 
-    func leaveReadingSession(sessionId: String) async throws {
+    func leaveReadingSession(sessionId: String, elapsedSeconds: Int, pagesRead: Int?, bookTitle: String?) async throws {
         let url = baseURL.appendingPathComponent("/reading-sessions/\(sessionId)/participants")
         var req = URLRequest(url: url); req.httpMethod = "DELETE"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
         if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        var body: [String: Any] = ["elapsed_seconds": elapsedSeconds]
+        if let pages = pagesRead { body["pages_read"] = pages }
+        if let title = bookTitle { body["book_title"] = title }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
         debugLogRequest(req)
         let (_, resp) = try await session.data(for: req)
         if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {

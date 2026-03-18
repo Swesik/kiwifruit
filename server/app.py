@@ -758,10 +758,22 @@ def update_reading_session(session_id):
         updates.append('status = ?'); params.append(data['status'])
     if 'elapsed_seconds' in data:
         updates.append('elapsed_seconds = ?'); params.append(int(data['elapsed_seconds']))
-    if updates:
-        params.append(session_id)
-        db.execute('UPDATE reading_sessions SET ' + ', '.join(updates) + ' WHERE session_id = ?', params)
+    try:
+        if updates:
+            params.append(session_id)
+            db.execute('UPDATE reading_sessions SET ' + ', '.join(updates) + ' WHERE session_id = ?', params)
+        # Write session summary to history when the host ends the session.
+        if data.get('status') == 'completed' and 'elapsed_seconds' in data:
+            session_row = db.execute('SELECT book_title FROM reading_sessions WHERE session_id = ?', (session_id,)).fetchone()
+            if session_row:
+                db.execute(
+                    'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read) VALUES (?, ?, ?, ?, ?)',
+                    (uuid.uuid4().hex, username, session_row['book_title'], int(data['elapsed_seconds']), data.get('pages_read'))
+                )
         db.commit()
+    except Exception:
+        db.rollback()
+        raise
     return jsonify({'status': 'ok'})
 
 
@@ -850,8 +862,23 @@ def leave_reading_session(session_id):
     if not username:
         abort(403)
     db = get_db()
-    db.execute('DELETE FROM session_participants WHERE session_id = ? AND username = ?', (session_id, username))
-    db.commit()
+    data = request.get_json() or {}
+    try:
+        db.execute('DELETE FROM session_participants WHERE session_id = ? AND username = ?', (session_id, username))
+        # Write session summary to history for the joiner.
+        if 'elapsed_seconds' in data:
+            session_row = db.execute('SELECT book_title FROM reading_sessions WHERE session_id = ?', (session_id,)).fetchone()
+            if session_row:
+                # Prefer the joiner's own book title if sent; fall back to the session's book.
+                book_title = (data.get('book_title') or '').strip() or session_row['book_title']
+                db.execute(
+                    'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read) VALUES (?, ?, ?, ?, ?)',
+                    (uuid.uuid4().hex, username, book_title, int(data['elapsed_seconds']), data.get('pages_read'))
+                )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     logger.info('reading_session left: session_id=%s participant=%s', session_id, username)
     return jsonify({'status': 'ok'})
 

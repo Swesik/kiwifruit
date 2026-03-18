@@ -36,14 +36,20 @@ final class FocusSessionStore {
     /// False when they joined someone else's session.
     private(set) var isHost = true
 
+    /// Page the user was on when they started the session.
+    var startingPage: Int? = nil
+    /// Pages read this session, set after the user inputs their ending page on stop.
+    private(set) var completedPagesRead: Int? = nil
+
     // MARK: - Start (own session)
 
-    func startSession(bookTitle: String) {
+    func startSession(bookTitle: String, startingPage: Int? = nil) {
         cancelTimerTaskIfNeeded()
         cancelStartSessionTask()
 
         isHost = true
         self.bookTitle = bookTitle
+        self.startingPage = startingPage
         self.currentSession = nil
         status = .active
         elapsedSeconds = 0
@@ -82,15 +88,24 @@ final class FocusSessionStore {
 
     // MARK: - Stop
 
-    func stopSession() {
+    func stopSession(endingPage: Int? = nil) {
         cancelTimerTaskIfNeeded()
 
         completedSeconds = elapsedSeconds
         status = .completed
 
         let elapsed = elapsedSeconds
+        let pagesRead: Int?
+        if let end = endingPage, let start = startingPage, end > start {
+            pagesRead = end - start
+        } else {
+            pagesRead = nil
+        }
+        completedPagesRead = pagesRead
+
         let alreadyKnownSession = currentSession
         let wasHost = isHost
+        let capturedBookTitle = bookTitle
         let inFlightTask = startSessionTask
         startSessionTask = nil
 
@@ -110,11 +125,10 @@ final class FocusSessionStore {
 
             do {
                 if wasHost {
-                    // Host stops → mark the whole session completed and record elapsed time.
-                    try await AppAPI.shared.endReadingSession(sessionId: sessionId, elapsedSeconds: elapsed)
+                    try await AppAPI.shared.endReadingSession(sessionId: sessionId, elapsedSeconds: elapsed, pagesRead: pagesRead)
                 } else {
-                    // Participant stops → just leave; the host's session continues.
-                    try await AppAPI.shared.leaveReadingSession(sessionId: sessionId)
+                    // Send the joiner's own book title so session_history records what they read.
+                    try await AppAPI.shared.leaveReadingSession(sessionId: sessionId, elapsedSeconds: elapsed, pagesRead: pagesRead, bookTitle: capturedBookTitle)
                 }
             } catch {
                 print("FocusSessionStore: stopSession remote call failed: \(error)")
@@ -124,16 +138,19 @@ final class FocusSessionStore {
 
     // MARK: - Join (someone else's session)
 
-    func joinSession(_ friendSession: ActiveFriendSession) {
+    func joinSession(_ friendSession: ActiveFriendSession, bookTitle: String? = nil, startingPage: Int? = nil) {
         // Cancel any existing timer before starting a new one.
         cancelTimerTaskIfNeeded()
         cancelStartSessionTask()
+
+        self.startingPage = startingPage
 
         Task {
             do {
                 let joined = try await AppAPI.shared.joinReadingSession(sessionId: friendSession.session.id)
                 isHost = false
-                bookTitle = joined.bookTitle
+                // Use the user's own book title if provided; fall back to the session's book.
+                self.bookTitle = bookTitle ?? joined.bookTitle
                 currentSession = joined
                 // Timer starts at zero — independent of the host's elapsed time.
                 status = .active
@@ -154,6 +171,8 @@ final class FocusSessionStore {
         currentSession = nil
         bookTitle = nil
         isHost = true
+        startingPage = nil
+        completedPagesRead = nil
     }
 
     // MARK: - Friends feed

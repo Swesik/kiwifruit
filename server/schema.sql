@@ -71,6 +71,17 @@ CREATE TABLE reading_sessions (
     FOREIGN KEY (host) REFERENCES users (username) ON DELETE CASCADE
 );
 
+-- Permanent record of every completed reading session per user
+CREATE TABLE session_history (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    book_title TEXT NOT NULL,
+    duration_seconds INTEGER NOT NULL,
+    pages_read INTEGER,
+    ended_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
+);
+
 -- Friends who joined a reading session (many-to-many)
 CREATE TABLE session_participants (
     session_id TEXT NOT NULL,
