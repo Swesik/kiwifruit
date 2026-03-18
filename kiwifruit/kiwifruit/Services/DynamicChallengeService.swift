@@ -13,6 +13,92 @@ final class DynamicChallengeService {
 
     private func randomXP() -> Int { Int.random(in: 5...25) }
 
+    private func randomCoordinate() -> (Double, Double) {
+        // Uniform random lat/lon; could be improved to bias to land areas
+        let lat = Double.random(in: -85.0...85.0)
+        let lon = Double.random(in: -180.0...180.0)
+        return (lat, lon)
+    }
+
+    // Public accessor for a random coordinate so callers can ensure consistency across multiple API calls
+    func randomCoordinatePublic() -> (Double, Double) { randomCoordinate() }
+
+    /// Generate multiple dynamic challenges for the same location using a single weather API call (if available).
+    func generateDynamicChallengesForLocation(lat: Double, lon: Double, streak: Int, count: Int) async -> [Challenge] {
+        var results: [Challenge] = []
+
+        var weatherInfo: ApiNinjasWeatherInfo? = nil
+        if apiKey != nil {
+            do {
+                weatherInfo = try await ApiNinjasWeatherService.shared.fetchWeather(lat: lat, lon: lon)
+            } catch {
+                weatherInfo = nil
+            }
+        }
+
+        for i in 0..<count {
+            // Slight variation per item
+            let difficulty = difficultyForStreak(streak)
+            let baseXP = 10 + difficulty * 10
+            let xp = rewardForDifficulty(baseXP + i*5, streak: streak)
+
+            if let w = weatherInfo {
+                let temp = w.temp ?? 70.0
+                let wind = w.wind_speed ?? 0.0
+                let humidity = w.humidity ?? 50.0
+                let desc = w.description ?? ""
+
+                var challengeTitle = "Local Discovery Read"
+                var challengeDesc = "Temp: \(Int(temp))°F, Wind: \(String(format: "%.1f", wind)) mph, Humidity: \(Int(humidity))%. \(desc)"
+
+                // create variations by index
+                switch i % 4 {
+                case 0:
+                    challengeTitle = "Ambient Read: Experience the local weather"
+                    challengeDesc += " Find a short piece that matches the mood and read for 20 minutes."
+                case 1:
+                    challengeTitle = "Micro-Challenge: Weather Sketch"
+                    challengeDesc += " Read a short passage and write a 3-sentence reflection inspired by the weather."
+                case 2:
+                    challengeTitle = "Focused Session: Shelter & Read"
+                    challengeDesc += " Choose a comfortable spot and read for 25 minutes."
+                default:
+                    challengeTitle = "Local Riddle Prompt"
+                    challengeDesc += " Solve a small riddle or find a poem inspired by the scene."
+                }
+
+                var c = Challenge(title: challengeTitle, description: challengeDesc, category: "dynamic", difficulty: difficulty, progress: 0.0, rewardXP: xp, recommendedConditions: nil, state: .available)
+                c.recommendationExplanation = "Generated from ApiNinjas weather at (\(String(format: "%.2f", lat)), \(String(format: "%.2f", lon)))."
+                c.hint = "Weather snapshot: Temp=\(Int(temp))°F Wind=\(String(format: "%.1f", wind))mph"
+                results.append(c)
+            } else {
+                // fallback variations using quotes/words
+                if i % 2 == 0 {
+                    var c = await generateRandomWordChallenge()
+                    c.difficulty = difficulty
+                    c.rewardXP = xp
+                    results.append(c)
+                } else {
+                    var c = await generateQuoteChallenge()
+                    c.difficulty = difficulty
+                    c.rewardXP = xp
+                    results.append(c)
+                }
+            }
+        }
+
+        return results
+    }
+
+    private func difficultyForStreak(_ streak: Int) -> Int {
+        // Increase difficulty slowly with streak (every 5 days increases difficulty)
+        return min(5, 1 + (streak / 5))
+    }
+
+    private func rewardForDifficulty(_ base: Int, streak: Int) -> Int {
+        return Int(Double(base) * (1.0 + Double(min(20, streak)) / 20.0))
+    }
+
     func generateRandomWordChallenge() async -> Challenge {
         let word: String
         if let key = apiKey {
@@ -60,16 +146,98 @@ final class DynamicChallengeService {
         let short = excerpt.count > 30 ? String(excerpt.prefix(27)) + "..." : excerpt
         let title = "Inspired: \"\(short)\""
         let desc = "Read a book inspired by this quote: \(quoteText). Dynamic XP: \(xp)."
-        var c = Challenge(title: title, description: desc, category: "dynamic", difficulty: 1, progress: 0.0, rewardXP: xp, recommendedConditions: nil, state: .available)
+        var c = Challenge(title: title, description: desc, category: "quote", difficulty: 1, progress: 0.0, rewardXP: xp, recommendedConditions: nil, state: .available)
         c.recommendationExplanation = "Quote-based suggestion"
+        // Enhance with LLM if available
+        if let enhanced = await OpenAIService.shared.enhanceChallenge(c, context: "quote excerpt") {
+            if let t = enhanced.title { c.title = t }
+            if let d = enhanced.description { c.description = d }
+            if let h = enhanced.hint { c.hint = h }
+        }
         return c
     }
 
     func generateDynamicChallenge() async -> Challenge {
+        // Default: generate using a random coordinate so we exercise the weather API when available
+        let (lat, lon) = randomCoordinate()
+        return await generateDynamicChallenge(lat: lat, lon: lon, streak: 1)
+    }
+
+    func generateDynamicChallenge(streak: Int) async -> Challenge {
+        let (lat, lon) = randomCoordinate()
+        return await generateDynamicChallenge(lat: lat, lon: lon, streak: streak)
+    }
+
+    func generateDynamicChallenge(lat: Double, lon: Double, streak: Int) async -> Challenge {
+        // If weather API available, use it to tailor the challenge
+        if apiKey != nil {
+            do {
+                let w = try await ApiNinjasWeatherService.shared.fetchWeather(lat: lat, lon: lon)
+                // build challenge based on weather
+                let temp = w.temp ?? 70.0
+                let wind = w.wind_speed ?? 0.0
+                let humidity = w.humidity ?? 50.0
+                let desc = w.description ?? ""
+
+                let difficulty = difficultyForStreak(streak)
+                let baseXP = 10 + difficulty * 10
+                let xp = rewardForDifficulty(baseXP, streak: streak)
+
+                var title = "Explore: Local weather at (\(String(format: "%.2f", lat)), \(String(format: "%.2f", lon)))"
+                var details = "Temp: \(Int(temp))°F, Wind: \(String(format: "%.1f", wind)) mph, Humidity: \(Int(humidity))%"
+                if !desc.isEmpty { details += " — \(desc)" }
+
+                // pick task type depending on conditions
+                var challengeTitle = title
+                var challengeDesc = "Based on local weather: \(details)."
+                if temp > 75.0 {
+                    challengeTitle = "Sunny Read: Take it outside"
+                    challengeDesc += " It's warm — try a 20-minute outdoor reading session."
+                } else if (w.wind_speed ?? 0) > 20 {
+                    challengeTitle = "Windy Focus Session"
+                    challengeDesc += " Windy conditions — find a sheltered spot and read for 15 minutes."
+                } else if (w.humidity ?? 0) > 80 || (w.description?.lowercased().contains("rain") ?? false) {
+                    challengeTitle = "Cozy Indoor Read"
+                    challengeDesc += " Cozy time — make a warm drink and read for 25 minutes."
+                } else {
+                    challengeTitle = "Local Discovery Read"
+                    challengeDesc += " Find a short story inspired by the local vibes and read for 20 minutes."
+                }
+
+                var c = Challenge(title: challengeTitle, description: challengeDesc, category: "weather", difficulty: difficulty, progress: 0.0, rewardXP: xp, recommendedConditions: nil, state: .available)
+                c.recommendationExplanation = "Generated from ApiNinjas weather at (\(String(format: "%.2f", lat)), \(String(format: "%.2f", lon)))."
+                c.hint = "Weather snapshot: \(details)"
+
+                // Use LLM to enhance text if available
+                if let enhanced = await OpenAIService.shared.enhanceChallenge(c, context: "temp=\(Int(temp)), wind=\(String(format: "%.1f", wind))") {
+                    if let t = enhanced.title { c.title = t }
+                    if let d = enhanced.description { c.description = d }
+                    if let h = enhanced.hint { c.hint = h }
+                }
+
+                return c
+            } catch {
+                // fall through to simpler generation on error
+            }
+        }
+
+        // Fallback: use quote or random word
         if Bool.random() {
-            return await generateRandomWordChallenge()
+            var c = await generateRandomWordChallenge()
+            c.difficulty = difficultyForStreak(streak)
+            c.rewardXP = rewardForDifficulty(c.rewardXP, streak: streak)
+            return c
         } else {
-            return await generateQuoteChallenge()
+            var c = await generateQuoteChallenge()
+            c.difficulty = difficultyForStreak(streak)
+            c.rewardXP = rewardForDifficulty(c.rewardXP, streak: streak)
+            if let enhanced = await OpenAIService.shared.enhanceChallenge(c, context: "quote excerpt") {
+                if let t = enhanced.title { c.title = t }
+                if let d = enhanced.description { c.description = d }
+                if let h = enhanced.hint { c.hint = h }
+            }
+            return c
+        }
         }
     }
 }

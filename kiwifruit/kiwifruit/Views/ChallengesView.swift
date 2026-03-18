@@ -13,6 +13,9 @@ struct ChallengesView: View {
                     VStack(alignment: .leading) {
                         Text("Challenges").font(.largeTitle).bold()
                         Text("Total Points: \(vm.totalPoints)").font(.subheadline).foregroundColor(.secondary)
+                        if let loc = vm.lastLocationSummary {
+                            Text(loc).font(.caption).foregroundColor(.secondary)
+                        }
                     }
                     Spacer()
                     VStack(alignment: .trailing) {
@@ -45,7 +48,7 @@ struct ChallengesView: View {
                         HStack {
                             Text("Discover More").font(.title2).bold()
                             Spacer()
-                            Button(action: { Task { await vm.loadRecommendations() } }) {
+                            Button(action: { Task { await vm.refreshRecommendations() } }) {
                                 Image(systemName: "arrow.clockwise")
                             }
                             .buttonStyle(.bordered)

@@ -8,6 +8,10 @@ final class ChallengeViewModel {
     var streak: Int = 1
     var completedChallenges: [Challenge] = []
     var totalPoints: Int = 0
+    // ambient location summary for the last refresh (e.g., "Iceland — Reykjavik (pop: 131k) — GMT")
+    var lastLocationSummary: String? = nil
+    var lastLat: Double? = nil
+    var lastLon: Double? = nil
 
     private let engine: ChallengeEngine = .shared
     private var bank: [Challenge] = []
@@ -67,6 +71,70 @@ final class ChallengeViewModel {
         }
 
         self.recommended = Array(filtered.prefix(desired))
+    }
+
+    // Force-refresh: generate entirely new dynamic challenges (useful for "refresh" action)
+    func refreshRecommendations() async {
+        let desired = 4
+        // Ensure all generated challenges share the same random coordinate for ambient consistency
+        let (lat, lon) = DynamicChallengeService.shared.randomCoordinatePublic()
+
+        // Try to fetch timezone and population for the chosen location to create a coherent ambiance
+        var tz: String? = nil
+        var pop: String? = nil
+        do {
+            tz = try await ApiNinjasTimezoneService.shared.fetchTimezone(lat: lat, lon: lon)
+        } catch {
+            tz = nil
+        }
+        do {
+            pop = try await ApiNinjasPopulationService.shared.fetchPopulation(lat: lat, lon: lon)
+        } catch {
+            pop = nil
+        }
+
+        // Build a readable summary
+        var summaryParts: [String] = []
+        if let pop = pop { summaryParts.append(pop) }
+        if let tz = tz { summaryParts.append(tz) }
+        let summary = summaryParts.joined(separator: " — ")
+        self.lastLocationSummary = summary.isEmpty ? "Lat: \(String(format: "%.2f", lat)), Lon: \(String(format: "%.2f", lon))" : summary
+        self.lastLat = lat
+        self.lastLon = lon
+
+        var generated = await DynamicChallengeService.shared.generateDynamicChallengesForLocation(lat: lat, lon: lon, streak: streak, count: desired)
+
+        // Attach location summary to each generated challenge's explanation/hint
+        for i in 0..<generated.count {
+            var g = generated[i]
+            let locnote = summary.isEmpty ? "Location: (\(String(format: "%.2f", lat)), \(String(format: "%.2f", lon)))" : summary
+            if var expl = g.recommendationExplanation {
+                expl += " | \(locnote)"
+                g.recommendationExplanation = expl
+            } else {
+                g.recommendationExplanation = locnote
+            }
+            if g.hint == nil { g.hint = locnote }
+            generated[i] = g
+        }
+
+        // Filter out any that clash with active/completed
+        generated.removeAll { c in
+            activeChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) ||
+            completedChallenges.contains(where: { $0.id == c.id || $0.title == c.title })
+        }
+
+        // If we have fewer than desired after filtering, fill using engine
+        if generated.count < desired {
+            let remaining = desired - generated.count
+            let rec = await engine.recommend(limit: remaining)
+            for r in rec where !activeChallenges.contains(where: { $0.id == r.id }) && !completedChallenges.contains(where: { $0.id == r.id }) {
+                generated.append(r)
+                if generated.count >= desired { break }
+            }
+        }
+
+        self.recommended = Array(generated.prefix(desired))
     }
 
     func accept(_ challenge: Challenge) -> Bool {

@@ -17,10 +17,23 @@ struct ChallengeCardView: View {
                 }
                 Spacer()
                 // Points badge
-                Text("\(challenge.rewardXP) XP")
+                VStack(alignment: .trailing, spacing: 6) {
+                    // Small Dynamic/API-created indicator
+                    if challenge.category == "dynamic" || (challenge.recommendationExplanation?.contains("ApiNinjas") ?? false) || (challenge.hint?.lowercased().contains("riddle") ?? false) {
+                        Text("Dynamic")
+                            .font(.caption2)
+                            .bold()
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 6)
+                            .background(Capsule().fill(Color.blue.opacity(0.15)))
+                            .foregroundColor(.blue)
+                    }
+
+                    Text("\(challenge.rewardXP) XP")
                     .font(.caption2).bold()
                     .padding(6)
                     .background(Capsule().fill(Color.yellow.opacity(0.9)))
+                }
             }
 
             ProgressView(value: challenge.progress)
