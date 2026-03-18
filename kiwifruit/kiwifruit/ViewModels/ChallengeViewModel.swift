@@ -13,6 +13,41 @@ final class ChallengeViewModel {
     var lastLat: Double? = nil
     var lastLon: Double? = nil
 
+    // Set an explicit location for subsequent generation. This will attempt to resolve a place/country and update lastLocationSummary, then refresh recommendations.
+    func setLocation(lat: Double, lon: Double) async {
+        self.lastLat = lat
+        self.lastLon = lon
+
+        // try to resolve place via ReverseGeocodeService first, fall back to OpenAI
+        var placeName: String? = nil
+        var countryName: String? = nil
+        if let rg = await ReverseGeocodeService.shared.reverse(lat: lat, lon: lon) {
+            placeName = rg.place
+            countryName = rg.country
+        } else if let place = await OpenAIService.shared.lookupPlace(lat: lat, lon: lon) {
+            placeName = place.place
+            countryName = place.country
+        }
+
+        // timezone and population fetch as before
+        var tz: String? = nil
+        var pop: String? = nil
+        do { tz = try await ApiNinjasTimezoneService.shared.fetchTimezone(lat: lat, lon: lon) } catch { tz = nil }
+        do { pop = try await ApiNinjasPopulationService.shared.fetchPopulation(lat: lat, lon: lon) } catch { pop = nil }
+
+        var parts: [String] = []
+        if let p = placeName { parts.append(p) }
+        if let c = countryName { parts.append(c) }
+        if let p = pop { parts.append(p) }
+        if let t = tz { parts.append(t) }
+
+        let summary = parts.joined(separator: " — ")
+        self.lastLocationSummary = summary.isEmpty ? "Lat: \(String(format: \"%.2f\", lat)), Lon: \(String(format: \"%.2f\", lon))" : summary
+
+        // refresh recommendations to use this locked location
+        Task { await self.refreshRecommendations() }
+    }
+
     private let engine: ChallengeEngine = .shared
     private var bank: [Challenge] = []
     private let totalPointsKey = "kiwifruit.totalPoints"
@@ -76,8 +111,15 @@ final class ChallengeViewModel {
     // Force-refresh: generate entirely new dynamic challenges (useful for "refresh" action)
     func refreshRecommendations() async {
         let desired = 4
-        // Ensure all generated challenges share the same random coordinate for ambient consistency
-        let (lat, lon) = DynamicChallengeService.shared.randomCoordinatePublic()
+        // Use an explicit location if set; otherwise pick a random coordinate for ambient consistency
+        let lat: Double
+        let lon: Double
+        if let l = self.lastLat, let o = self.lastLon {
+            lat = l; lon = o
+        } else {
+            let coord = DynamicChallengeService.shared.randomCoordinatePublic()
+            lat = coord.0; lon = coord.1
+        }
 
         // Try to fetch timezone and population for the chosen location to create a coherent ambiance
         var tz: String? = nil

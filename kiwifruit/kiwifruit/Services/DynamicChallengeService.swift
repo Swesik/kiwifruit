@@ -68,8 +68,22 @@ final class DynamicChallengeService {
                 }
 
                 var c = Challenge(title: challengeTitle, description: challengeDesc, category: "dynamic", difficulty: difficulty, progress: 0.0, rewardXP: xp, recommendedConditions: nil, state: .available)
-                c.recommendationExplanation = "Generated from ApiNinjas weather at (\(String(format: "%.2f", lat)), \(String(format: "%.2f", lon)))."
+                c.recommendationExplanation = "Generated from ApiNinjas weather."
                 c.hint = "Weather snapshot: Temp=\(Int(temp))°F Wind=\(String(format: "%.1f", wind))mph"
+
+                // Build location-aware context (include lat/lon and approximate date) for the LLM to craft a culturally-aware challenge
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateStyle = .long
+                let today = dateFormatter.string(from: Date())
+                let locationContext = "lat=\(String(format: "%.2f", lat)), lon=\(String(format: "%.2f", lon)); date=\(today)"
+
+                // Ask LLM to enhance the challenge using the location context (few-shot handled in OpenAIService)
+                if let enhanced = await OpenAIService.shared.enhanceChallenge(c, context: locationContext) {
+                    if let t = enhanced.title { c.title = t }
+                    if let d = enhanced.description { c.description = d }
+                    if let h = enhanced.hint { c.hint = h }
+                }
+
                 results.append(c)
             } else {
                 // fallback variations using quotes/words

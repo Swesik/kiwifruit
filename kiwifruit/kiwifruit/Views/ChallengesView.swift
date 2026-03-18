@@ -5,6 +5,8 @@ struct ChallengesView: View {
     @State private var selected: Challenge? = nil
     @State private var showDetail = false
     @State private var showLimitAlert = false
+    @State private var inputLat: String = ""
+    @State private var inputLon: String = ""
 
     var body: some View {
         NavigationStack {
@@ -15,6 +17,22 @@ struct ChallengesView: View {
                         Text("Total Points: \(vm.totalPoints)").font(.subheadline).foregroundColor(.secondary)
                         if let loc = vm.lastLocationSummary {
                             Text(loc).font(.caption).foregroundColor(.secondary)
+                        }
+                        HStack {
+                            TextField("Lat", text: $inputLat)
+                                .keyboardType(.decimalPad)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 120)
+                            TextField("Lon", text: $inputLon)
+                                .keyboardType(.decimalPad)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 120)
+                            Button("Set location") {
+                                if let lat = Double(inputLat), let lon = Double(inputLon) {
+                                    Task { await vm.setLocation(lat: lat, lon: lon) }
+                                }
+                            }
+                            .buttonStyle(.bordered)
                         }
                     }
                     Spacer()
@@ -49,7 +67,7 @@ struct ChallengesView: View {
                             Text("Discover More").font(.title2).bold()
                             Spacer()
                             Button(action: { Task { await vm.refreshRecommendations() } }) {
-                                Image(systemName: "arrow.clockwise")
+                                Text("Generate new challenge")
                             }
                             .buttonStyle(.bordered)
                         }
