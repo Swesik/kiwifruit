@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-@Observable @MainActor
+@Observable
 final class ChallengeViewModel {
     var activeChallenges: [Challenge] = []
     var recommended: [Challenge] = []
@@ -65,11 +65,12 @@ final class ChallengeViewModel {
                         filtered.append(c)
                     }
                 }
-                let final = Array(filtered.prefix(desired))
-                await MainActor.run {
-                    self.recommended = final
-                    if let enc = try? JSONEncoder().encode(final) { UserDefaults.standard.set(enc, forKey: self.recommendedCacheKey) }
-                }
+                    let final = Array(filtered.prefix(desired))
+                    Task { [weak self] in
+                        guard let self = self else { return }
+                        self.recommended = final
+                        if let enc = try? JSONEncoder().encode(final) { UserDefaults.standard.set(enc, forKey: self.recommendedCacheKey) }
+                    }
             }
             return
         }
@@ -359,49 +360,47 @@ final class ChallengeViewModel {
         let minutes = await calculateMinutes(host: host)
         let books = await calculateBooks(host: host)
 
-        await MainActor.run {
-            for idx in activeChallenges.indices {
-                var c = activeChallenges[idx]
-                let manual = manualAdjustments[c.id.uuidString] ?? 0.0
-                var newProgress: Double = c.progress
+        for idx in activeChallenges.indices {
+            var c = activeChallenges[idx]
+            let manual = manualAdjustments[c.id.uuidString] ?? 0.0
+            var newProgress: Double = c.progress
 
-                if let unit = c.goalUnit {
-                    let lower = unit.lowercased()
-                    if lower.contains("minute") {
-                        if let goal = c.goalCount, goal > 0 {
-                            let serverProgress = Double(minutes) / Double(goal)
-                            newProgress = min(1.0, serverProgress + manual)
-                        } else {
-                            newProgress = min(1.0, manual)
-                        }
-                    } else if lower.contains("book") {
-                        if let goal = c.goalCount, goal > 0 {
-                            let serverProgress = Double(books) / Double(goal)
-                            newProgress = min(1.0, serverProgress + manual)
-                        } else {
-                            newProgress = min(1.0, manual)
-                        }
-                    } else if lower.contains("page") {
-                        // pages aren't tracked in reading_sessions; rely on manual adjustments
-                        newProgress = min(1.0, manual)
+            if let unit = c.goalUnit {
+                let lower = unit.lowercased()
+                if lower.contains("minute") {
+                    if let goal = c.goalCount, goal > 0 {
+                        let serverProgress = Double(minutes) / Double(goal)
+                        newProgress = min(1.0, serverProgress + manual)
                     } else {
                         newProgress = min(1.0, manual)
                     }
+                } else if lower.contains("book") {
+                    if let goal = c.goalCount, goal > 0 {
+                        let serverProgress = Double(books) / Double(goal)
+                        newProgress = min(1.0, serverProgress + manual)
+                    } else {
+                        newProgress = min(1.0, manual)
+                    }
+                } else if lower.contains("page") {
+                    // pages aren't tracked in reading_sessions; rely on manual adjustments
+                    newProgress = min(1.0, manual)
                 } else {
                     newProgress = min(1.0, manual)
                 }
+            } else {
+                newProgress = min(1.0, manual)
+            }
 
-                // only update if meaningfully changed
-                if abs(newProgress - c.progress) > 0.0001 {
-                    activeChallenges[idx].progress = newProgress
-                    if newProgress >= 1.0 {
-                        complete(activeChallenges[idx])
-                    }
+            // only update if meaningfully changed
+            if abs(newProgress - c.progress) > 0.0001 {
+                activeChallenges[idx].progress = newProgress
+                if newProgress >= 1.0 {
+                    complete(activeChallenges[idx])
                 }
             }
-            // persist any changes to active dynamic challenges
-            persistActiveDynamicChallenges()
         }
+        // persist any changes to active dynamic challenges
+        persistActiveDynamicChallenges()
     }
 
     
