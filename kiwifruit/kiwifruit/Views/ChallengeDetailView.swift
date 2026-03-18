@@ -20,6 +20,11 @@ struct ChallengeDetailView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(challenge.title).font(.largeTitle).bold()
                     Text(challenge.description).font(.body).foregroundColor(.secondary)
+                        if let name = challenge.generatedLocationName {
+                            Text("Location: \(name)").font(.caption).foregroundColor(.secondary)
+                        } else if let lat = challenge.generatedLat, let lon = challenge.generatedLon {
+                            Text("Location: \(String(format: "%.4f", lat)), \(String(format: "%.4f", lon)) \((challenge.generatedLocationIsRandom == true) ? "(randomly generated)" : "")").font(.caption).foregroundColor(.secondary)
+                        }
                     // show goal UI for custom challenges
                     if challenge.category == "custom" {
                         if let unit = challenge.goalUnit, let goal = challenge.goalCount {

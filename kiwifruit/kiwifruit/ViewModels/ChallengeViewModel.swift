@@ -137,7 +137,6 @@ final class ChallengeViewModel {
         // persist and add
         activeChallenges.append(c)
         persistActiveDynamicChallenges()
-        Task { await loadRecommendations() }
     }
 
     // Create a weather-driven challenge using external API and add as accepted with zeroed progress
@@ -167,9 +166,14 @@ final class ChallengeViewModel {
             }
 
             // Add to user's active challenges and persist
+            c.generatedLat = lat
+            c.generatedLon = lon
+            c.generatedLocationIsRandom = false
+            if let geo = try? await GeoService.shared.reverseGeocode(lat: lat, lon: lon) {
+                c.generatedLocationName = geo.displayName ?? geo.country
+            }
             activeChallenges.append(c)
             persistActiveDynamicChallenges()
-            Task { await loadRecommendations() }
             return
         } catch {
             // On error, fall back to a dynamic item
@@ -182,7 +186,6 @@ final class ChallengeViewModel {
         c.recommendationExplanation = (c.recommendationExplanation ?? "") + " (fallback: weather fetch failed)"
         activeChallenges.append(c)
         persistActiveDynamicChallenges()
-        Task { await loadRecommendations() }
     }
 
     // Log progress for a custom challenge: amount is in the unit matching goalUnit (e.g., pages, minutes, books)
@@ -212,8 +215,7 @@ final class ChallengeViewModel {
         recommended.removeAll { $0.id == c.id || $0.title == c.title }
         // persist accepted dynamic challenges so they survive app restarts
         persistActiveDynamicChallenges()
-        // refill discover asynchronously so user sees 4 items consistently
-        Task { await loadRecommendations() }
+        // do not auto-refresh recommendations; user must press refresh
         return true
     }
 
@@ -225,7 +227,6 @@ final class ChallengeViewModel {
     func abandon(_ challenge: Challenge) {
         activeChallenges.removeAll { $0.id == challenge.id }
         persistActiveDynamicChallenges()
-        Task { await loadRecommendations() }
     }
 
     func updateProgress(challenge: Challenge, progress: Double) {
@@ -246,8 +247,7 @@ final class ChallengeViewModel {
         persistTotals()
         // ensure completed challenge is not shown in recommendations
         recommended.removeAll { $0.id == c.id || $0.title == c.title }
-        // refill discover asynchronously to maintain constant discover size
-        Task { await loadRecommendations() }
+        // do not auto-refresh recommendations; user must press refresh
         // persist removal of any dynamic challenges no longer active
         persistActiveDynamicChallenges()
     }

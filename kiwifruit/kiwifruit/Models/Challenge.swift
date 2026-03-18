@@ -43,6 +43,11 @@ struct Challenge: Identifiable, Codable, Equatable {
     var state: ChallengeState
     var recommendationExplanation: String?
     var generatedBy: ChallengeGenerationSource?
+    // Optional generated location info for weather-driven or random challenges
+    var generatedLat: Double?
+    var generatedLon: Double?
+    var generatedLocationName: String?
+    var generatedLocationIsRandom: Bool?
 
     init(id: UUID = UUID(), title: String, description: String, category: String = "general", difficulty: Int = 1, progress: Double = 0.0, rewardXP: Int = 10, recommendedConditions: RecommendedConditions? = nil, hint: String? = nil, goalCount: Int? = nil, goalUnit: String? = nil, state: ChallengeState = .available, recommendationExplanation: String? = nil) {
         self.id = id
@@ -58,5 +63,9 @@ struct Challenge: Identifiable, Codable, Equatable {
         self.goalUnit = goalUnit
         self.state = state
         self.recommendationExplanation = recommendationExplanation
+        self.generatedLat = nil
+        self.generatedLon = nil
+        self.generatedLocationName = nil
+        self.generatedLocationIsRandom = nil
     }
 }

@@ -112,7 +112,14 @@ final class DynamicChallengeService {
             // Attempt weather-driven challenge occasionally, otherwise quote/word driven
             if Bool.random() {
                 let (lat, lon) = randomCoordinate()
-                let c = await generateDynamicChallenge(lat: lat, lon: lon, streak: 1)
+                var c = await generateDynamicChallenge(lat: lat, lon: lon, streak: 1)
+                // mark that this used a random coordinate and attempt to reverse-geocode for display
+                c.generatedLat = lat
+                c.generatedLon = lon
+                c.generatedLocationIsRandom = true
+                if let geo = try? await GeoService.shared.reverseGeocode(lat: lat, lon: lon) {
+                    c.generatedLocationName = geo.displayName ?? geo.country
+                }
                 results.append(c)
             } else if i % 2 == 0 {
                 let c = await generateRandomWordChallenge()
@@ -241,6 +248,12 @@ final class DynamicChallengeService {
 
                 var c = Challenge(title: challengeTitle, description: challengeDesc, category: "weather", difficulty: difficulty, progress: 0.0, rewardXP: xp, recommendedConditions: nil, state: .available)
                 c.recommendationExplanation = "Generated from ApiNinjas weather at (\(String(format: "%.2f", lat)), \(String(format: "%.2f", lon)))."
+                c.generatedLat = lat
+                c.generatedLon = lon
+                c.generatedLocationIsRandom = false
+                if let geo = try? await GeoService.shared.reverseGeocode(lat: lat, lon: lon) {
+                    c.generatedLocationName = geo.displayName ?? geo.country
+                }
                 c.hint = "Weather snapshot: \(details)"
 
                 // Use LLM to enhance text if available

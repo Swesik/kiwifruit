@@ -112,7 +112,7 @@ struct ChallengesView: View {
                         HStack {
                             Text("Discover More").font(.title2).bold()
                             Spacer()
-                            Button(action: { Task { await vm.refreshRecommendations() } }) {
+                            Button(action: { Task { await vm.loadRecommendations() } }) {
                                 Image(systemName: "arrow.clockwise")
                             }
                             .buttonStyle(.bordered)
@@ -141,7 +141,7 @@ struct ChallengesView: View {
                     }
                 }
             }
-            .onAppear { Task { await vm.loadRecommendations() } }
+            // No automatic refresh; user must tap the refresh button
             .alert("Maximum active challenges reached", isPresented: $showLimitAlert) {
                 Button("OK", role: .cancel) {}
             } message: {

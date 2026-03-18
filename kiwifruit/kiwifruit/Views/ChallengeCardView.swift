@@ -14,6 +14,12 @@ struct ChallengeCardView: View {
                     if let expl = challenge.recommendationExplanation {
                         Text(expl).font(.caption).foregroundColor(.gray).lineLimit(2)
                     }
+                    if let name = challenge.generatedLocationName {
+                        Text("Location: \(name)").font(.caption2).foregroundColor(.gray)
+                    } else if let lat = challenge.generatedLat, let lon = challenge.generatedLon {
+                        let coord = String(format: "%.2f, %.2f", lat, lon)
+                        Text("Location: \(coord) \((challenge.generatedLocationIsRandom == true) ? "(random)" : "")").font(.caption2).foregroundColor(.gray)
+                    }
                 }
                 Spacer()
                 // Points badge
