@@ -7,6 +7,7 @@ final class DynamicChallengeService {
 
     private var apiKey: String? {
         if let env = ProcessInfo.processInfo.environment["API_NINJAS_KEY"], !env.isEmpty { return env }
+        if let stored = UserDefaults.standard.string(forKey: "API_NINJAS_KEY"), !stored.isEmpty { return stored }
         if let url = Bundle.main.url(forResource: "Keys", withExtension: "plist"), let dict = NSDictionary(contentsOf: url), let val = dict["API_NINJAS_KEY"] as? String, !val.isEmpty { return val }
         return nil
     }
