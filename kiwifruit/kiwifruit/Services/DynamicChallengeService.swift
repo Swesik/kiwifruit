@@ -238,6 +238,5 @@ final class DynamicChallengeService {
             }
             return c
         }
-        }
     }
 }
