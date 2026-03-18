@@ -673,6 +673,14 @@ struct FocusView: View {
                     .frame(height: 40)
             }
         }
+        .alert("Session not saved", isPresented: Binding(
+            get: { sessionStore.saveError != nil },
+            set: { if !$0 { sessionStore.saveError = nil } }
+        )) {
+            Button("OK") { sessionStore.saveError = nil }
+        } message: {
+            Text(sessionStore.saveError ?? "")
+        }
     }
 
     private var completionHeader: some View {

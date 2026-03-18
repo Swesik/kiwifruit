@@ -40,6 +40,8 @@ final class FocusSessionStore {
     var startingPage: Int? = nil
     /// Pages read this session, set after the user inputs their ending page on stop.
     private(set) var completedPagesRead: Int? = nil
+    /// Set if the stop/leave API call fails so the UI can show an error alert.
+    var saveError: String? = nil
 
     // MARK: - Start (own session)
 
@@ -132,6 +134,7 @@ final class FocusSessionStore {
                 }
             } catch {
                 print("FocusSessionStore: stopSession remote call failed: \(error)")
+                saveError = "Your session couldn't be saved. Please check your connection and try again."
             }
         }
     }
@@ -173,6 +176,7 @@ final class FocusSessionStore {
         isHost = true
         startingPage = nil
         completedPagesRead = nil
+        saveError = nil
     }
 
     // MARK: - Friends feed
