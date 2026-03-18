@@ -10,9 +10,21 @@ private enum ChallengesDesign {
 }
 
 struct ChallengesView: View {
-    private let activeChallenges: [(title: String, subtitle: String, progress: Double)] = [
-        ("Read 5 books in a month", "Sci-Fi Edition", 0.4),
-        ("Daily 30 mins", "Consistency is key", 0.8)
+    private let activeChallenges: [Challenge] = [
+        Challenge(
+            title: "Read 5 books in a month",
+            subtitle: "Sci-Fi Edition",
+            description: "Dive deep into the magical realms and complete 5 books within this month. Your consistency will unlock special badges!",
+            progress: 0.4,
+            progressLabel: "2/5 Books"
+        ),
+        Challenge(
+            title: "Daily 30 mins",
+            subtitle: "Consistency is key",
+            description: "Build a daily reading habit by dedicating at least 30 minutes every day. Small steps lead to big results!",
+            progress: 0.8,
+            progressLabel: "24/30 Days"
+        )
     ]
 
     private let discoverChallenges: [(title: String, description: String)] = [
@@ -85,36 +97,35 @@ struct ChallengesView: View {
                 .foregroundColor(ChallengesDesign.uiText)
 
             VStack(spacing: 12) {
-                ForEach(Array(activeChallenges.enumerated()), id: \.offset) { _, challenge in
-                    activeChallengeCard(
-                        title: challenge.title,
-                        subtitle: challenge.subtitle,
-                        progress: challenge.progress
-                    )
+                ForEach(activeChallenges) { challenge in
+                    NavigationLink(destination: ChallengeDetailView(challenge: challenge)) {
+                        activeChallengeCard(challenge: challenge)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
     }
 
-    private func activeChallengeCard(title: String, subtitle: String, progress: Double) -> some View {
+    private func activeChallengeCard(challenge: Challenge) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
+                    Text(challenge.title)
                         .font(.subheadline).fontWeight(.bold)
                         .foregroundColor(ChallengesDesign.uiText)
-                    Text(subtitle)
+                    Text(challenge.subtitle)
                         .font(.caption).fontWeight(.semibold)
                         .foregroundColor(ChallengesDesign.uiText)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                Button("view →") {}
+                Text("view →")
                     .font(.caption).fontWeight(.bold)
                     .foregroundColor(ChallengesDesign.uiText)
             }
 
-            progressBar(progress: progress)
+            progressBar(progress: challenge.progress)
                 .padding(.top, 24)
         }
         .padding(16)
@@ -194,5 +205,7 @@ struct ChallengesView: View {
 }
 
 #Preview {
-    ChallengesView()
+    NavigationStack {
+        ChallengesView()
+    }
 }
