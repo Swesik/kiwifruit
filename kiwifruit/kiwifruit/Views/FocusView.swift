@@ -11,6 +11,7 @@ private enum FocusDesign {
 
 struct FocusView: View {
     @Environment(\.focusSessionStore) private var sessionStore: FocusSessionStore
+    @State private var showingSpeedReading = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,6 +26,7 @@ struct FocusView: View {
         }
         .background(FocusDesign.uiBg)
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $showingSpeedReading) { SpeedReadingView() }
     }
 
     private var startSessionView: some View {
@@ -67,7 +69,7 @@ struct FocusView: View {
     }
 
     private var speedReadingButton: some View {
-        Button(action: {}) {
+        Button(action: { showingSpeedReading = true }) {
             Text("launch speed reading")
                 .font(.system(size: 20, weight: .bold))
                 .tracking(0.5)
