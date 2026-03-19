@@ -10,7 +10,7 @@ private enum FocusDesign {
 }
 
 struct FocusView: View {
-    @Environment(\.focusSessionStore) private var sessionStore: FocusSessionStore
+    @Environment(\.readingSessionStore) private var sessionStore: ReadingSessionStore
 
     var body: some View {
         VStack(spacing: 0) {
