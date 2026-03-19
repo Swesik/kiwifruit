@@ -13,7 +13,7 @@ enum FocusSessionStatus {
 /// and syncs session lifecycle events with the backend.
 @Observable
 @MainActor
-final class FocusSessionStore {
+final class ReadingSessionStore {
     private var timerTask: Task<Void, Never>?
     /// Holds the in-flight POST /reading-sessions task so stopSession can await it
     /// if the user stops before the server has responded.
@@ -240,13 +240,13 @@ final class FocusSessionStore {
     }
 }
 
-private struct FocusSessionStoreKey: EnvironmentKey {
-    static let defaultValue: FocusSessionStore = FocusSessionStore()
+private struct ReadingSessionStoreKey: EnvironmentKey {
+    static let defaultValue: ReadingSessionStore = ReadingSessionStore()
 }
 
 extension EnvironmentValues {
-    var focusSessionStore: FocusSessionStore {
-        get { self[FocusSessionStoreKey.self] }
-        set { self[FocusSessionStoreKey.self] = newValue }
+    var readingSessionStore: ReadingSessionStore {
+        get { self[ReadingSessionStoreKey.self] }
+        set { self[ReadingSessionStoreKey.self] = newValue }
     }
 }

@@ -10,7 +10,7 @@ private enum FocusDesign {
 }
 
 struct FocusView: View {
-    @Environment(\.focusSessionStore) private var sessionStore: FocusSessionStore
+    @Environment(\.readingSessionStore) private var sessionStore: ReadingSessionStore
     @Environment(\.sessionStore) private var session: SessionStore
 
     @State private var isSelectingBook = false
@@ -21,6 +21,7 @@ struct FocusView: View {
     @State private var pendingJoinSession: ActiveFriendSession? = nil
     @State private var tempJoinBookTitle = ""
     @State private var tempJoinStartingPage = ""
+    @State private var showingSpeedReading = false
 
     var body: some View {
         Group {
@@ -47,6 +48,7 @@ struct FocusView: View {
             // Refresh every time the tab is switched to, so elapsed times stay reasonably fresh.
             sessionStore.loadFriendSessions()
         }
+        .sheet(isPresented: $showingSpeedReading) { SpeedReadingView() }
     }
 
     private var bookSelectionView: some View {
@@ -297,7 +299,7 @@ struct FocusView: View {
     }
 
     private var speedReadingButton: some View {
-        Button(action: {}) {
+        Button(action: { showingSpeedReading = true }) {
             Text("launch speed reading")
                 .font(.system(size: 20, weight: .bold))
                 .tracking(0.5)

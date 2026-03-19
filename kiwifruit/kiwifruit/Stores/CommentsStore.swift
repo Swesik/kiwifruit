@@ -8,10 +8,16 @@ final class CommentsStore {
     private let key = "kiwifruit.comments"
     private(set) var commentsByPost: [String: [Comment]] = [:]
 
-    init() { load() }
-
     func comments(for post: Post) -> [Comment] {
-        commentsByPost[post.id] ?? []
+        loadIfNeeded()
+        return commentsByPost[post.id] ?? []
+    }
+
+    private var _hasLoaded = false
+    private func loadIfNeeded() {
+        guard !_hasLoaded else { return }
+        _hasLoaded = true
+        load()
     }
 
     func addLocalComment(_ text: String, post: Post, author: User) {
@@ -21,6 +27,7 @@ final class CommentsStore {
     }
 
     func fetchForPost(_ post: Post) async {
+        loadIfNeeded()
         do {
             let fetched = try await AppAPI.shared.fetchComments(postId: post.id)
             commentsByPost[post.id] = fetched
@@ -33,6 +40,7 @@ final class CommentsStore {
 
     /// Create a comment on the server; returns true if server call succeeded, false if fallback used.
     func createComment(_ text: String, post: Post, author: User?) async -> Bool {
+        loadIfNeeded()
         do {
             try await AppAPI.shared.createComment(postId: post.id, text: text)
             // refresh comments from server
