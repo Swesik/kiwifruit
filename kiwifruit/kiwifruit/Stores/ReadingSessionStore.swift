@@ -12,7 +12,7 @@ enum FocusSessionStatus {
 /// Manages the state and timing of a single in-app focus reading session.
 @Observable
 @MainActor
-final class FocusSessionStore {
+final class ReadingSessionStore {
     private var timerTask: Task<Void, Never>?
 
     var status: FocusSessionStatus = .idle
@@ -70,14 +70,14 @@ final class FocusSessionStore {
     }
 }
 
-private struct FocusSessionStoreKey: EnvironmentKey {
-    static let defaultValue: FocusSessionStore = FocusSessionStore()
+private struct ReadingSessionStoreKey: EnvironmentKey {
+    static let defaultValue: ReadingSessionStore = ReadingSessionStore()
 }
 
 extension EnvironmentValues {
-    var focusSessionStore: FocusSessionStore {
-        get { self[FocusSessionStoreKey.self] }
-        set { self[FocusSessionStoreKey.self] = newValue }
+    var readingSessionStore: ReadingSessionStore {
+        get { self[ReadingSessionStoreKey.self] }
+        set { self[ReadingSessionStoreKey.self] = newValue }
     }
 }
 

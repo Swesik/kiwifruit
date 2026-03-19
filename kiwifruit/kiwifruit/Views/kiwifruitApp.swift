@@ -6,18 +6,20 @@ struct kiwifruitApp: App {
     // observe the same source-of-truth instances.
     private let postsStore = PostsStore()
     private let sessionStore = SessionStore()
+    private let moodSessionStore = MoodSessionStore()
     private let userPreferencesStore = UserPreferencesStore(
         repository: UserDefaultsUserPreferencesRepository()
     )
-    private let focusSessionStore = FocusSessionStore()
+    private let readingSessionStore = ReadingSessionStore()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(\.postsStore, postsStore)
                 .environment(\.sessionStore, sessionStore)
+                .environment(\.moodSessionStore, moodSessionStore)
                 .environment(\.userPreferencesStore, userPreferencesStore)
-                .environment(\.focusSessionStore, focusSessionStore)
+                .environment(\.readingSessionStore, readingSessionStore)
         }
     }
 }

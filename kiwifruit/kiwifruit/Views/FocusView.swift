@@ -10,7 +10,7 @@ private enum FocusDesign {
 }
 
 struct FocusView: View {
-    @Environment(\.focusSessionStore) private var sessionStore: FocusSessionStore
+    @Environment(\.readingSessionStore) private var sessionStore: ReadingSessionStore
     @State private var showingSpeedReading = false
 
     var body: some View {
