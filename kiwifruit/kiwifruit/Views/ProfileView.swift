@@ -1,6 +1,6 @@
 import SwiftUI
 
-private struct RecentUpdateItem: Identifiable {
+struct RecentUpdateItem: Identifiable {
     let id = UUID()
     let kind: String
     let timeAgo: String
@@ -8,7 +8,7 @@ private struct RecentUpdateItem: Identifiable {
     let imageURL: URL?
 }
 
-private enum ProfileDesign {
+enum ProfileDesign {
     static let kiwiLight = Color(hex: "E6F0DC")
     static let kiwi = Color(hex: "A3C985")
     static let tanLight = Color(hex: "F5E6D3")
@@ -145,59 +145,24 @@ struct ProfileView: View {
 
             ForEach(recentUpdates) { recentUpdateCard($0).padding(.horizontal, 20) }
 
-            Button("LOAD MORE") {}
-                .font(.subheadline).fontWeight(.black)
-                .foregroundColor(ProfileDesign.uiText)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(ProfileDesign.kiwiLight)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(ProfileDesign.border, lineWidth: 2))
-                .sketchShadow()
-                .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 20)
+            NavigationLink(destination: AllUpdatesView(updates: recentUpdates)) {
+                Text("LOAD MORE")
+                    .font(.subheadline).fontWeight(.black)
+                    .foregroundColor(ProfileDesign.uiText)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(ProfileDesign.kiwiLight)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(ProfileDesign.border, lineWidth: 2))
+                    .sketchShadow()
+            }
+            .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 20)
         }
         .background(Color.white)
     }
 
     private func recentUpdateCard(_ item: RecentUpdateItem) -> some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Text(item.kind.uppercased())
-                        .font(.caption2).fontWeight(.black)
-                        .foregroundColor(ProfileDesign.uiText)
-                    Spacer()
-                    Text(item.timeAgo)
-                        .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(ProfileDesign.uiText.opacity(0.85))
-                }
-                Text("\"\(item.quote)\"")
-                    .font(.subheadline).fontWeight(.bold)
-                    .foregroundColor(ProfileDesign.uiText)
-                    .lineSpacing(4).padding(.bottom, 8)
-
-                Button("Edit") {}
-                    .font(.caption2).fontWeight(.black)
-                    .foregroundColor(ProfileDesign.uiText)
-                    .padding(.horizontal, 12).padding(.vertical, 4)
-                    .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(ProfileDesign.border, lineWidth: 2))
-                    .sketchShadow(cornerRadius: 6)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            bookCoverImage(url: item.imageURL)
-                .frame(width: 80, height: 112)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(ProfileDesign.border, lineWidth: 2))
-                .sketchShadow(cornerRadius: 6)
-        }
-        .padding(16)
-        .background(ProfileDesign.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(ProfileDesign.border, lineWidth: 2))
-        .sketchShadow()
+        RecentUpdateCard(item: item)
     }
 
     // MARK: - My Library
@@ -257,6 +222,57 @@ struct ProfileView: View {
             else if phase.error != nil { ProfileDesign.uiBorder.overlay(Image(systemName: "book.closed")) }
             else { ProfileDesign.uiBorder.overlay(ProgressView()) }
         }
+    }
+}
+
+// MARK: - Shared card used by ProfileView and AllUpdatesView
+
+struct RecentUpdateCard: View {
+    let item: RecentUpdateItem
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Text(item.kind.uppercased())
+                        .font(.caption2).fontWeight(.black)
+                        .foregroundColor(ProfileDesign.uiText)
+                    Spacer()
+                    Text(item.timeAgo)
+                        .font(.caption2).fontWeight(.bold)
+                        .foregroundColor(ProfileDesign.uiText.opacity(0.85))
+                }
+                Text("\"\(item.quote)\"")
+                    .font(.subheadline).fontWeight(.bold)
+                    .foregroundColor(ProfileDesign.uiText)
+                    .lineSpacing(4).padding(.bottom, 8)
+
+                Button("Edit") {}
+                    .font(.caption2).fontWeight(.black)
+                    .foregroundColor(ProfileDesign.uiText)
+                    .padding(.horizontal, 12).padding(.vertical, 4)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(ProfileDesign.border, lineWidth: 2))
+                    .sketchShadow(cornerRadius: 6)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            AsyncImage(url: item.imageURL) { phase in
+                if let image = phase.image { image.resizable().scaledToFill() }
+                else if phase.error != nil { ProfileDesign.uiBorder.overlay(Image(systemName: "book.closed")) }
+                else { ProfileDesign.uiBorder.overlay(ProgressView()) }
+            }
+            .frame(width: 80, height: 112)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(ProfileDesign.border, lineWidth: 2))
+            .sketchShadow(cornerRadius: 6)
+        }
+        .padding(16)
+        .background(ProfileDesign.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(ProfileDesign.border, lineWidth: 2))
+        .sketchShadow()
     }
 }
 
