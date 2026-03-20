@@ -567,10 +567,23 @@ def reading_sessions_handler():
     db = get_db()
     if request.method == 'GET':
         host = request.args.get('host')
+        # Accept optional status filter: 'active', 'completed', or 'any'.
+        # Default is 'completed' to preserve existing semantics used by clients
+        # that expect only completed sessions to contribute to challenge progress.
+        status = request.args.get('status')
+        if status not in ('active', 'completed', 'any'):
+            status = 'completed'
+
         if host:
-            rows = db.execute("SELECT session_id, host, book_title, started_at, status, elapsed_seconds FROM reading_sessions WHERE host = ? AND status = 'completed' ORDER BY started_at DESC", (host,)).fetchall()
+            if status == 'any':
+                rows = db.execute("SELECT session_id, host, book_title, started_at, status, elapsed_seconds FROM reading_sessions WHERE host = ? ORDER BY started_at DESC", (host,)).fetchall()
+            else:
+                rows = db.execute("SELECT session_id, host, book_title, started_at, status, elapsed_seconds FROM reading_sessions WHERE host = ? AND status = ? ORDER BY started_at DESC", (host, status)).fetchall()
         else:
-            rows = db.execute("SELECT session_id, host, book_title, started_at, status, elapsed_seconds FROM reading_sessions WHERE status = 'completed' ORDER BY started_at DESC").fetchall()
+            if status == 'any':
+                rows = db.execute("SELECT session_id, host, book_title, started_at, status, elapsed_seconds FROM reading_sessions ORDER BY started_at DESC").fetchall()
+            else:
+                rows = db.execute("SELECT session_id, host, book_title, started_at, status, elapsed_seconds FROM reading_sessions WHERE status = ? ORDER BY started_at DESC", (status,)).fetchall()
         out = []
         for r in rows:
             out.append({

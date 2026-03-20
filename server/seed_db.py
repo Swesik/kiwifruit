@@ -109,13 +109,27 @@ def main():
    bob_session_id = uuid.uuid4().hex
    bob_started = (now_utc - timedelta(minutes=45)).strftime('%Y-%m-%d %H:%M:%S')
    carol_joined = (now_utc - timedelta(minutes=20)).strftime('%Y-%m-%d %H:%M:%S')
+   # Seed an active host session for bob (45 min elapsed) and a participant carol
+   # Note: elapsed_seconds included for testing real-time displays; the client
+   # will still only count completed sessions for challenge auto-complete unless
+   # requested via the new status parameter.
    cur.execute(
-       'INSERT INTO reading_sessions (session_id, host, book_title, started_at, status) VALUES (?, ?, ?, ?, ?)',
-       (bob_session_id, 'bob', 'Dune', bob_started, 'active')
+       'INSERT INTO reading_sessions (session_id, host, book_title, started_at, status, elapsed_seconds) VALUES (?, ?, ?, ?, ?, ?)',
+       (bob_session_id, 'bob', 'Dune', bob_started, 'active', 45 * 60)
    )
    cur.execute(
        'INSERT INTO session_participants (session_id, username, joined_at) VALUES (?, ?, ?)',
        (bob_session_id, 'carol', carol_joined)
+   )
+
+   # Also seed one completed session for alice to allow testing of automatic
+   # challenge completion logic (clients requesting completed sessions will
+   # receive this entry and can compute progress from elapsed_seconds).
+   alice_session_id = uuid.uuid4().hex
+   alice_started = (now_utc - timedelta(hours=2)).strftime('%Y-%m-%d %H:%M:%S')
+   cur.execute(
+       'INSERT INTO reading_sessions (session_id, host, book_title, started_at, status, elapsed_seconds) VALUES (?, ?, ?, ?, ?, ?)',
+       (alice_session_id, 'alice', 'Sample Complete', alice_started, 'completed', 60 * 60)
    )
 
 

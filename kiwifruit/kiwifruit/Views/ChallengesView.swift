@@ -47,8 +47,8 @@ struct ChallengesView: View {
                                                 Button("Lookup Place") {
                                                     if let lat = Double(latText), let lon = Double(lonText) {
                                                         Task {
-                                                            let geo = await GeoService.shared.reverseGeocode(lat: lat, lon: lon)
-                                                            lookedUpPlace = geo.displayName ?? (geo.country ?? "Unknown location")
+                                                            let result = await vm.reverseGeocode(lat: lat, lon: lon)
+                                                            lookedUpPlace = result ?? "Unknown location"
                                                         }
                                                     }
                                                 }
@@ -56,8 +56,13 @@ struct ChallengesView: View {
 
                                                 Button("Create Weather Challenge") {
                                                     if let lat = Double(latText), let lon = Double(lonText) {
-                                                        Task { await vm.createWeatherChallenge(lat: lat, lon: lon, placeName: lookedUpPlace) }
-                                                        latText = ""; lonText = ""; lookedUpPlace = ""
+                                                        Task {
+                                                            let c = await vm.createWeatherChallenge(lat: lat, lon: lon, placeName: lookedUpPlace)
+                                                            await MainActor.run {
+                                                                vm.applyAccept(c)
+                                                            }
+                                                            latText = ""; lonText = ""; lookedUpPlace = ""
+                                                        }
                                                     }
                                                 }
                                                 .buttonStyle(.borderedProminent)
@@ -93,11 +98,14 @@ struct ChallengesView: View {
 
                                         Button("Create and Add") {
                                             if newType == "pages" {
-                                                vm.createChallenge(type: "pages", pagesPerWeek: Int(pagesPerWeekVal))
+                                                let c = vm.createChallenge(type: "pages", pagesPerWeek: Int(pagesPerWeekVal))
+                                                Task { await MainActor.run { vm.applyAccept(c) } }
                                             } else if newType == "minutes" {
-                                                vm.createChallenge(type: "minutes", minutesPerWeek: Int(minutesPerWeekVal))
+                                                let c = vm.createChallenge(type: "minutes", minutesPerWeek: Int(minutesPerWeekVal))
+                                                Task { await MainActor.run { vm.applyAccept(c) } }
                                             } else {
-                                                vm.createChallenge(type: "books", booksCount: Int(booksCountVal))
+                                                let c = vm.createChallenge(type: "books", booksCount: Int(booksCountVal))
+                                                Task { await MainActor.run { vm.applyAccept(c) } }
                                             }
                                         }
                                         .buttonStyle(.borderedProminent)
@@ -115,7 +123,11 @@ struct ChallengesView: View {
                             ForEach(vm.activeChallenges) { challenge in
                                 ChallengeCardView(challenge: challenge, action: {
                                     // action -> complete when accepted
-                                    vm.complete(challenge)
+                                    Task {
+                                        if let _ = vm.complete(challenge) {
+                                            await MainActor.run { vm.applyComplete(challengeId: challenge.id) }
+                                        }
+                                    }
                                 }, viewAction: {
                                     selected = challenge; showDetail = true
                                 })
@@ -128,7 +140,14 @@ struct ChallengesView: View {
                         HStack {
                             Text("Discover More").font(.title2).bold()
                             Spacer()
-                            Button(action: { Task { await vm.loadRecommendations() } }) {
+                            Button(action: {
+                                Task {
+                                    let recs = await vm.loadRecommendations()
+                                    await MainActor.run {
+                                        vm.recommended = recs
+                                    }
+                                }
+                            }) {
                                 Image(systemName: "arrow.clockwise")
                             }
                             .buttonStyle(.bordered)
@@ -137,8 +156,11 @@ struct ChallengesView: View {
                         ForEach(vm.recommended) { challenge in
                             ChallengeCardView(challenge: challenge, action: {
                                 // action -> join (alias to accept) keeping success handling
-                                let success = vm.accept(challenge)
-                                if !success { showLimitAlert = true }
+                                let res = vm.accept(challenge)
+                                if !res.success { showLimitAlert = true }
+                                else if let prepared = res.prepared {
+                                    Task { await MainActor.run { vm.applyAccept(prepared) } }
+                                }
                             }, viewAction: {
                                 selected = challenge; showDetail = true
                             })

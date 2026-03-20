@@ -44,19 +44,34 @@ struct ChallengeDetailView: View {
                     HStack(spacing: 16) {
                         if challenge.state == .available {
                             Button {
-                                let success = viewModel.accept(challenge)
-                                if !success { showLimitAlert = true }
+                                Task {
+                                    let res = viewModel.accept(challenge)
+                                    if !res.success { showLimitAlert = true }
+                                    else if let prepared = res.prepared {
+                                        await MainActor.run { viewModel.applyAccept(prepared) }
+                                    }
+                                }
                             } label: { Text("Accept").frame(maxWidth: .infinity) }
                                 .buttonStyle(.borderedProminent)
                         } else if challenge.state == .accepted {
-                            Button { viewModel.complete(challenge) } label: { Text("Complete").frame(maxWidth: .infinity) }
+                            Button {
+                                Task {
+                                    if let _ = viewModel.complete(challenge) {
+                                        await MainActor.run { viewModel.applyComplete(challengeId: challenge.id) }
+                                    }
+                                }
+                            } label: { Text("Complete").frame(maxWidth: .infinity) }
                                 .buttonStyle(.borderedProminent)
                             // progress logging controls for custom challenges
                             if challenge.category == "custom" {
                                 VStack(spacing: 8) {
                                     if challenge.goalUnit == "books/month" {
                                         Button("Mark book read") {
-                                            viewModel.logProgress(challengeId: challenge.id, amount: 1)
+                                            Task {
+                                                if let (newProgress, didComplete) = viewModel.logProgress(challengeId: challenge.id, amount: 1) {
+                                                    await MainActor.run { viewModel.applyLogProgress(challengeId: challenge.id, newProgress: newProgress) }
+                                                }
+                                            }
                                         }
                                         .buttonStyle(.bordered)
                                     } else {
@@ -64,8 +79,12 @@ struct ChallengeDetailView: View {
                                             TextField("Amount", text: $logAmount).keyboardType(.numberPad).textFieldStyle(.roundedBorder).frame(width: 100)
                                             Button("Log") {
                                                 let val = Int(logAmount) ?? 0
-                                                viewModel.logProgress(challengeId: challenge.id, amount: val)
-                                                logAmount = ""
+                                                Task {
+                                                    if let (newProgress, didComplete) = viewModel.logProgress(challengeId: challenge.id, amount: val) {
+                                                        await MainActor.run { viewModel.applyLogProgress(challengeId: challenge.id, newProgress: newProgress) }
+                                                    }
+                                                    logAmount = ""
+                                                }
                                             }
                                             .buttonStyle(.bordered)
                                         }
@@ -73,7 +92,12 @@ struct ChallengeDetailView: View {
                                 }
                                 .padding(.leading, 8)
                             }
-                            Button { viewModel.abandon(challenge) } label: { Text("Abandon").frame(maxWidth: .infinity) }
+                            Button {
+                                Task {
+                                    let ok = viewModel.abandon(challenge)
+                                    if ok { await MainActor.run { viewModel.applyAbandon(challenge) } }
+                                }
+                            } label: { Text("Abandon").frame(maxWidth: .infinity) }
                                 .buttonStyle(.bordered)
                         } else {
                             Text("Already completed").frame(maxWidth: .infinity)
