@@ -48,7 +48,10 @@ struct ChallengeDetailView: View {
                                     let res = viewModel.accept(challenge)
                                     if !res.success { showLimitAlert = true }
                                     else if let prepared = res.prepared {
-                                        await MainActor.run { viewModel.applyAccept(prepared) }
+                                        await MainActor.run {
+                                            let ok = viewModel.applyAccept(prepared)
+                                            if !ok { showLimitAlert = true }
+                                        }
                                     }
                                 }
                             } label: { Text("Accept").frame(maxWidth: .infinity) }

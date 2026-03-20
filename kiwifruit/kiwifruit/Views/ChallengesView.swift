@@ -12,7 +12,7 @@ struct ChallengesView: View {
     @State private var weatherToggle: Bool = false
     @State private var latText: String = ""
     @State private var lonText: String = ""
-    @State private var lookedUpPlace: String = ""
+    
 
     var body: some View {
         NavigationStack {
@@ -44,32 +44,26 @@ struct ChallengesView: View {
                                             TextField("Latitude", text: $latText).textFieldStyle(.roundedBorder).keyboardType(.decimalPad).frame(width: 180)
                                             TextField("Longitude", text: $lonText).textFieldStyle(.roundedBorder).keyboardType(.decimalPad).frame(width: 180)
                                             HStack(spacing: 8) {
-                                                Button("Lookup Place") {
-                                                    if let lat = Double(latText), let lon = Double(lonText) {
-                                                        Task {
-                                                            let result = await vm.reverseGeocode(lat: lat, lon: lon)
-                                                            lookedUpPlace = result ?? "Unknown location"
-                                                        }
-                                                    }
-                                                }
-                                                .buttonStyle(.bordered)
-
                                                 Button("Create Weather Challenge") {
                                                     if let lat = Double(latText), let lon = Double(lonText) {
                                                         Task {
-                                                            let c = await vm.createWeatherChallenge(lat: lat, lon: lon, placeName: lookedUpPlace)
-                                                            await MainActor.run {
-                                                                vm.applyAccept(c)
+                                                            let c = await vm.createWeatherChallenge(lat: lat, lon: lon, placeName: nil)
+                                                            // Prepare acceptance check then apply on main actor
+                                                            let res = vm.accept(c)
+                                                            if !res.success { showLimitAlert = true }
+                                                            else if let prepared = res.prepared {
+                                                                await MainActor.run {
+                                                                    let ok = vm.applyAccept(prepared)
+                                                                    if !ok { showLimitAlert = true }
+                                                                }
                                                             }
-                                                            latText = ""; lonText = ""; lookedUpPlace = ""
+                                                            latText = ""; lonText = ""
                                                         }
                                                     }
                                                 }
                                                 .buttonStyle(.borderedProminent)
                                             }
-                                            if !lookedUpPlace.isEmpty {
-                                                Text("Place: \(lookedUpPlace)").font(.caption).foregroundColor(.secondary)
-                                            }
+                                            
                                         }
                                     } else {
                                         Picker("Type", selection: $newType) {
@@ -99,13 +93,34 @@ struct ChallengesView: View {
                                         Button("Create and Add") {
                                             if newType == "pages" {
                                                 let c = vm.createChallenge(type: "pages", pagesPerWeek: Int(pagesPerWeekVal))
-                                                Task { await MainActor.run { vm.applyAccept(c) } }
+                                                let res = vm.accept(c)
+                                                if !res.success { showLimitAlert = true }
+                                                else if let prepared = res.prepared {
+                                                    Task { await MainActor.run {
+                                                        let ok = vm.applyAccept(prepared)
+                                                        if !ok { showLimitAlert = true }
+                                                    } }
+                                                }
                                             } else if newType == "minutes" {
                                                 let c = vm.createChallenge(type: "minutes", minutesPerWeek: Int(minutesPerWeekVal))
-                                                Task { await MainActor.run { vm.applyAccept(c) } }
+                                                let res = vm.accept(c)
+                                                if !res.success { showLimitAlert = true }
+                                                else if let prepared = res.prepared {
+                                                    Task { await MainActor.run {
+                                                        let ok = vm.applyAccept(prepared)
+                                                        if !ok { showLimitAlert = true }
+                                                    } }
+                                                }
                                             } else {
                                                 let c = vm.createChallenge(type: "books", booksCount: Int(booksCountVal))
-                                                Task { await MainActor.run { vm.applyAccept(c) } }
+                                                let res = vm.accept(c)
+                                                if !res.success { showLimitAlert = true }
+                                                else if let prepared = res.prepared {
+                                                    Task { await MainActor.run {
+                                                        let ok = vm.applyAccept(prepared)
+                                                        if !ok { showLimitAlert = true }
+                                                    } }
+                                                }
                                             }
                                         }
                                         .buttonStyle(.borderedProminent)
@@ -159,7 +174,12 @@ struct ChallengesView: View {
                                 let res = vm.accept(challenge)
                                 if !res.success { showLimitAlert = true }
                                 else if let prepared = res.prepared {
-                                    Task { await MainActor.run { vm.applyAccept(prepared) } }
+                                    Task {
+                                        await MainActor.run {
+                                            let ok = vm.applyAccept(prepared)
+                                            if !ok { showLimitAlert = true }
+                                        }
+                                    }
                                 }
                             }, viewAction: {
                                 selected = challenge; showDetail = true

@@ -284,11 +284,16 @@ final class ChallengeViewModel {
 
     // MARK: - UI apply helpers (mutate observable state; must be called on MainActor)
 
-    func applyAccept(_ challenge: Challenge) {
-        // assume caller has already verified capacity
+    // Apply acceptance on the MainActor. Returns true when applied,
+    // false if capacity prevents accepting (enforced here for safety).
+    func applyAccept(_ challenge: Challenge) -> Bool {
+        let maxActive = 3
+        if activeChallenges.contains(where: { $0.id == challenge.id }) { return true }
+        if activeChallenges.count >= maxActive { return false }
         activeChallenges.append(challenge)
         recommended.removeAll { $0.id == challenge.id || $0.title == challenge.title }
         persistActiveDynamicChallenges()
+        return true
     }
 
     func applyAbandon(_ challenge: Challenge) {
@@ -339,11 +344,16 @@ final class ChallengeViewModel {
         guard let data = UserDefaults.standard.data(forKey: persistedDynamicKey) else { return }
         let decoder = JSONDecoder()
         if let dynamics = try? decoder.decode([Challenge].self, from: data) {
+            let maxActive = 3
             for var c in dynamics {
                 c.state = .accepted
-                // avoid duplicates
+                // avoid duplicates and enforce capacity
                 if !activeChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) {
-                    activeChallenges.append(c)
+                    if activeChallenges.count < maxActive {
+                        activeChallenges.append(c)
+                    } else {
+                        break
+                    }
                 }
             }
         }
