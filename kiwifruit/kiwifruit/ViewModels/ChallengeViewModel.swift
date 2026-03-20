@@ -19,16 +19,36 @@ final class ChallengeViewModel {
     private let recommendedCacheKey = "kiwifruit.recommendedCache"
     private let adjustmentsKey = "kiwifruit.challengeAdjustments"
 
-    init(streak: Int = 1) {
+    // Injected dependencies (useful for testing and to satisfy AI_RULES.md)
+    private let sessionRepo: SessionRepository
+    private let weatherRepo: WeatherRepository
+    private let geoRepo: GeoRepository
+    private let persistence: PersistenceRepository
+    private let dynamicRepo: DynamicChallengeRepository
+    private let llmRepo: LLMRepository
+
+    init(
+        streak: Int = 1,
+        sessionRepo: SessionRepository = ServerSessionRepository(),
+        weatherRepo: WeatherRepository = ApiNinjasWeatherService.shared,
+        geoRepo: GeoRepository = GeoService.shared,
+        persistence: PersistenceRepository = UserDefaultsPersistence(),
+        dynamicRepo: DynamicChallengeRepository = DynamicChallengeService.shared,
+        llmRepo: LLMRepository = OpenAIService.shared
+    ) {
         self.streak = streak
+        self.sessionRepo = sessionRepo
+        self.weatherRepo = weatherRepo
+        self.geoRepo = geoRepo
+        self.persistence = persistence
+        self.dynamicRepo = dynamicRepo
+        self.llmRepo = llmRepo
         // Use the engine's canonical bank so IDs and titles remain stable
         self.bank = engine.bank
         self.activeChallenges = []
-        // load persisted points and completed ids
-        if let pts = UserDefaults.standard.object(forKey: totalPointsKey) as? Int {
-            totalPoints = pts
-        }
-        if let ids = UserDefaults.standard.array(forKey: completedIDsKey) as? [String] {
+        // load persisted points and completed ids via injected persistence
+        if let pts = persistence.integer(forKey: totalPointsKey) { totalPoints = pts }
+        if let ids = persistence.array(forKey: completedIDsKey) {
             let uuidSet = Set(ids.compactMap { UUID(uuidString: $0) })
             // mark completed in bank (match by id)
             let completed = bank.filter { uuidSet.contains($0.id) }
@@ -38,7 +58,7 @@ final class ChallengeViewModel {
         loadPersistedDynamicChallenges()
 
         // load manual adjustments
-        if let dict = UserDefaults.standard.dictionary(forKey: adjustmentsKey) as? [String:Double] {
+        if let dict = persistence.dictionary(forKey: adjustmentsKey) as? [String:Double] {
             manualAdjustments = dict
         }
 
@@ -51,12 +71,12 @@ final class ChallengeViewModel {
         // Always generate API-driven random challenges for Discover
         let desired = 4
         // Try cached recommendations first
-        if let data = UserDefaults.standard.data(forKey: recommendedCacheKey), let cached = try? JSONDecoder().decode([Challenge].self, from: data) {
+        if let data = persistence.data(forKey: recommendedCacheKey), let cached = try? JSONDecoder().decode([Challenge].self, from: data) {
             // Return cached immediately and kick off a background refresh
             let cachedList = cached
             Task { [weak self] in
                 guard let self = self else { return }
-                let generated = await DynamicChallengeService.shared.generateRandomChallenges(count: desired)
+                let generated = await self.dynamicRepo.generateRandomChallenges(count: desired)
                 var filtered: [Challenge] = []
                 for var c in generated {
                     if self.completedChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) { c.state = .completed; c.progress = 1.0 }
@@ -67,13 +87,13 @@ final class ChallengeViewModel {
                     }
                 }
                 let final = Array(filtered.prefix(desired))
-                if let enc = try? JSONEncoder().encode(final) { UserDefaults.standard.set(enc, forKey: self.recommendedCacheKey) }
+                if let enc = try? JSONEncoder().encode(final) { self.persistence.setData(enc, forKey: self.recommendedCacheKey) }
             }
             // return cached immediately
             return Array(cachedList.prefix(desired))
         }
 
-        let generated = await DynamicChallengeService.shared.generateRandomChallenges(count: desired)
+        let generated = await dynamicRepo.generateRandomChallenges(count: desired)
         // mark states appropriately and filter out active/completed
         var filtered: [Challenge] = []
         for var c in generated {
@@ -85,14 +105,14 @@ final class ChallengeViewModel {
             }
         }
         let final = Array(filtered.prefix(desired))
-        if let enc = try? JSONEncoder().encode(final) { UserDefaults.standard.set(enc, forKey: recommendedCacheKey) }
+        if let enc = try? JSONEncoder().encode(final) { persistence.setData(enc, forKey: recommendedCacheKey) }
         return final
     }
 
     // Force-refresh: generate entirely new dynamic challenges (useful for "refresh" action)
     func refreshRecommendations() async -> [Challenge] {
         let desired = 4
-        let generated = await DynamicChallengeService.shared.generateRandomChallenges(count: desired)
+        let generated = await dynamicRepo.generateRandomChallenges(count: desired)
         var filtered: [Challenge] = []
         for var c in generated {
             if completedChallenges.contains(where: { $0.id == c.id || $0.title == c.title }) { c.state = .completed; c.progress = 1.0 }
@@ -142,7 +162,7 @@ final class ChallengeViewModel {
     func createWeatherChallenge(lat: Double, lon: Double, placeName: String? = nil) async -> Challenge {
         // Try to fetch weather and build a combined reading challenge from it
         do {
-            let w = try await ApiNinjasWeatherService.shared.fetchWeather(lat: lat, lon: lon)
+            let w = try await weatherRepo.fetchWeather(lat: lat, lon: lon)
             // Build a natural title/description combining weather and a reading task
             let temp = w.temp ?? 0.0
             let desc = w.description ?? ""
@@ -166,7 +186,7 @@ final class ChallengeViewModel {
                 placeContext = "lat=\(String(format: "%.2f", lat)), lon=\(String(format: "%.2f", lon))"
             }
             let userContext = "Temperature=\(Int(temp))F; wind=\(windStr)mph; humidity=\(Int(w.humidity ?? 0)); \(placeContext); date=\(Date()). Create a short, mobile-friendly reading challenge title, description (one-sentence), and a hint specifically tailored to the temperature. Respond with JSON {\"title\", \"description\", \"hint\"}."
-            if let enhanced = await OpenAIService.shared.enhanceChallenge(c, context: userContext) {
+            if let enhanced = await llmRepo.enhanceChallenge(c, context: userContext) {
                 if let t = enhanced.title { c.title = t }
                 if let d = enhanced.description { c.description = d }
                 if let h = enhanced.hint { c.hint = h }
@@ -199,7 +219,7 @@ final class ChallengeViewModel {
             c.generatedLocationIsRandom = false
             if let pn = placeName, !pn.isEmpty {
                 c.generatedLocationName = pn
-            } else if let geo = try? await GeoService.shared.reverseGeocode(lat: lat, lon: lon) {
+            } else if let geo = try? await geoRepo.reverseGeocode(lat: lat, lon: lon) {
                 c.generatedLocationName = geo.displayName ?? geo.country
             }
             return c
@@ -208,7 +228,7 @@ final class ChallengeViewModel {
         }
 
         // Fallback: use the dynamic generator and mark as fallback for diagnostics
-        var c = await DynamicChallengeService.shared.generateDynamicChallenge(lat: lat, lon: lon, streak: self.streak)
+        var c = await dynamicRepo.generateDynamicChallenge(lat: lat, lon: lon, streak: self.streak)
         c.state = .accepted
         c.progress = 0.0
         c.recommendationExplanation = (c.recommendationExplanation ?? "") + " (fallback: weather fetch failed)"
@@ -271,9 +291,9 @@ final class ChallengeViewModel {
     }
 
     private func persistTotals() {
-        UserDefaults.standard.set(totalPoints, forKey: totalPointsKey)
+        persistence.setInteger(totalPoints, forKey: totalPointsKey)
         let ids = completedChallenges.map { $0.id.uuidString }
-        UserDefaults.standard.set(ids, forKey: completedIDsKey)
+        persistence.setArray(ids, forKey: completedIDsKey)
     }
 
     // Persist currently active dynamic challenges to UserDefaults
@@ -282,9 +302,9 @@ final class ChallengeViewModel {
         let toPersist = activeChallenges.filter { $0.category == "dynamic" || $0.category == "custom" }
         let encoder = JSONEncoder()
         if let data = try? encoder.encode(toPersist) {
-            UserDefaults.standard.set(data, forKey: persistedDynamicKey)
+            persistence.setData(data, forKey: persistedDynamicKey)
         } else {
-            UserDefaults.standard.removeObject(forKey: persistedDynamicKey)
+            persistence.setData(nil, forKey: persistedDynamicKey)
         }
     }
 
@@ -347,7 +367,7 @@ final class ChallengeViewModel {
 
     // Load previously persisted dynamic challenges and restore them as accepted
     private func loadPersistedDynamicChallenges() {
-        guard let data = UserDefaults.standard.data(forKey: persistedDynamicKey) else { return }
+        guard let data = persistence.data(forKey: persistedDynamicKey) else { return }
         let decoder = JSONDecoder()
         if let dynamics = try? decoder.decode([Challenge].self, from: data) {
             let maxActive = 3
@@ -369,13 +389,13 @@ final class ChallengeViewModel {
 
     func setManualAdjustment(for challengeId: UUID, adjustment: Double) {
         manualAdjustments[challengeId.uuidString] = adjustment
-        UserDefaults.standard.set(manualAdjustments, forKey: adjustmentsKey)
+        persistence.setDictionary(manualAdjustments, forKey: adjustmentsKey)
         Task { await updateChallengeProgress() }
     }
 
     func removeManualAdjustment(for challengeId: UUID) {
         manualAdjustments.removeValue(forKey: challengeId.uuidString)
-        UserDefaults.standard.set(manualAdjustments, forKey: adjustmentsKey)
+        persistence.setDictionary(manualAdjustments, forKey: adjustmentsKey)
         Task { await updateChallengeProgress() }
     }
 
@@ -385,29 +405,7 @@ final class ChallengeViewModel {
 
     // MARK: - Reading sessions integration
 
-    private struct ReadingSession: Decodable {
-        let session_id: String?
-        let host: String?
-        let book_title: String?
-        let started_at: String?
-        let status: String?
-        let elapsed_seconds: Int?
-    }
-
-    // Fetch reading sessions for a host. By default the server returns only
-    // completed sessions; pass `status: "any"` to include active sessions
-    // for real-time progress displays.
-    private func fetchReadingSessions(host: String = "local", status: String? = nil) async throws -> [ReadingSession] {
-        var urlString = "http://127.0.0.1:5000/reading_sessions?host=\(host)"
-        if let s = status {
-            urlString += "&status=\(s)"
-        }
-        guard let url = URL(string: urlString) else { return [] }
-        let (data, _) = try await URLSession.shared.data(from: url)
-        let decoder = JSONDecoder()
-        let sessions = try decoder.decode([ReadingSession].self, from: data)
-        return sessions
-    }
+    // Reading sessions are provided by the injected `SessionRepository`.
 
     // Sum total completed minutes across sessions (elapsed_seconds -> minutes)
     // Calculate total completed minutes for a host within the given lookback
@@ -415,7 +413,7 @@ final class ChallengeViewModel {
     // so UI reflects near-real-time progress.
     func calculateMinutes(host: String = "local", days: Int = 7) async -> Int {
         do {
-            let sessions = try await fetchReadingSessions(host: host, status: "any")
+            let sessions = try await sessionRepo.fetchReadingSessions(host: host, status: "any")
             let iso = ISO8601DateFormatter()
             let now = Date()
             let cutoff = now.addingTimeInterval(-TimeInterval(days * 24 * 60 * 60))
@@ -440,7 +438,7 @@ final class ChallengeViewModel {
     // Uses both active and completed sessions (status=any) to reflect near-real-time progress.
     func calculateBooks(host: String = "local", days: Int = 30) async -> Int {
         do {
-            let sessions = try await fetchReadingSessions(host: host, status: "any")
+            let sessions = try await sessionRepo.fetchReadingSessions(host: host, status: "any")
             let iso = ISO8601DateFormatter()
             let now = Date()
             let cutoff = now.addingTimeInterval(-TimeInterval(days * 24 * 60 * 60))
