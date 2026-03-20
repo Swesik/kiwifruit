@@ -187,6 +187,12 @@ final class ChallengeViewModel {
                 }
             }
 
+            // Ensure weather challenges track minutes so they listen to session data
+            // by default (e.g., 20 minutes/week). This allows updateChallengeProgress
+            // to attribute session minutes to these weather challenges.
+            c.goalUnit = "minutes/week"
+            c.goalCount = 20
+
             // Add to user's active challenges and persist
             c.generatedLat = lat
             c.generatedLon = lon
@@ -404,28 +410,51 @@ final class ChallengeViewModel {
     }
 
     // Sum total completed minutes across sessions (elapsed_seconds -> minutes)
-    // Calculate total completed minutes for a host. Uses both active and
-    // completed sessions (status=any) so UI reflects near-real-time progress.
-    func calculateMinutes(host: String = "local") async -> Int {
+    // Calculate total completed minutes for a host within the given lookback
+    // window in days. Uses both active and completed sessions (status=any)
+    // so UI reflects near-real-time progress.
+    func calculateMinutes(host: String = "local", days: Int = 7) async -> Int {
         do {
             let sessions = try await fetchReadingSessions(host: host, status: "any")
-            let totalSeconds = sessions.compactMap { $0.elapsed_seconds }.reduce(0, +)
+            let iso = ISO8601DateFormatter()
+            let now = Date()
+            let cutoff = now.addingTimeInterval(-TimeInterval(days * 24 * 60 * 60))
+            var totalSeconds = 0
+            for s in sessions {
+                if let started = s.started_at, let dt = iso.date(from: started) {
+                    if dt >= cutoff {
+                        totalSeconds += s.elapsed_seconds ?? 0
+                    }
+                } else {
+                    // If started_at missing or unparsable, conservatively include
+                    totalSeconds += s.elapsed_seconds ?? 0
+                }
+            }
             return Int(totalSeconds / 60)
         } catch {
             return 0
         }
     }
 
-    // Count unique completed book titles
-    // Count unique completed book titles. Uses both active and completed
-    // sessions (status=any) so progress for book-count challenges updates
-    // in near-real-time while sessions are in progress.
-    func calculateBooks(host: String = "local") async -> Int {
+    // Count unique completed book titles within the given lookback window in days.
+    // Uses both active and completed sessions (status=any) to reflect near-real-time progress.
+    func calculateBooks(host: String = "local", days: Int = 30) async -> Int {
         do {
             let sessions = try await fetchReadingSessions(host: host, status: "any")
-            let titles = sessions.compactMap { $0.book_title?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-            let unique = Set(titles)
-            return unique.count
+            let iso = ISO8601DateFormatter()
+            let now = Date()
+            let cutoff = now.addingTimeInterval(-TimeInterval(days * 24 * 60 * 60))
+            var titles: [String] = []
+            for s in sessions {
+                if let started = s.started_at, let dt = iso.date(from: started) {
+                    if dt >= cutoff {
+                        if let t = s.book_title?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty { titles.append(t) }
+                    }
+                } else {
+                    if let t = s.book_title?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty { titles.append(t) }
+                }
+            }
+            return Set(titles).count
         } catch {
             return 0
         }
@@ -433,9 +462,10 @@ final class ChallengeViewModel {
 
     // Update active challenge progress by reconciling server reading_sessions and manual adjustments
     func updateChallengeProgress(host: String = "local") async {
-        // Fetch metrics concurrently to minimize latency
-        async let minutesTask = calculateMinutes(host: host)
-        async let booksTask = calculateBooks(host: host)
+        // Fetch metrics concurrently to minimize latency. Use windows:
+        // minutes/pages -> last 7 days; books -> last 30 days.
+        async let minutesTask = calculateMinutes(host: host, days: 7)
+        async let booksTask = calculateBooks(host: host, days: 30)
         let minutes = await minutesTask
         let books = await booksTask
 
@@ -468,8 +498,17 @@ final class ChallengeViewModel {
                         newProgress = min(1.0, manual)
                     }
                 } else if lower.contains("page") {
-                    // pages aren't tracked in reading_sessions; rely on manual adjustments
-                    newProgress = min(1.0, manual)
+                    // Pages are not tracked directly. Use session minutes as a
+                    // heuristic where possible: assume ~1 page per minute to
+                    // estimate progress from session lengths over the last 7 days.
+                    if let goal = c.goalCount, goal > 0 {
+                        let pagesPerMinute = 1.0
+                        let estimatedPages = Double(minutes) * pagesPerMinute
+                        let serverProgress = estimatedPages / Double(goal)
+                        newProgress = min(1.0, serverProgress + manual)
+                    } else {
+                        newProgress = min(1.0, manual)
+                    }
                 } else {
                     newProgress = min(1.0, manual)
                 }
@@ -486,10 +525,10 @@ final class ChallengeViewModel {
             }
         }
 
-        // Apply completions after iteration to avoid mutating during enumeration.
+        // Apply completions on the main actor to mutate UI state safely.
         for id in toCompleteIDs {
-            if let idx = activeChallenges.firstIndex(where: { $0.id == id }) {
-                complete(activeChallenges[idx])
+            await MainActor.run {
+                applyComplete(challengeId: id)
             }
         }
 
