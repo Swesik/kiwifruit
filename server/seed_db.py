@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Seed the sqlite database with mock users and synthetic content.
 
+
 Creates `kiwifruit.db` next to this script using `schema.sql` then inserts
-5 demo users (password stored as literal 'password') and a few posts,
+7 demo users (password stored as literal 'password') and a few posts,
 likes, comments, and follows so the app has visible shared data.
 
 Focus session testing
@@ -23,6 +24,7 @@ BASE_DIR = os.path.dirname(__file__)
 DB_PATH = os.path.join(BASE_DIR, 'kiwifruit.db')
 SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.sql')
 
+
 def main():
     if os.path.exists(DB_PATH):
         print(f"Removing existing DB at {DB_PATH}")
@@ -31,12 +33,10 @@ def main():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
-    # Load schema
-    with open(SCHEMA_PATH, 'r') as f:
-        schema = f.read()
-    cur.executescript(schema)
+    with open(SCHEMA_PATH) as f:
+        cur.executescript(f.read())
 
-    # Create 5 users with simple password marker 'password'
+    # Create 7 users with simple password marker 'password'
     users = [
         ('alice', 'Alice Anderson', 'alice@example.com'),
         ('bob', 'Bob Brown', 'bob@example.com'),
@@ -63,22 +63,6 @@ def main():
         filename = f'post{i+1}.jpg'
         cur.execute('INSERT INTO posts (filename, owner, caption, created) VALUES (?, ?, ?, ?)', (filename, u, sample_captions[i % len(sample_captions)], now))
         posts.append(cur.lastrowid)
-
-    # Likes: give each post some likes from other users
-    for pid in posts:
-        for liker, _, _ in users:
-            # make some variety: only some users like some posts
-            if (hash(f"{pid}-{liker}") % 3) == 0:
-                try:
-                    cur.execute('INSERT INTO likes (owner, postid, created) VALUES (?, ?, ?)', (liker, pid, now))
-                except sqlite3.IntegrityError:
-                    pass
-
-    # Comments: add a couple of comments per post
-    for pid in posts:
-        for j, (u, _, _) in enumerate(users):
-            if j % 2 == 0:
-                cur.execute('INSERT INTO comments (owner, postid, text, created) VALUES (?, ?, ?, ?)', (u, pid, f'Nice post {pid} by {u}', now))
 
     # Following relationships
     follows = [('alice', 'bob'), ('alice', 'carol'), ('alice', 'dave'), ('alice', 'eve'), ('bob', 'alice'), ('carol', 'dave'), ('eve', 'alice'), ('grace', 'bob')]

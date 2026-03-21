@@ -748,6 +748,99 @@ def get_following(username):
     return jsonify(out)
 
 
+@app.route('/reading_sessions', methods=['GET','POST','PUT'])
+def reading_sessions_handler():
+    """Manage reading sessions.
+
+    GET /reading_sessions?host=<username>
+      - Returns completed sessions for the host (status='completed') if host provided,
+        otherwise returns all completed sessions.
+
+    POST /reading_sessions
+      - Create a new reading session. Requires authentication. JSON body: session_id (optional), host, book_title, elapsed_seconds, status
+
+    PUT /reading_sessions
+      - Update an existing session (e.g., mark completed). Requires authentication and session_id.
+    """
+    db = get_db()
+    if request.method == 'GET':
+        host = request.args.get('host')
+        # Accept optional status filter: 'active', 'completed', or 'any'.
+        # Default is 'completed' to preserve existing semantics used by clients
+        # that expect only completed sessions to contribute to challenge progress.
+        status = request.args.get('status')
+        if status not in ('active', 'completed', 'any'):
+            status = 'completed'
+
+        if host:
+            if status == 'any':
+                rows = db.execute("SELECT session_id, host, book_title, started_at, status, elapsed_seconds FROM reading_sessions WHERE host = ? ORDER BY started_at DESC", (host,)).fetchall()
+            else:
+                rows = db.execute("SELECT session_id, host, book_title, started_at, status, elapsed_seconds FROM reading_sessions WHERE host = ? AND status = ? ORDER BY started_at DESC", (host, status)).fetchall()
+        else:
+            if status == 'any':
+                rows = db.execute("SELECT session_id, host, book_title, started_at, status, elapsed_seconds FROM reading_sessions ORDER BY started_at DESC").fetchall()
+            else:
+                rows = db.execute("SELECT session_id, host, book_title, started_at, status, elapsed_seconds FROM reading_sessions WHERE status = ? ORDER BY started_at DESC", (status,)).fetchall()
+        out = []
+        for r in rows:
+            out.append({
+                'session_id': r['session_id'],
+                'host': r['host'],
+                'book_title': r['book_title'],
+                'started_at': _to_iso(r['started_at']),
+                'status': r['status'],
+                'elapsed_seconds': r['elapsed_seconds']
+            })
+        return jsonify(out)
+
+    if request.method == 'POST':
+        # Create a new reading session. Requires authentication.
+        username = get_username_from_token(request)
+        if not username:
+            abort(403)
+        data = request.get_json() or {}
+        session_id = data.get('session_id') or uuid.uuid4().hex
+        host = data.get('host') or username
+        book_title = data.get('book_title')
+        elapsed = data.get('elapsed_seconds')
+        status = data.get('status') or 'active'
+        if not host or not book_title:
+            abort(400)
+        try:
+            # Use datetime('now') for started_at while passing the other params in order
+            db.execute("INSERT OR REPLACE INTO reading_sessions (session_id, host, book_title, started_at, status, elapsed_seconds) VALUES (?, ?, ?, datetime('now'), ?, ?)", (session_id, host, book_title, status, elapsed))
+            db.commit()
+        except Exception as e:
+            logger.exception('failed to insert reading_session: %s', e)
+            abort(500)
+        return jsonify({'status': 'ok', 'session_id': session_id})
+
+    if request.method == 'PUT':
+        # Update an existing session (e.g., mark completed). Requires authentication and session_id.
+        username = get_username_from_token(request)
+        if not username:
+            abort(403)
+        data = request.get_json() or {}
+        session_id = data.get('session_id')
+        if not session_id:
+            abort(400)
+        updates = []
+        params = []
+        if 'status' in data:
+            updates.append('status = ?')
+            params.append(data.get('status'))
+        if 'elapsed_seconds' in data:
+            updates.append('elapsed_seconds = ?')
+            params.append(data.get('elapsed_seconds'))
+        if not updates:
+            abort(400)
+        params.append(session_id)
+        db.execute('UPDATE reading_sessions SET ' + ', '.join(updates) + ' WHERE session_id = ?', params)
+        db.commit()
+        return jsonify({'status': 'ok'})
+
+
 @app.route('/users', methods=['POST'])
 def create_user():
     """Create a new user account.
