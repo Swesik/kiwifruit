@@ -1161,15 +1161,11 @@ def leave_reading_session(session_id):
     try:
         db.execute('DELETE FROM session_participants WHERE session_id = ? AND username = ?', (session_id, username))
         # Write session summary to history for the joiner.
-        if 'elapsed_seconds' in data:
-            session_row = db.execute('SELECT book_title FROM reading_sessions WHERE session_id = ?', (session_id,)).fetchone()
-            if session_row:
-                # Prefer the joiner's own book title if sent; fall back to the session's book.
-                book_title = (data.get('book_title') or '').strip() or session_row['book_title']
-                db.execute(
-                    'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read) VALUES (?, ?, ?, ?, ?)',
-                    (uuid.uuid4().hex, username, book_title, int(data['elapsed_seconds']), data.get('pages_read'))
-                )
+        if 'elapsed_seconds' in data and data.get('book_title'):
+            db.execute(
+                'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read) VALUES (?, ?, ?, ?, ?)',
+                (uuid.uuid4().hex, username, data['book_title'], int(data['elapsed_seconds']), data.get('pages_read'))
+            )
         db.commit()
     except Exception:
         db.rollback()
