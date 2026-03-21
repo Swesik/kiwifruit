@@ -160,15 +160,17 @@ server/uploads/
 # sphinx
 docs/build
 # macOS
+.DS_Store
 .AppleDouble
 .LSOverride
 
 # Database files
+*.db
 *.db-shm
 *.db-wal
+server/*.db
 
 # Xcode user-specific
+xcuserdata/
+*.xcworkspace
 !default.xcworkspace
-
-# Local keys file (do not commit)
-kiwifruit/Keys.plist
