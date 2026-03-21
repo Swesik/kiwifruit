@@ -935,14 +935,14 @@ def create_reading_session():
 
 @app.route('/reading-sessions/<session_id>', methods=['PATCH'])
 def update_reading_session(session_id):
-    """End or update a reading session (host only).
+    """End a reading session (host only). Elapsed time is calculated server-side.
 
     **PATCH** ``/reading-sessions/<session_id>``
 
-    :json string status: New status, e.g. ``"completed"`` (optional).
-    :json int elapsed_seconds: Total seconds the user read (optional).
+    :json string status: Must be ``"completed"``.
+    :json int pages_read: Pages read this session (optional).
     :returns: JSON ``{"status": "ok"}``.
-    :status 200: Session updated.
+    :status 200: Session completed.
     :status 403: Not authenticated or not the session host.
     :status 404: Session not found.
     """
@@ -950,33 +950,118 @@ def update_reading_session(session_id):
     if not username:
         abort(403)
     db = get_db()
-    row = db.execute('SELECT host FROM reading_sessions WHERE session_id = ?', (session_id,)).fetchone()
+    row = db.execute('SELECT host, status FROM reading_sessions WHERE session_id = ?', (session_id,)).fetchone()
     if not row:
         abort(404)
     if row['host'] != username:
         abort(403)
     data = request.get_json() or {}
-    updates, params = [], []
-    if 'status' in data:
-        updates.append('status = ?'); params.append(data['status'])
-    if 'elapsed_seconds' in data:
-        updates.append('elapsed_seconds = ?'); params.append(int(data['elapsed_seconds']))
     try:
-        if updates:
-            params.append(session_id)
-            db.execute('UPDATE reading_sessions SET ' + ', '.join(updates) + ' WHERE session_id = ?', params)
-        # Write session summary to history when the host ends the session.
-        if data.get('status') == 'completed' and 'elapsed_seconds' in data:
-            session_row = db.execute('SELECT book_title FROM reading_sessions WHERE session_id = ?', (session_id,)).fetchone()
+        if data.get('status') == 'completed':
+            if row['status'] == 'paused':
+                # Elapsed already accumulated on the last pause — just mark completed.
+                db.execute(
+                    "UPDATE reading_sessions SET status = 'completed' WHERE session_id = ?",
+                    (session_id,)
+                )
+            else:
+                # Active: add time since the last resume (or start) to any stored elapsed.
+                db.execute(
+                    '''UPDATE reading_sessions
+                       SET status = 'completed',
+                           elapsed_seconds = COALESCE(elapsed_seconds, 0) +
+                               CAST((julianday('now') - julianday(COALESCE(resumed_at, started_at))) * 86400 AS INTEGER)
+                       WHERE session_id = ?''',
+                    (session_id,)
+                )
+            # Write session summary to history for the host.
+            session_row = db.execute(
+                'SELECT book_title, elapsed_seconds FROM reading_sessions WHERE session_id = ?',
+                (session_id,)
+            ).fetchone()
             if session_row:
                 db.execute(
                     'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read) VALUES (?, ?, ?, ?, ?)',
-                    (uuid.uuid4().hex, username, session_row['book_title'], int(data['elapsed_seconds']), data.get('pages_read'))
+                    (uuid.uuid4().hex, username, session_row['book_title'], session_row['elapsed_seconds'] or 0, data.get('pages_read'))
                 )
         db.commit()
     except Exception:
         db.rollback()
         raise
+    return jsonify({'status': 'ok'})
+
+
+@app.route('/reading-sessions/<session_id>/pause', methods=['POST'])
+def pause_reading_session(session_id):
+    """Pause an active reading session (host only).
+
+    Accumulates elapsed time server-side using ``julianday`` and sets
+    the session status to ``'paused'``.
+
+    **POST** ``/reading-sessions/<session_id>/pause``
+
+    :returns: JSON ``{"status": "ok"}``.
+    :status 200: Session paused.
+    :status 403: Not authenticated or not the session host.
+    :status 404: Session not found or not currently active.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    row = db.execute(
+        "SELECT host FROM reading_sessions WHERE session_id = ? AND status = 'active'",
+        (session_id,)
+    ).fetchone()
+    if not row:
+        abort(404)
+    if row['host'] != username:
+        abort(403)
+    db.execute(
+        '''UPDATE reading_sessions
+           SET status = 'paused',
+               elapsed_seconds = COALESCE(elapsed_seconds, 0) +
+                   CAST((julianday('now') - julianday(COALESCE(resumed_at, started_at))) * 86400 AS INTEGER)
+           WHERE session_id = ?''',
+        (session_id,)
+    )
+    db.commit()
+    logger.info('reading_session paused: session_id=%s host=%s', session_id, username)
+    return jsonify({'status': 'ok'})
+
+
+@app.route('/reading-sessions/<session_id>/resume', methods=['POST'])
+def resume_reading_session(session_id):
+    """Resume a paused reading session (host only).
+
+    Sets ``resumed_at`` to the current time so the next pause or completion
+    can accurately measure the newly active interval.
+
+    **POST** ``/reading-sessions/<session_id>/resume``
+
+    :returns: JSON ``{"status": "ok"}``.
+    :status 200: Session resumed.
+    :status 403: Not authenticated or not the session host.
+    :status 404: Session not found or not currently paused.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    row = db.execute(
+        "SELECT host FROM reading_sessions WHERE session_id = ? AND status = 'paused'",
+        (session_id,)
+    ).fetchone()
+    if not row:
+        abort(404)
+    if row['host'] != username:
+        abort(403)
+    db.execute(
+        "UPDATE reading_sessions SET status = 'active', resumed_at = CURRENT_TIMESTAMP WHERE session_id = ?",
+        (session_id,)
+    )
+    db.commit()
+    logger.info('reading_session resumed: session_id=%s host=%s', session_id, username)
     return jsonify({'status': 'ok'})
 
 
@@ -998,11 +1083,15 @@ def get_friend_reading_sessions():
     # Active sessions belonging to anyone the current user follows
     rows = db.execute(
         '''SELECT rs.*, u.username, u.fullname, u.filename,
-                  CAST((julianday('now') - julianday(rs.started_at)) * 86400 AS INTEGER) as elapsed
+                  CASE
+                      WHEN rs.status = 'paused' THEN COALESCE(rs.elapsed_seconds, 0)
+                      ELSE COALESCE(rs.elapsed_seconds, 0) +
+                           CAST((julianday('now') - julianday(COALESCE(rs.resumed_at, rs.started_at))) * 86400 AS INTEGER)
+                  END as elapsed
            FROM reading_sessions rs
            JOIN following f ON f.followee = rs.host AND f.follower = ?
            JOIN users u ON u.username = rs.host
-           WHERE rs.status = 'active'
+           WHERE rs.status IN ('active', 'paused')
            ORDER BY rs.started_at DESC''',
         (username,)
     ).fetchall()
@@ -1026,13 +1115,16 @@ def join_reading_session(session_id):
     :returns: JSON ``ReadingSession`` with updated participants list.
     :status 200: Joined successfully.
     :status 403: Not authenticated.
-    :status 404: Session not found or not active.
+    :status 404: Session not found or not active/paused.
     """
     username = get_username_from_token(request)
     if not username:
         abort(403)
     db = get_db()
-    row = db.execute('SELECT * FROM reading_sessions WHERE session_id = ? AND status = ?', (session_id, 'active')).fetchone()
+    row = db.execute(
+        "SELECT * FROM reading_sessions WHERE session_id = ? AND status IN ('active', 'paused')",
+        (session_id,)
+    ).fetchone()
     if not row:
         abort(404)
     try:

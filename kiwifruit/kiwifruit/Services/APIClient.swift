@@ -29,9 +29,13 @@ protocol APIClientProtocol {
     // MARK: - Reading Sessions
     /// Creates a new reading session for the current user and returns the persisted session object.
     func startReadingSession(bookTitle: String) async throws -> ReadingSession
-    /// Marks the session as completed and records how many seconds the user actually read.
-    func endReadingSession(sessionId: String, elapsedSeconds: Int, pagesRead: Int?) async throws -> Void
-    /// Returns all active sessions belonging to users the current user follows.
+    /// Marks the session as completed. Elapsed time is calculated server-side.
+    func endReadingSession(sessionId: String, pagesRead: Int?) async throws -> Void
+    /// Pauses an active session; server accumulates elapsed time via julianday.
+    func pauseReadingSession(sessionId: String) async throws -> Void
+    /// Resumes a paused session; server records resumed_at for the next interval.
+    func resumeReadingSession(sessionId: String) async throws -> Void
+    /// Returns all active/paused sessions belonging to users the current user follows.
     func fetchActiveFriendSessions() async throws -> [ActiveFriendSession]
     /// Adds the current user as a participant of the given session.
     func joinReadingSession(sessionId: String) async throws -> ReadingSession
@@ -109,7 +113,9 @@ final class MockAPIClient: APIClientProtocol {
         )
     }
 
-    func endReadingSession(sessionId: String, elapsedSeconds: Int, pagesRead: Int?) async throws { try await Task.sleep(nanoseconds: 80 * 1_000_000) }
+    func endReadingSession(sessionId: String, pagesRead: Int?) async throws { try await Task.sleep(nanoseconds: 80 * 1_000_000) }
+    func pauseReadingSession(sessionId: String) async throws { try await Task.sleep(nanoseconds: 50 * 1_000_000) }
+    func resumeReadingSession(sessionId: String) async throws { try await Task.sleep(nanoseconds: 50 * 1_000_000) }
 
     func fetchActiveFriendSessions() async throws -> [ActiveFriendSession] {
         try await Task.sleep(nanoseconds: 100 * 1_000_000)
@@ -402,18 +408,42 @@ final class RESTAPIClient: APIClientProtocol {
         return try jsonDecoder.decode(ReadingSession.self, from: data)
     }
 
-    func endReadingSession(sessionId: String, elapsedSeconds: Int, pagesRead: Int?) async throws {
+    func endReadingSession(sessionId: String, pagesRead: Int?) async throws {
         let url = baseURL.appendingPathComponent("/reading-sessions/\(sessionId)")
         var req = URLRequest(url: url); req.httpMethod = "PATCH"
         req.addValue("application/json", forHTTPHeaderField: "Content-Type")
         if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        var body: [String: Any] = ["status": "completed", "elapsed_seconds": elapsedSeconds]
+        var body: [String: Any] = ["status": "completed"]
         if let pages = pagesRead { body["pages_read"] = pages }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         debugLogRequest(req)
         let (data, resp) = try await session.data(for: req)
         if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             print("endReadingSession failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+    }
+
+    func pauseReadingSession(sessionId: String) async throws {
+        let url = baseURL.appendingPathComponent("/reading-sessions/\(sessionId)/pause")
+        var req = URLRequest(url: url); req.httpMethod = "POST"
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("pauseReadingSession failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+    }
+
+    func resumeReadingSession(sessionId: String) async throws {
+        let url = baseURL.appendingPathComponent("/reading-sessions/\(sessionId)/resume")
+        var req = URLRequest(url: url); req.httpMethod = "POST"
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("resumeReadingSession failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
             throw URLError(.badServerResponse)
         }
     }

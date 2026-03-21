@@ -82,8 +82,16 @@ final class ReadingSessionStore {
 
     func togglePause() {
         switch status {
-        case .active:  status = .paused
-        case .paused:  status = .active
+        case .active:
+            status = .paused
+            if isHost, let sessionId = currentSession?.id {
+                Task { try? await AppAPI.shared.pauseReadingSession(sessionId: sessionId) }
+            }
+        case .paused:
+            status = .active
+            if isHost, let sessionId = currentSession?.id {
+                Task { try? await AppAPI.shared.resumeReadingSession(sessionId: sessionId) }
+            }
         default: break
         }
     }
@@ -96,7 +104,7 @@ final class ReadingSessionStore {
         completedSeconds = elapsedSeconds
         status = .completed
 
-        let elapsed = elapsedSeconds
+        let capturedElapsed = elapsedSeconds
         let pagesRead: Int?
         if let end = endingPage, let start = startingPage, end > start {
             pagesRead = end - start
@@ -127,10 +135,10 @@ final class ReadingSessionStore {
 
             do {
                 if wasHost {
-                    try await AppAPI.shared.endReadingSession(sessionId: sessionId, elapsedSeconds: elapsed, pagesRead: pagesRead)
+                    try await AppAPI.shared.endReadingSession(sessionId: sessionId, pagesRead: pagesRead)
                 } else {
                     // Send the joiner's own book title so session_history records what they read.
-                    try await AppAPI.shared.leaveReadingSession(sessionId: sessionId, elapsedSeconds: elapsed, pagesRead: pagesRead, bookTitle: capturedBookTitle)
+                    try await AppAPI.shared.leaveReadingSession(sessionId: sessionId, elapsedSeconds: capturedElapsed, pagesRead: pagesRead, bookTitle: capturedBookTitle)
                 }
             } catch {
                 print("FocusSessionStore: stopSession remote call failed: \(error)")

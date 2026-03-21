@@ -66,8 +66,9 @@ CREATE TABLE reading_sessions (
     host TEXT NOT NULL,
     book_title TEXT NOT NULL CHECK (LENGTH(book_title) <= 256),
     started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed')),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed')),
     elapsed_seconds INTEGER,
+    resumed_at DATETIME,
     FOREIGN KEY (host) REFERENCES users (username) ON DELETE CASCADE
 );
 
