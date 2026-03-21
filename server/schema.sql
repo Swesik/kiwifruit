@@ -60,6 +60,39 @@ CREATE TABLE sessions (
     FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
 );
 
+-- Reading sessions created by a user (focus tab)
+CREATE TABLE reading_sessions (
+    session_id TEXT PRIMARY KEY,
+    host TEXT NOT NULL,
+    book_title TEXT NOT NULL CHECK (LENGTH(book_title) <= 256),
+    started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed')),
+    elapsed_seconds INTEGER,
+    resumed_at DATETIME,
+    FOREIGN KEY (host) REFERENCES users (username) ON DELETE CASCADE
+);
+
+-- Permanent record of every completed reading session per user
+CREATE TABLE session_history (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    book_title TEXT NOT NULL,
+    duration_seconds INTEGER NOT NULL,
+    pages_read INTEGER,
+    ended_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
+);
+
+-- Friends who joined a reading session (many-to-many)
+CREATE TABLE session_participants (
+    session_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (session_id, username),
+    FOREIGN KEY (session_id) REFERENCES reading_sessions (session_id) ON DELETE CASCADE,
+    FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
+);
+
 -- Epub uploads table (tracks uploaded epub files and parsing state)
 CREATE TABLE epubs (
     epubid INTEGER PRIMARY KEY AUTOINCREMENT,

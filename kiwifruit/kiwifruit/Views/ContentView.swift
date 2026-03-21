@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.sessionStore) private var session: SessionStore
     @Environment(\.postsStore) private var postsStore: PostsStore
+    @Environment(\.readingSessionStore) private var readingSessionStore: ReadingSessionStore
     @State private var selection: Int = 2
 
     @State private var bookSearchViewModel = BookSearchViewModel(api: AppAPI.shared)
@@ -31,7 +32,11 @@ struct ContentView: View {
             if new != nil { selection = 2; Task { await postsStore.loadInitial(force: true) } }
         }
         .onChange(of: session.isValidSession) { valid in
-            if valid && session.userId != nil { selection = 2; Task { await postsStore.loadInitial(force: true) } }
+            if valid && session.userId != nil {
+                selection = 2
+                Task { await postsStore.loadInitial(force: true) }
+                readingSessionStore.loadFriendSessions()
+            }
         }
         .fullScreenCover(isPresented: Binding(get: { !(session.isValidSession && session.userId != nil) }, set: { _ in })) {
             LoginView()

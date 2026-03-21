@@ -28,11 +28,13 @@ final class SessionStore {
         // Ensure global API client uses this REST client by default
         AppAPI.shared = apiClient
         apiClient.setAuthToken(token)
-        // If we have a token and userId loaded, asynchronously validate that the token is still valid
-        if let token = token, let userId = userId {
+        // If we have a token loaded, validate it against the server.
+        // Uses GET /users/me which requires auth — an expired/deleted token correctly fails
+        // and triggers clear(), forcing the login screen.
+        if token != nil {
             Task {
                 do {
-                    let user = try await fetchUser(id: userId)
+                    let user = try await fetchCurrentSessionUser()
                     DispatchQueue.main.async {
                         self.currentUser = user
                         self.isValidSession = true
@@ -92,13 +94,16 @@ final class SessionStore {
         print("SessionStore.load: token=\(token != nil ? "present" : "nil") userId=\(userId ?? "nil") currentUser=\(currentUser?.username ?? "nil")")
     }
 
-    // Fetch a user by id (string) using the REST client; throws on network or decode errors
-    private func fetchUser(id: String) async throws -> User {
-        let url = apiClient.baseURL.appendingPathComponent("/users/")
-            .appendingPathComponent(id)
+    /// Validates the stored token by calling GET /users/me (requires auth).
+    /// Throws if the token is missing, expired, or not in the sessions table.
+    private func fetchCurrentSessionUser() async throws -> User {
+        let url = apiClient.baseURL.appendingPathComponent("/users/me")
         var req = URLRequest(url: url)
         if let token = token { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, _) = try await apiClient.session.data(for: req)
+        let (data, resp) = try await apiClient.session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw URLError(.userAuthenticationRequired)
+        }
         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase; decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode(User.self, from: data)
     }
