@@ -155,9 +155,20 @@ dmypy.json
 
 # project specific
 server/kiwifruit.db
+server/uploads/
 
 # sphinx
 docs/build
+# macOS
+.AppleDouble
+.LSOverride
+
+# Database files
+*.db-shm
+*.db-wal
+
+# Xcode user-specific
+!default.xcworkspace
 
 # Local keys file (do not commit)
 kiwifruit/Keys.plist

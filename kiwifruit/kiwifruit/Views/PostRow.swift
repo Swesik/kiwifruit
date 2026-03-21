@@ -55,11 +55,11 @@ struct PostRow: View {
                 AsyncImage(url: post.imageURL) { phase in
                     switch phase {
                     case .empty:
-                        ZStack { Color(.systemGray5); ProgressView() }
+                        Color(.systemGray5).overlay(ProgressView())
                     case .success(let image):
                         image.resizable().scaledToFill()
                     case .failure:
-                        ZStack { Color(.systemGray4); Image(systemName: "photo") }
+                        Color(.systemGray4).overlay(Image(systemName: "photo"))
                     @unknown default:
                         EmptyView()
                     }
@@ -170,12 +170,9 @@ struct PostRow: View {
     }
 }
 
-struct PostRow_Previews: PreviewProvider {
-    static var previews: some View {
-        NavigationStack {
-            PostRow(post: MockData.makePosts(count: 1, page: 0).first!)
-                .previewLayout(.sizeThatFits)
-                .padding()
-        }
+#Preview {
+    NavigationStack {
+        PostRow(post: MockData.makePosts(count: 1, page: 0).first!)
+            .padding()
     }
 }

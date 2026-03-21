@@ -28,9 +28,9 @@ struct PostDetailView: View {
 
                 AsyncImage(url: post.imageURL) { phase in
                     switch phase {
-                    case .empty: ZStack { Color(.systemGray5); ProgressView() }
+                    case .empty: Color(.systemGray5).overlay(ProgressView())
                     case .success(let image): image.resizable().scaledToFill()
-                    case .failure: ZStack { Color(.systemGray4); Image(systemName: "photo") }
+                    case .failure: Color(.systemGray4).overlay(Image(systemName: "photo"))
                     @unknown default: EmptyView()
                     }
                 }
@@ -91,8 +91,6 @@ struct PostDetailView: View {
     }
 }
 
-struct PostDetailView_Previews: PreviewProvider {
-    static var previews: some View {
-        NavigationStack { PostDetailView(post: MockData.makePosts(count: 1, page: 0).first!) }
-    }
+#Preview {
+    NavigationStack { PostDetailView(post: MockData.makePosts(count: 1, page: 0).first!) }
 }

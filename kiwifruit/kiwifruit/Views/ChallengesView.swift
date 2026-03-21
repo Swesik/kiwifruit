@@ -1,216 +1,211 @@
 import SwiftUI
 
+private enum ChallengesDesign {
+    static let border = Color(hex: "2D3748")
+    static let uiText = Color(hex: "2D3748")
+    static let kiwi = Color(hex: "A3C985")
+    static let kiwiLight = Color(hex: "E6F0DC")
+    static let tealCard = Color(hex: "CFE6EC")
+    static let brownCard = Color(hex: "D1BFAe")
+}
+
 struct ChallengesView: View {
-    @State private var vm = ChallengeViewModel()
-    @State private var selected: Challenge? = nil
-    @State private var showDetail = false
-    @State private var showLimitAlert = false
-    @State private var newType: String = "pages"
-    @State private var pagesPerWeekVal: Double = 50
-    @State private var minutesPerWeekVal: Double = 120
-    @State private var booksCountVal: Double = 2
-    @State private var weatherToggle: Bool = false
-    @State private var latText: String = ""
-    @State private var lonText: String = ""
-    
+    private let activeChallenges: [Challenge] = [
+        Challenge(
+            title: "Read 5 books in a month",
+            subtitle: "Sci-Fi Edition",
+            description: "Dive deep into the magical realms and complete 5 books within this month. Your consistency will unlock special badges!",
+            progress: 0.4,
+            progressLabel: "2/5 Books"
+        ),
+        Challenge(
+            title: "Daily 30 mins",
+            subtitle: "Consistency is key",
+            description: "Build a daily reading habit by dedicating at least 30 minutes every day. Small steps lead to big results!",
+            progress: 0.8,
+            progressLabel: "24/30 Days"
+        )
+    ]
+
+    private let discoverChallenges: [(title: String, description: String)] = [
+        ("Fantasy marathon: 1000 pages", "Dive deep into magical realms."),
+        ("Read a classic", "Time to tackle those must-reads.")
+    ]
 
     var body: some View {
-        NavigationStack {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                headerSection
+                VStack(alignment: .leading, spacing: 32) {
+                    yourChallengesSection
+                    discoverMoreSection
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 32)
+            }
+        }
+        .background(Color.white)
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    // MARK: - Header
+
+    private var headerSection: some View {
+        HStack(alignment: .top) {
+            Text("Challenges")
+                .font(.system(size: 36, weight: .black))
+                .foregroundColor(ChallengesDesign.uiText)
+            Spacer()
+            NavigationLink(destination: StreakTrackerView(streakDays: 1)) {
+                streakBadge
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 48)
+        .padding(.bottom, 8)
+    }
+
+    private var streakBadge: some View {
+        VStack(spacing: 2) {
+            HStack(alignment: .lastTextBaseline, spacing: 0) {
+                Text("1")
+                    .font(.system(size: 24, weight: .black))
+                    .foregroundColor(ChallengesDesign.uiText)
+                Text("day")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(ChallengesDesign.uiText)
+            }
+            Text("streak")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(ChallengesDesign.uiText)
+        }
+        .frame(width: 80, height: 80)
+        .background(ChallengesDesign.kiwiLight)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(ChallengesDesign.border, lineWidth: 2))
+        .sketchShadowCircle()
+        .rotationEffect(.degrees(2))
+    }
+
+    // MARK: - Your Challenges
+
+    private var yourChallengesSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Your challenges")
+                .font(.title2).fontWeight(.black)
+                .foregroundColor(ChallengesDesign.uiText)
+
             VStack(spacing: 12) {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading) {
-                        Text("Challenges").font(.largeTitle).bold()
+                ForEach(activeChallenges) { challenge in
+                    NavigationLink(destination: ChallengeDetailView(challenge: challenge)) {
+                        activeChallengeCard(challenge: challenge)
                     }
-                    Spacer()
-                    VStack(alignment: .trailing) {
-                        Text("\(vm.streak) day streak").font(.footnote).padding(8).background(Capsule().fill(Color.blue.opacity(0.2)))
-                        Text("\(vm.totalPoints) XP").font(.caption2).padding(6).background(Capsule().fill(Color.orange.opacity(0.2)))
-                    }
+                    .buttonStyle(.plain)
                 }
-                .padding([.horizontal, .top])
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        // Create Challenge section (moved above user's challenges)
-                        Divider().padding(.vertical)
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Create Challenge").font(.title3).bold().padding(.horizontal)
-                            HStack(alignment: .top) {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Toggle("Generate challenge from weather (use lat/lon)", isOn: $weatherToggle)
-
-                                    if weatherToggle {
-                                        VStack(alignment: .leading, spacing: 6) {
-                                            TextField("Latitude", text: $latText).textFieldStyle(.roundedBorder).keyboardType(.decimalPad).frame(width: 180)
-                                            TextField("Longitude", text: $lonText).textFieldStyle(.roundedBorder).keyboardType(.decimalPad).frame(width: 180)
-                                            HStack(spacing: 8) {
-                                                Button("Create Weather Challenge") {
-                                                    if let lat = Double(latText), let lon = Double(lonText) {
-                                                        Task {
-                                                            let c = await vm.createWeatherChallenge(lat: lat, lon: lon, placeName: nil)
-                                                            // Prepare acceptance check then apply on main actor
-                                                            let res = vm.accept(c)
-                                                            if !res.success { showLimitAlert = true }
-                                                            else if let prepared = res.prepared {
-                                                                await MainActor.run {
-                                                                    let ok = vm.applyAccept(prepared)
-                                                                    if !ok { showLimitAlert = true }
-                                                                }
-                                                            }
-                                                            latText = ""; lonText = ""
-                                                        }
-                                                    }
-                                                }
-                                                .buttonStyle(.borderedProminent)
-                                            }
-                                            
-                                        }
-                                    } else {
-                                        Picker("Type", selection: $newType) {
-                                            Text("Pages/week").tag("pages")
-                                            Text("Minutes/week").tag("minutes")
-                                            Text("Books/month").tag("books")
-                                        }
-                                        .pickerStyle(.segmented)
-
-                                        if newType == "pages" {
-                                            VStack(alignment: .leading) {
-                                                Text("Pages per week: \(Int(pagesPerWeekVal))")
-                                                Slider(value: $pagesPerWeekVal, in: 0...500, step: 5)
-                                            }
-                                        } else if newType == "minutes" {
-                                            VStack(alignment: .leading) {
-                                                Text("Minutes per week: \(Int(minutesPerWeekVal))")
-                                                Slider(value: $minutesPerWeekVal, in: 0...600, step: 5)
-                                            }
-                                        } else if newType == "books" {
-                                            VStack(alignment: .leading) {
-                                                Text("Books this month: \(Int(booksCountVal))")
-                                                Slider(value: $booksCountVal, in: 0...20, step: 1)
-                                            }
-                                        }
-
-                                        Button("Create and Add") {
-                                            if newType == "pages" {
-                                                let c = vm.createChallenge(type: "pages", pagesPerWeek: Int(pagesPerWeekVal))
-                                                let res = vm.accept(c)
-                                                if !res.success { showLimitAlert = true }
-                                                else if let prepared = res.prepared {
-                                                    Task { await MainActor.run {
-                                                        let ok = vm.applyAccept(prepared)
-                                                        if !ok { showLimitAlert = true }
-                                                    } }
-                                                }
-                                            } else if newType == "minutes" {
-                                                let c = vm.createChallenge(type: "minutes", minutesPerWeek: Int(minutesPerWeekVal))
-                                                let res = vm.accept(c)
-                                                if !res.success { showLimitAlert = true }
-                                                else if let prepared = res.prepared {
-                                                    Task { await MainActor.run {
-                                                        let ok = vm.applyAccept(prepared)
-                                                        if !ok { showLimitAlert = true }
-                                                    } }
-                                                }
-                                            } else {
-                                                let c = vm.createChallenge(type: "books", booksCount: Int(booksCountVal))
-                                                let res = vm.accept(c)
-                                                if !res.success { showLimitAlert = true }
-                                                else if let prepared = res.prepared {
-                                                    Task { await MainActor.run {
-                                                        let ok = vm.applyAccept(prepared)
-                                                        if !ok { showLimitAlert = true }
-                                                    } }
-                                                }
-                                            }
-                                        }
-                                        .buttonStyle(.borderedProminent)
-                                    }
-                                }
-                                Spacer()
-                            }
-                            .padding(.horizontal)
-                        }
-
-                        Text("Your Challenges").font(.title2).bold().padding(.horizontal)
-                        if vm.activeChallenges.isEmpty {
-                            Text("No active challenges. Explore Discover More below!").foregroundColor(.secondary).padding(.horizontal)
-                        } else {
-                            ForEach(vm.activeChallenges) { challenge in
-                                ChallengeCardView(challenge: challenge, action: {
-                                    // action -> complete when accepted
-                                    Task {
-                                        if let _ = vm.complete(challenge) {
-                                            await MainActor.run { vm.applyComplete(challengeId: challenge.id) }
-                                        }
-                                    }
-                                }, viewAction: {
-                                    selected = challenge; showDetail = true
-                                })
-                                .padding(.horizontal)
-                            }
-                        }
-
-                        // (create section was moved above)
-
-                        HStack {
-                            Text("Discover More").font(.title2).bold()
-                            Spacer()
-                            Button(action: {
-                                Task {
-                                    let recs = await vm.loadRecommendations()
-                                    await MainActor.run {
-                                        vm.recommended = recs
-                                    }
-                                }
-                            }) {
-                                Image(systemName: "arrow.clockwise")
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                        .padding(.horizontal)
-                        ForEach(vm.recommended) { challenge in
-                            ChallengeCardView(challenge: challenge, action: {
-                                // action -> join (alias to accept) keeping success handling
-                                let res = vm.accept(challenge)
-                                if !res.success { showLimitAlert = true }
-                                else if let prepared = res.prepared {
-                                    Task {
-                                        await MainActor.run {
-                                            let ok = vm.applyAccept(prepared)
-                                            if !ok { showLimitAlert = true }
-                                        }
-                                    }
-                                }
-                            }, viewAction: {
-                                selected = challenge; showDetail = true
-                            })
-                            .padding(.horizontal)
-                        }
-                    }
-                    .padding(.bottom, 60)
-                }
-            }
-            .navigationDestination(isPresented: $showDetail) {
-                Group {
-                    if let c = selected {
-                        ChallengeDetailView(viewModel: vm, challengeId: c.id)
-                    } else {
-                        EmptyView()
-                    }
-                }
-            }
-            // No automatic refresh; user must tap the refresh button
-            .alert("Maximum active challenges reached", isPresented: $showLimitAlert) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("You can have up to 3 active challenges. Abandon an active challenge to join a new one.")
             }
         }
     }
+
+    private func activeChallengeCard(challenge: Challenge) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(challenge.title)
+                        .font(.subheadline).fontWeight(.bold)
+                        .foregroundColor(ChallengesDesign.uiText)
+                    Text(challenge.subtitle)
+                        .font(.caption).fontWeight(.semibold)
+                        .foregroundColor(ChallengesDesign.uiText)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Text("view →")
+                    .font(.caption).fontWeight(.bold)
+                    .foregroundColor(ChallengesDesign.uiText)
+            }
+
+            progressBar(progress: challenge.progress)
+                .padding(.top, 24)
+        }
+        .padding(16)
+        .background(ChallengesDesign.tealCard)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(ChallengesDesign.border, lineWidth: 2))
+        .sketchShadow()
+    }
+
+    private func progressBar(progress: Double) -> some View {
+        Rectangle()
+            .fill(ChallengesDesign.border.opacity(0.2))
+            .frame(height: 2)
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(ChallengesDesign.border)
+                    .frame(height: 2)
+                    .scaleEffect(x: progress, y: 1, anchor: .leading)
+            }
+            .overlay(alignment: .leading) {
+                Circle()
+                    .fill(ChallengesDesign.border)
+                    .frame(width: 8, height: 8)
+            }
+            .overlay(alignment: .trailing) {
+                Circle()
+                    .fill(Color.white)
+                    .overlay(Circle().stroke(ChallengesDesign.border, lineWidth: 2))
+                    .frame(width: 8, height: 8)
+            }
+            .frame(height: 8)
+    }
+
+    // MARK: - Discover More
+
+    private var discoverMoreSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Discover more")
+                .font(.title2).fontWeight(.black)
+                .foregroundColor(ChallengesDesign.uiText)
+
+            VStack(spacing: 12) {
+                ForEach(Array(discoverChallenges.enumerated()), id: \.offset) { _, challenge in
+                    discoverCard(title: challenge.title, description: challenge.description)
+                }
+            }
+        }
+    }
+
+    private func discoverCard(title: String, description: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline).fontWeight(.bold)
+                    .foregroundColor(ChallengesDesign.uiText)
+                Text(description)
+                    .font(.caption).fontWeight(.semibold)
+                    .foregroundColor(ChallengesDesign.uiText)
+            }
+
+            Button("JOIN NOW") {}
+                .font(.caption).fontWeight(.black)
+                .foregroundColor(ChallengesDesign.uiText)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(ChallengesDesign.kiwi)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(ChallengesDesign.border, lineWidth: 2))
+                .sketchShadow()
+        }
+        .padding(16)
+        .background(ChallengesDesign.brownCard)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(ChallengesDesign.border, lineWidth: 2))
+        .sketchShadow()
+    }
 }
 
-struct ChallengesView_Previews: PreviewProvider {
-    static var previews: some View {
+#Preview {
+    NavigationStack {
         ChallengesView()
     }
 }

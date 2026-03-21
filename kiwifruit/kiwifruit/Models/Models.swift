@@ -35,3 +35,24 @@ struct BookSearchResult: Identifiable, Codable, Hashable {
     let authors: [String]?
     let isbn13: String?
 }
+
+/// A live reading session created by a user and optionally joined by friends.
+struct ReadingSession: Identifiable, Codable, Hashable {
+    let id: String
+    let host: User
+    let bookTitle: String
+    let startedAt: Date
+    /// "active" | "completed"
+    var status: String
+    /// Friends who have joined this session.
+    var participants: [User]
+}
+
+/// A friend's active session as returned by the feed endpoint, with server-calculated elapsed time.
+struct ActiveFriendSession: Identifiable, Codable, Hashable {
+    let session: ReadingSession
+    /// How many seconds the host has been reading (calculated server-side from startedAt).
+    let hostElapsedSeconds: Int
+
+    var id: String { session.id }
+}

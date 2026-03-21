@@ -3,9 +3,13 @@ import uuid
 import hashlib
 import sqlite3
 import logging
+import threading
 from datetime import datetime, timezone
 from flask import Flask, request, jsonify, g, abort, send_from_directory, make_response
 from werkzeug.exceptions import HTTPException
+import ebooklib
+from ebooklib import epub as epub_lib
+from bs4 import BeautifulSoup
 
 BASE_DIR = os.path.dirname(__file__)
 DB_PATH = os.path.join(BASE_DIR, 'kiwifruit.db')
@@ -72,6 +76,170 @@ def _to_iso(ts):
     except Exception:
         return ts
 
+
+def _extract_epub_metadata(filepath, fallback_name):
+    """Extract title and author from epub Dublin Core metadata.
+
+    :param filepath: Path to the epub file on disk.
+    :param fallback_name: Original filename used as fallback title.
+    :returns: ``(title, author)`` tuple of strings.
+    """
+    title = os.path.splitext(fallback_name)[0][:512]
+    author = ''
+    try:
+        book = epub_lib.read_epub(filepath, options={'ignore_ncx': True})
+        titles = book.get_metadata('DC', 'title')
+        if titles and titles[0] and titles[0][0]:
+            title = titles[0][0][:512]
+        creators = book.get_metadata('DC', 'creator')
+        if creators and creators[0] and creators[0][0]:
+            author = creators[0][0][:512]
+    except Exception as e:
+        logger.warning('could not extract epub metadata from %s: %s', filepath, e)
+    return title, author
+
+
+def _extract_text_and_title(item, chapter_number):
+    """Extract plaintext and title from an epub document item.
+
+    :param item: An ebooklib document item.
+    :param chapter_number: Fallback chapter number used when no heading is found.
+    :returns: ``(text, title)`` tuple, or ``None`` if the item has no readable text.
+    """
+    html_content = item.get_content().decode('utf-8', errors='replace')
+    soup = BeautifulSoup(html_content, 'html.parser')
+    text = soup.get_text(separator='\n', strip=True)
+
+    if not text.strip():
+        return None
+
+    chapter_title = ''
+    for tag in ['h1', 'h2', 'h3']:
+        heading = soup.find(tag)
+        if heading:
+            chapter_title = heading.get_text(strip=True)[:512]
+            break
+    if not chapter_title:
+        chapter_title = f'Chapter {chapter_number}'
+
+    return text, chapter_title
+
+
+def _write_chapter_file(item, chapter_number, epubid, db):
+    """Parse a single epub document item, write its text to disk, and insert a DB row.
+
+    :param item: An ebooklib document item.
+    :param chapter_number: 1-based chapter index.
+    :param epubid: The database ID of the epub record.
+    :param db: An open SQLite connection.
+    :returns: The path of the written ``.txt`` file, or ``None`` if the item
+              had no readable text.
+    """
+    parsed = _extract_text_and_title(item, chapter_number)
+    if parsed is None:
+        return None
+
+    text, chapter_title = parsed
+
+    txt_filename = f"{uuid.uuid4().hex}.txt"
+    txt_filepath = os.path.join(UPLOAD_FOLDER, txt_filename)
+    with open(txt_filepath, 'w', encoding='utf-8') as f:
+        f.write(text)
+
+    db.execute(
+        'INSERT INTO epub_chapters (epubid, chapter_number, title, filename) '
+        'VALUES (?, ?, ?, ?)',
+        (epubid, chapter_number, chapter_title, txt_filename)
+    )
+
+    return txt_filepath
+
+
+def _process_epub_spine(book, epubid, db):
+    """Walk the epub spine, writing each chapter to disk and inserting DB rows.
+
+    :param book: A parsed ebooklib ``EpubBook``.
+    :param epubid: The database ID of the epub record.
+    :param db: An open SQLite connection.
+    :returns: List of ``.txt`` file paths written (used for cleanup on failure).
+    """
+    chapter_files = []
+    chapter_number = 0
+
+    for item_id, _ in book.spine:
+        item = book.get_item_with_id(item_id)
+        if item is None:
+            continue
+        if item.get_type() != ebooklib.ITEM_DOCUMENT:
+            continue
+        if isinstance(item, epub_lib.EpubNav):
+            continue
+
+        txt_filepath = _write_chapter_file(item, chapter_number + 1, epubid, db)
+        if txt_filepath is None:
+            continue
+
+        chapter_number += 1
+        chapter_files.append(txt_filepath)
+
+    if chapter_number == 0:
+        db.execute(
+            'UPDATE epubs SET status = ?, error_message = ? WHERE epubid = ?',
+            ('FAILED', 'No readable chapters found in epub', epubid)
+        )
+    else:
+        db.execute(
+            'UPDATE epubs SET status = ? WHERE epubid = ?',
+            ('PARSED', epubid)
+        )
+
+    return chapter_files, chapter_number
+
+
+def _parse_epub_chapters(epubid, filepath):
+    """Parse epub chapters in a background thread.
+
+    Opens its own database connection (not request-scoped).
+    Writes each chapter's plaintext to a UUID-named ``.txt`` file in the
+    uploads folder. Updates the epub status to PARSED on success or FAILED
+    on error.
+
+    :param epubid: The database ID of the epub record.
+    :param filepath: Path to the epub file on disk.
+    """
+    db = None
+    chapter_files = []
+    try:
+        db = sqlite3.connect(DB_PATH)
+        db.row_factory = sqlite3.Row
+
+        book = epub_lib.read_epub(filepath, options={'ignore_ncx': True})
+        chapter_files, chapter_number = _process_epub_spine(book, epubid, db)
+
+        db.commit()
+        logger.info('epub parsed: epubId=%s chapters=%d', epubid, chapter_number)
+
+    except Exception as e:
+        logger.exception('epub parsing failed: epubId=%s error=%s', epubid, e)
+        for fpath in chapter_files:
+            try:
+                if os.path.exists(fpath):
+                    os.remove(fpath)
+            except Exception as cleanup_err:
+                logger.exception('failed to remove temp file %s: %s', fpath, cleanup_err)
+        if db:
+            try:
+                db.execute(
+                    'UPDATE epubs SET status = ?, error_message = ? WHERE epubid = ?',
+                    ('FAILED', str(e)[:1024], epubid)
+                )
+                db.commit()
+            except Exception as db_err:
+                logger.exception('failed to update epub status: %s', db_err)
+    finally:
+        if db:
+            db.close()
+
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     """Serve an uploaded file, requiring authentication.
@@ -94,6 +262,36 @@ def uploaded_file(filename):
     if not os.path.exists(fullpath):
         abort(404)
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+@app.route('/users/me', methods=['GET'])
+def get_current_session():
+    """Return the authenticated user for the current token.
+
+    **GET** ``/users/me``
+
+    Used by the iOS client to validate a stored session token on startup.
+    Unlike ``GET /users/<username>``, this endpoint requires a valid token
+    and will return 403 if the token is missing or not in the sessions table.
+
+    :returns: JSON user object.
+    :status 200: Token is valid; user returned.
+    :status 403: Token missing or invalid.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    row = db.execute('SELECT username, fullname, filename FROM users WHERE username = ?', (username,)).fetchone()
+    if not row:
+        abort(403)
+    user = {
+        'id': row['username'],
+        'username': row['username'],
+        'displayName': row['fullname'],
+        'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (row['filename'] or 'default.jpg')
+    }
+    return jsonify(user)
+
 
 @app.route('/sessions', methods=['POST'])
 def create_session():
@@ -731,6 +929,553 @@ def update_user(username):
     newrow = db.execute('SELECT username, fullname, filename FROM users WHERE username = ?', (username,)).fetchone()
     user = {'id': newrow['username'], 'username': newrow['username'], 'displayName': newrow['fullname'], 'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (newrow['filename'] or 'default.jpg')}
     return jsonify(user)
+
+@app.route('/books/scan', methods=['POST'])
+def capture_book_scan():
+    """Receive a camera-derived book scan payload for later processing.
+
+    **POST** ``/books/scan``
+
+    Accepts JSON containing either:
+    - ``barcode``: detected EAN-13 string
+    - ``ocrText``: OCR-extracted candidate title/author text
+
+    At least one payload field must be present.
+
+    :json string barcode: Detected EAN-13 barcode value (optional).
+    :json string ocrText: OCR candidate text payload (optional).
+    :returns: JSON echoing the accepted payload.
+    :status 200: Payload accepted.
+    :status 400: Missing both barcode and OCR text.
+    """
+    data = request.get_json() or {}
+    barcode = data.get('barcode')
+    ocr_text = data.get('ocrText')
+
+    if not barcode and not ocr_text:
+        return jsonify({
+            'message': 'Missing scan payload',
+            'status_code': 400
+        }), 400
+
+    logger.info('book scan captured: barcode=%s ocr_present=%s', barcode, bool(ocr_text))
+
+    return jsonify({
+        'status': 'ok',
+        'barcode': barcode,
+        'ocrText': ocr_text
+    })
+
+def _user_dict(row, req):
+    """Build the standard user JSON object from a DB row with username/fullname/filename columns."""
+    return {
+        'id': row['username'],
+        'username': row['username'],
+        'displayName': row['fullname'],
+        'avatarURL': req.host_url.rstrip('/') + '/uploads/' + (row['filename'] or 'default.jpg')
+    }
+
+
+def _session_dict(session_row, host_row, participants, req):
+    """Build the ReadingSession JSON object the iOS client expects."""
+    return {
+        'id': session_row['session_id'],
+        'host': _user_dict(host_row, req),
+        'book_title': session_row['book_title'],
+        'started_at': _to_iso(session_row['started_at']),
+        'status': session_row['status'],
+        'participants': [_user_dict(p, req) for p in participants],
+    }
+
+
+@app.route('/reading-sessions', methods=['POST'])
+def create_reading_session():
+    """Start a new reading session.
+
+    **POST** ``/reading-sessions``
+
+    :json string book_title: Title of the book being read (required).
+    :returns: JSON ``ReadingSession`` object.
+    :status 201: Session created.
+    :status 400: Missing ``book_title``.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    data = request.get_json() or {}
+    book_title = (data.get('book_title') or '').strip()
+    if not book_title:
+        abort(400)
+    db = get_db()
+    # Close any existing active sessions for this user before creating a new one.
+    # This prevents stale 'active' rows from accumulating (e.g. after a crash or force-quit).
+    db.execute(
+        "UPDATE reading_sessions SET status = 'completed' WHERE host = ? AND status = 'active'",
+        (username,)
+    )
+    session_id = uuid.uuid4().hex
+    db.execute(
+        'INSERT INTO reading_sessions (session_id, host, book_title) VALUES (?, ?, ?)',
+        (session_id, username, book_title)
+    )
+    db.commit()
+    row = db.execute('SELECT * FROM reading_sessions WHERE session_id = ?', (session_id,)).fetchone()
+    host_row = db.execute('SELECT username, fullname, filename FROM users WHERE username = ?', (username,)).fetchone()
+    logger.info('reading_session created: session_id=%s host=%s book=%s', session_id, username, book_title)
+    return jsonify(_session_dict(row, host_row, [], request)), 201
+
+
+@app.route('/reading-sessions/<session_id>', methods=['PATCH'])
+def update_reading_session(session_id):
+    """End a reading session (host only). Elapsed time is calculated server-side.
+
+    **PATCH** ``/reading-sessions/<session_id>``
+
+    :json string status: Must be ``"completed"``.
+    :json int pages_read: Pages read this session (optional).
+    :returns: JSON ``{"status": "ok"}``.
+    :status 200: Session completed.
+    :status 403: Not authenticated or not the session host.
+    :status 404: Session not found.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    row = db.execute('SELECT host, status FROM reading_sessions WHERE session_id = ?', (session_id,)).fetchone()
+    if not row:
+        abort(404)
+    if row['host'] != username:
+        abort(403)
+    data = request.get_json() or {}
+    try:
+        if data.get('status') == 'completed':
+            if row['status'] == 'paused':
+                # Elapsed already accumulated on the last pause — just mark completed.
+                db.execute(
+                    "UPDATE reading_sessions SET status = 'completed' WHERE session_id = ?",
+                    (session_id,)
+                )
+            else:
+                # Active: add time since the last resume (or start) to any stored elapsed.
+                db.execute(
+                    '''UPDATE reading_sessions
+                       SET status = 'completed',
+                           elapsed_seconds = COALESCE(elapsed_seconds, 0) +
+                               CAST((julianday('now') - julianday(COALESCE(resumed_at, started_at))) * 86400 AS INTEGER)
+                       WHERE session_id = ?''',
+                    (session_id,)
+                )
+            # Write session summary to history for the host.
+            session_row = db.execute(
+                'SELECT book_title, elapsed_seconds FROM reading_sessions WHERE session_id = ?',
+                (session_id,)
+            ).fetchone()
+            if session_row:
+                db.execute(
+                    'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read) VALUES (?, ?, ?, ?, ?)',
+                    (uuid.uuid4().hex, username, session_row['book_title'], session_row['elapsed_seconds'] or 0, data.get('pages_read'))
+                )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return jsonify({'status': 'ok'})
+
+
+@app.route('/reading-sessions/<session_id>/pause', methods=['POST'])
+def pause_reading_session(session_id):
+    """Pause an active reading session (host only).
+
+    Accumulates elapsed time server-side using ``julianday`` and sets
+    the session status to ``'paused'``.
+
+    **POST** ``/reading-sessions/<session_id>/pause``
+
+    :returns: JSON ``{"status": "ok"}``.
+    :status 200: Session paused.
+    :status 403: Not authenticated or not the session host.
+    :status 404: Session not found or not currently active.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    row = db.execute(
+        "SELECT host FROM reading_sessions WHERE session_id = ? AND status = 'active'",
+        (session_id,)
+    ).fetchone()
+    if not row:
+        abort(404)
+    if row['host'] != username:
+        abort(403)
+    db.execute(
+        '''UPDATE reading_sessions
+           SET status = 'paused',
+               elapsed_seconds = COALESCE(elapsed_seconds, 0) +
+                   CAST((julianday('now') - julianday(COALESCE(resumed_at, started_at))) * 86400 AS INTEGER)
+           WHERE session_id = ?''',
+        (session_id,)
+    )
+    db.commit()
+    logger.info('reading_session paused: session_id=%s host=%s', session_id, username)
+    return jsonify({'status': 'ok'})
+
+
+@app.route('/reading-sessions/<session_id>/resume', methods=['POST'])
+def resume_reading_session(session_id):
+    """Resume a paused reading session (host only).
+
+    Sets ``resumed_at`` to the current time so the next pause or completion
+    can accurately measure the newly active interval.
+
+    **POST** ``/reading-sessions/<session_id>/resume``
+
+    :returns: JSON ``{"status": "ok"}``.
+    :status 200: Session resumed.
+    :status 403: Not authenticated or not the session host.
+    :status 404: Session not found or not currently paused.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    row = db.execute(
+        "SELECT host FROM reading_sessions WHERE session_id = ? AND status = 'paused'",
+        (session_id,)
+    ).fetchone()
+    if not row:
+        abort(404)
+    if row['host'] != username:
+        abort(403)
+    db.execute(
+        "UPDATE reading_sessions SET status = 'active', resumed_at = CURRENT_TIMESTAMP WHERE session_id = ?",
+        (session_id,)
+    )
+    db.commit()
+    logger.info('reading_session resumed: session_id=%s host=%s', session_id, username)
+    return jsonify({'status': 'ok'})
+
+
+@app.route('/reading-sessions/friends', methods=['GET'])
+def get_friend_reading_sessions():
+    """Return active reading sessions of users the current user follows.
+
+    **GET** ``/reading-sessions/friends``
+
+    :returns: JSON list of ``ActiveFriendSession`` objects, each containing a
+              ``session`` (ReadingSession) and ``host_elapsed_seconds`` (int).
+    :status 200: List returned (may be empty).
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    # Active sessions belonging to anyone the current user follows
+    rows = db.execute(
+        '''SELECT rs.*, u.username, u.fullname, u.filename,
+                  CASE
+                      WHEN rs.status = 'paused' THEN COALESCE(rs.elapsed_seconds, 0)
+                      ELSE COALESCE(rs.elapsed_seconds, 0) +
+                           CAST((julianday('now') - julianday(COALESCE(rs.resumed_at, rs.started_at))) * 86400 AS INTEGER)
+                  END as elapsed
+           FROM reading_sessions rs
+           JOIN following f ON f.followee = rs.host AND f.follower = ?
+           JOIN users u ON u.username = rs.host
+           WHERE rs.status IN ('active', 'paused')
+           ORDER BY rs.started_at DESC''',
+        (username,)
+    ).fetchall()
+    result = []
+    for r in rows:
+        parts = db.execute(
+            'SELECT u.username, u.fullname, u.filename FROM session_participants sp JOIN users u ON u.username = sp.username WHERE sp.session_id = ?',
+            (r['session_id'],)
+        ).fetchall()
+        session_obj = _session_dict(r, r, parts, request)
+        result.append({'session': session_obj, 'host_elapsed_seconds': r['elapsed'] or 0})
+    return jsonify(result)
+
+
+@app.route('/reading-sessions/<session_id>/participants', methods=['POST'])
+def join_reading_session(session_id):
+    """Join a friend's active reading session.
+
+    **POST** ``/reading-sessions/<session_id>/participants``
+
+    :returns: JSON ``ReadingSession`` with updated participants list.
+    :status 200: Joined successfully.
+    :status 403: Not authenticated.
+    :status 404: Session not found or not active/paused.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    row = db.execute(
+        "SELECT * FROM reading_sessions WHERE session_id = ? AND status IN ('active', 'paused')",
+        (session_id,)
+    ).fetchone()
+    if not row:
+        abort(404)
+    try:
+        db.execute('INSERT INTO session_participants (session_id, username) VALUES (?, ?)', (session_id, username))
+        db.commit()
+    except sqlite3.IntegrityError:
+        logger.warning('join_reading_session: %s is already a participant of session %s — possible duplicate UI call', username, session_id)
+    host_row = db.execute('SELECT username, fullname, filename FROM users WHERE username = ?', (row['host'],)).fetchone()
+    parts = db.execute(
+        'SELECT u.username, u.fullname, u.filename FROM session_participants sp JOIN users u ON u.username = sp.username WHERE sp.session_id = ?',
+        (session_id,)
+    ).fetchall()
+    logger.info('reading_session joined: session_id=%s participant=%s', session_id, username)
+    return jsonify(_session_dict(row, host_row, parts, request))
+
+
+@app.route('/reading-sessions/<session_id>/participants', methods=['DELETE'])
+def leave_reading_session(session_id):
+    """Leave a reading session the current user previously joined.
+
+    **DELETE** ``/reading-sessions/<session_id>/participants``
+
+    Does not end the host's session.
+
+    :returns: JSON ``{"status": "ok"}``.
+    :status 200: Left successfully.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    data = request.get_json() or {}
+    try:
+        db.execute('DELETE FROM session_participants WHERE session_id = ? AND username = ?', (session_id, username))
+        # Write session summary to history for the joiner.
+        if 'elapsed_seconds' in data:
+            session_row = db.execute('SELECT book_title FROM reading_sessions WHERE session_id = ?', (session_id,)).fetchone()
+            if session_row:
+                # Prefer the joiner's own book title if sent; fall back to the session's book.
+                book_title = (data.get('book_title') or '').strip() or session_row['book_title']
+                db.execute(
+                    'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read) VALUES (?, ?, ?, ?, ?)',
+                    (uuid.uuid4().hex, username, book_title, int(data['elapsed_seconds']), data.get('pages_read'))
+                )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    logger.info('reading_session left: session_id=%s participant=%s', session_id, username)
+    return jsonify({'status': 'ok'})
+
+
+@app.route('/api/epub', methods=['POST'])
+def epub_upload():
+    """Upload an epub file for background parsing.
+
+    **POST** ``/api/epub``
+
+    Accepts a multipart form with a ``file`` field containing an ``.epub`` file.
+    Saves the file, creates an epub record with LOADING status, and starts
+    a background thread to parse chapters.
+
+    :returns: JSON epub object with ``id``, ``title``, ``author``, ``status``,
+              ``originalFilename``, and ``createdAt``.
+    :status 201: Epub accepted and parsing started.
+    :status 400: Missing file, empty filename, or not an .epub file.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    if 'file' not in request.files:
+        abort(400)
+    file = request.files['file']
+    if file.filename == '':
+        abort(400)
+
+    original_filename = file.filename
+    suffix = os.path.splitext(original_filename)[1].lower()
+    if suffix != '.epub':
+        return jsonify({'error': 'invalid_file_type',
+                        'message': 'Only .epub files are accepted'}), 400
+
+    stem = uuid.uuid4().hex
+    stored_filename = f"{stem}{suffix}"
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], stored_filename)
+    file.save(filepath)
+
+    title, author = _extract_epub_metadata(filepath, original_filename)
+
+    db = get_db()
+    cur = db.execute(
+        'INSERT INTO epubs (owner, title, author, original_filename, stored_filename, status) '
+        'VALUES (?, ?, ?, ?, ?, ?)',
+        (username, title, author, original_filename, stored_filename, 'LOADING')
+    )
+    db.commit()
+    epubid = cur.lastrowid
+
+    thread = threading.Thread(
+        target=_parse_epub_chapters,
+        args=(epubid, filepath),
+        daemon=True
+    )
+    thread.start()
+
+    row = db.execute(
+        'SELECT epubid, title, author, status, original_filename, created '
+        'FROM epubs WHERE epubid = ?',
+        (epubid,)
+    ).fetchone()
+
+    logger.info("epub upload started: epubId=%s owner=%s filename=%s", epubid, username, stored_filename)
+
+    return jsonify({
+        'id': str(row['epubid']),
+        'title': row['title'],
+        'author': row['author'],
+        'status': row['status'],
+        'originalFilename': row['original_filename'],
+        'createdAt': _to_iso(row['created'])
+    }), 201
+
+
+@app.route('/api/epub/<epub_id>', methods=['GET'])
+def epub_detail(epub_id):
+    """Retrieve epub metadata and parsing status.
+
+    **GET** ``/api/epub/<epub_id>``
+
+    Requires authentication. Only the owner may access their epub.
+
+    :param epub_id: ID of the epub.
+    :returns: JSON epub object including status and chapter count.
+    :status 200: Epub returned.
+    :status 403: Not authenticated or not the owner.
+    :status 404: Epub not found.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    db = get_db()
+    row = db.execute(
+        'SELECT epubid, owner, title, author, original_filename, status, error_message, created '
+        'FROM epubs WHERE epubid = ?', (epub_id,)
+    ).fetchone()
+    if not row:
+        abort(404)
+    if row['owner'] != username:
+        abort(403)
+
+    chapter_count = db.execute(
+        'SELECT COUNT(*) as c FROM epub_chapters WHERE epubid = ?', (epub_id,)
+    ).fetchone()['c']
+
+    return jsonify({
+        'id': str(row['epubid']),
+        'title': row['title'],
+        'author': row['author'],
+        'status': row['status'],
+        'originalFilename': row['original_filename'],
+        'createdAt': _to_iso(row['created']),
+        'errorMessage': row['error_message'],
+        'chapterCount': chapter_count
+    })
+
+
+@app.route('/api/epub/<epub_id>/chapters', methods=['GET'])
+def epub_chapters(epub_id):
+    """Retrieve all chapters for an epub.
+
+    **GET** ``/api/epub/<epub_id>/chapters``
+
+    Requires authentication. Only the owner may access. Returns 409 if the
+    epub is still being parsed or parsing failed.
+
+    :param epub_id: ID of the epub.
+    :returns: JSON list of chapter objects ordered by chapter number.
+    :status 200: Chapters returned.
+    :status 403: Not authenticated or not the owner.
+    :status 404: Epub not found.
+    :status 409: Epub is still LOADING or FAILED.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    db = get_db()
+    epub_row = db.execute(
+        'SELECT epubid, owner, status FROM epubs WHERE epubid = ?', (epub_id,)
+    ).fetchone()
+    if not epub_row:
+        abort(404)
+    if epub_row['owner'] != username:
+        abort(403)
+    if epub_row['status'] == 'LOADING':
+        return jsonify({'error': 'epub_still_loading',
+                        'message': 'Epub is still being parsed'}), 409
+    if epub_row['status'] == 'FAILED':
+        return jsonify({'error': 'epub_parse_failed',
+                        'message': 'Epub parsing failed'}), 409
+
+    rows = db.execute(
+        'SELECT chapterid, chapter_number, title, filename FROM epub_chapters '
+        'WHERE epubid = ? ORDER BY chapter_number ASC', (epub_id,)
+    ).fetchall()
+
+    chapters = []
+    for r in rows:
+        chapters.append({
+            'id': str(r['chapterid']),
+            'chapterNumber': r['chapter_number'],
+            'title': r['title'],
+            'filename': r['filename']
+        })
+    return jsonify(chapters)
+
+
+@app.route('/api/epubs', methods=['GET'])
+def epub_list():
+    """List all epubs belonging to the authenticated user.
+
+    **GET** ``/api/epubs``
+
+    :returns: JSON list of epub metadata objects (no chapter data).
+    :status 200: List returned.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    db = get_db()
+    rows = db.execute(
+        'SELECT epubid, title, author, original_filename, status, error_message, created '
+        'FROM epubs WHERE owner = ? ORDER BY created DESC', (username,)
+    ).fetchall()
+
+    epubs = []
+    for r in rows:
+        chapter_count = db.execute(
+            'SELECT COUNT(*) as c FROM epub_chapters WHERE epubid = ?',
+            (r['epubid'],)
+        ).fetchone()['c']
+        epubs.append({
+            'id': str(r['epubid']),
+            'title': r['title'],
+            'author': r['author'],
+            'originalFilename': r['original_filename'],
+            'status': r['status'],
+            'errorMessage': r['error_message'],
+            'createdAt': _to_iso(r['created']),
+            'chapterCount': chapter_count
+        })
+    return jsonify(epubs)
 
 
 @app.errorhandler(HTTPException)

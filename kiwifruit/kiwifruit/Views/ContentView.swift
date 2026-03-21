@@ -3,10 +3,14 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.sessionStore) private var session: SessionStore
     @Environment(\.postsStore) private var postsStore: PostsStore
-    // Show login while there is no validated session/user
-    @State private var selection: Int = 0
-    
+    @Environment(\.readingSessionStore) private var readingSessionStore: ReadingSessionStore
+    @State private var selection: Int = 2
+
     @State private var bookSearchViewModel = BookSearchViewModel(api: AppAPI.shared)
+    @State private var bookScanViewModel = BookScanViewModel(
+        scannerService: VisionBookScannerService(),
+        api: AppAPI.shared
+    )
 
     private var currentUser: User {
         if let user = session.currentUser { return user }
@@ -17,25 +21,9 @@ struct ContentView: View {
     }
 
     var body: some View {
-        TabView(selection: $selection) {
-            NavigationStack { FeedView() }
-                .tabItem { Label("Home", systemImage: "house.fill") }
-                .tag(0)
-            NavigationStack { DiscoverView(bookSearchViewModel: bookSearchViewModel) }
-                .tabItem { Label("Discover", systemImage: "sparkles") }
-                .tag(1)
-
-            NavigationStack { ProfileView(user: currentUser) }
-                .tabItem { Label("Profile", systemImage: "person.crop.circle") }
-                .tag(2)
-
-            NavigationStack { ChallengesView() }
-                .tabItem { Label("Challenges", systemImage: "flag.checkered") }
-                .tag(3)
-
-            Text("Focus")
-                .tabItem { Label("Focus", systemImage: "leaf.fill") }
-                .tag(4)
+        VStack(spacing: 0) {
+            currentView
+            CustomTabBar(selection: $selection)
         }
         .onAppear {
             if session.isValidSession && session.userId != nil { Task { await postsStore.loadInitial() } }
@@ -44,17 +32,30 @@ struct ContentView: View {
             if new != nil { selection = 2; Task { await postsStore.loadInitial(force: true) } }
         }
         .onChange(of: session.isValidSession) { valid in
-            if valid && session.userId != nil { selection = 2; Task { await postsStore.loadInitial(force: true) } }
+            if valid && session.userId != nil {
+                selection = 2
+                Task { await postsStore.loadInitial(force: true) }
+                readingSessionStore.loadFriendSessions()
+            }
         }
         .fullScreenCover(isPresented: Binding(get: { !(session.isValidSession && session.userId != nil) }, set: { _ in })) {
             LoginView()
         }
     }
+
+    @ViewBuilder
+    private var currentView: some View {
+        switch selection {
+        case 0: NavigationStack { ProfileView(user: currentUser) }.id(0)
+        case 1: NavigationStack { DiscoverView(bookSearchViewModel: bookSearchViewModel, bookScanViewModel: bookScanViewModel) }.id(1)
+        case 2: NavigationStack { FeedView() }.id(2)
+        case 3: NavigationStack { ChallengesView() }.id(3)
+        case 4: NavigationStack { FocusView() }.id(4)
+        default: EmptyView()
+        }
+    }
 }
 
-
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
-    }
+#Preview {
+    ContentView()
 }

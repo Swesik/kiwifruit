@@ -66,25 +66,60 @@ CREATE TABLE sessions (
    FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
 );
 
-
 -- Reading sessions created by a user (focus tab)
 CREATE TABLE reading_sessions (
-   session_id TEXT PRIMARY KEY,
-   host TEXT NOT NULL,
-   book_title TEXT NOT NULL CHECK (LENGTH(book_title) <= 256),
-   started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed')),
-   elapsed_seconds INTEGER,
-   FOREIGN KEY (host) REFERENCES users (username) ON DELETE CASCADE
+    session_id TEXT PRIMARY KEY,
+    host TEXT NOT NULL,
+    book_title TEXT NOT NULL CHECK (LENGTH(book_title) <= 256),
+    started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed')),
+    elapsed_seconds INTEGER,
+    resumed_at DATETIME,
+    FOREIGN KEY (host) REFERENCES users (username) ON DELETE CASCADE
 );
 
+-- Permanent record of every completed reading session per user
+CREATE TABLE session_history (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    book_title TEXT NOT NULL,
+    duration_seconds INTEGER NOT NULL,
+    pages_read INTEGER,
+    ended_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
+);
 
 -- Friends who joined a reading session (many-to-many)
 CREATE TABLE session_participants (
-   session_id TEXT NOT NULL,
-   username TEXT NOT NULL,
-   joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-   PRIMARY KEY (session_id, username),
-   FOREIGN KEY (session_id) REFERENCES reading_sessions (session_id) ON DELETE CASCADE,
-   FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
+    session_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (session_id, username),
+    FOREIGN KEY (session_id) REFERENCES reading_sessions (session_id) ON DELETE CASCADE,
+    FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
+);
+
+-- Epub uploads table (tracks uploaded epub files and parsing state)
+CREATE TABLE epubs (
+    epubid INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner TEXT NOT NULL CHECK (LENGTH(owner) <= 20),
+    title TEXT NOT NULL DEFAULT '' CHECK (LENGTH(title) <= 512),
+    author TEXT NOT NULL DEFAULT '' CHECK (LENGTH(author) <= 512),
+    original_filename TEXT NOT NULL CHECK (LENGTH(original_filename) <= 256),
+    stored_filename TEXT NOT NULL CHECK (LENGTH(stored_filename) <= 128),
+    status TEXT NOT NULL DEFAULT 'LOADING' CHECK (status IN ('LOADING', 'PARSED', 'FAILED')),
+    error_message TEXT,
+    created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (owner) REFERENCES users (username) ON DELETE CASCADE
+);
+
+-- Epub chapters table (one row per chapter, text stored as .txt file on disk)
+CREATE TABLE epub_chapters (
+    chapterid INTEGER PRIMARY KEY AUTOINCREMENT,
+    epubid INTEGER NOT NULL,
+    chapter_number INTEGER NOT NULL,
+    title TEXT NOT NULL DEFAULT '' CHECK (LENGTH(title) <= 512),
+    filename TEXT NOT NULL CHECK (LENGTH(filename) <= 128),
+    created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (epubid) REFERENCES epubs (epubid) ON DELETE CASCADE
 );
