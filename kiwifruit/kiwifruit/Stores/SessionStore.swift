@@ -29,7 +29,7 @@ final class SessionStore {
         AppAPI.shared = apiClient
         apiClient.setAuthToken(token)
         // If we have a token loaded, validate it against the server.
-        // Uses GET /sessions/me which requires auth — an expired/deleted token correctly fails
+        // Uses GET /users/me which requires auth — an expired/deleted token correctly fails
         // and triggers clear(), forcing the login screen.
         if token != nil {
             Task {
@@ -94,10 +94,10 @@ final class SessionStore {
         print("SessionStore.load: token=\(token != nil ? "present" : "nil") userId=\(userId ?? "nil") currentUser=\(currentUser?.username ?? "nil")")
     }
 
-    /// Validates the stored token by calling GET /sessions/me (requires auth).
+    /// Validates the stored token by calling GET /users/me (requires auth).
     /// Throws if the token is missing, expired, or not in the sessions table.
     private func fetchCurrentSessionUser() async throws -> User {
-        let url = apiClient.baseURL.appendingPathComponent("/sessions/me")
+        let url = apiClient.baseURL.appendingPathComponent("/users/me")
         var req = URLRequest(url: url)
         if let token = token { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         let (data, resp) = try await apiClient.session.data(for: req)

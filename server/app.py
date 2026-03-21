@@ -263,11 +263,11 @@ def uploaded_file(filename):
         abort(404)
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-@app.route('/sessions/me', methods=['GET'])
+@app.route('/users/me', methods=['GET'])
 def get_current_session():
     """Return the authenticated user for the current token.
 
-    **GET** ``/sessions/me``
+    **GET** ``/users/me``
 
     Used by the iOS client to validate a stored session token on startup.
     Unlike ``GET /users/<username>``, this endpoint requires a valid token
