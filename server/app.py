@@ -933,11 +933,11 @@ def create_reading_session():
     return jsonify(_session_dict(row, host_row, [], request)), 201
 
 
-@app.route('/reading-sessions/<session_id>', methods=['PATCH'])
+@app.route('/reading-sessions/<session_id>/complete', methods=['POST'])
 def update_reading_session(session_id):
     """End a reading session (host only). Elapsed time is calculated server-side.
 
-    **PATCH** ``/reading-sessions/<session_id>``
+    **POST** ``/reading-sessions/<session_id>/complete``
 
     :json string status: Must be ``"completed"``.
     :json int pages_read: Pages read this session (optional).

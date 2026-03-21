@@ -409,8 +409,8 @@ final class RESTAPIClient: APIClientProtocol {
     }
 
     func endReadingSession(sessionId: String, pagesRead: Int?) async throws {
-        let url = baseURL.appendingPathComponent("/reading-sessions/\(sessionId)")
-        var req = URLRequest(url: url); req.httpMethod = "PATCH"
+        let url = baseURL.appendingPathComponent("/reading-sessions/\(sessionId)/complete")
+        var req = URLRequest(url: url); req.httpMethod = "POST"
         req.addValue("application/json", forHTTPHeaderField: "Content-Type")
         if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         var body: [String: Any] = ["status": "completed"]
