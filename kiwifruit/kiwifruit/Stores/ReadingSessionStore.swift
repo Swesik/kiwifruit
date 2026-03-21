@@ -85,12 +85,18 @@ final class ReadingSessionStore {
         case .active:
             status = .paused
             if isHost, let sessionId = currentSession?.id {
-                Task { try? await AppAPI.shared.pauseReadingSession(sessionId: sessionId) }
+                Task {
+                    do { try await AppAPI.shared.pauseReadingSession(sessionId: sessionId) }
+                    catch { print("ReadingSessionStore: pauseReadingSession failed: \(error)") }
+                }
             }
         case .paused:
             status = .active
             if isHost, let sessionId = currentSession?.id {
-                Task { try? await AppAPI.shared.resumeReadingSession(sessionId: sessionId) }
+                Task {
+                    do { try await AppAPI.shared.resumeReadingSession(sessionId: sessionId) }
+                    catch { print("ReadingSessionStore: resumeReadingSession failed: \(error)") }
+                }
             }
         default: break
         }
