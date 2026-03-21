@@ -934,7 +934,7 @@ def create_reading_session():
 
 
 @app.route('/reading-sessions/<session_id>/complete', methods=['POST'])
-def update_reading_session(session_id):
+def complete_reading_session(session_id):
     """End a reading session (host only). Elapsed time is calculated server-side.
 
     **POST** ``/reading-sessions/<session_id>/complete``
