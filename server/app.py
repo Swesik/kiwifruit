@@ -1131,7 +1131,7 @@ def join_reading_session(session_id):
         db.execute('INSERT INTO session_participants (session_id, username) VALUES (?, ?)', (session_id, username))
         db.commit()
     except sqlite3.IntegrityError:
-        pass  # already a participant
+        logger.warning('join_reading_session: %s is already a participant of session %s — possible duplicate UI call', username, session_id)
     host_row = db.execute('SELECT username, fullname, filename FROM users WHERE username = ?', (row['host'],)).fetchone()
     parts = db.execute(
         'SELECT u.username, u.fullname, u.filename FROM session_participants sp JOIN users u ON u.username = sp.username WHERE sp.session_id = ?',
