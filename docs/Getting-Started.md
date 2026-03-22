@@ -102,7 +102,7 @@ open kiwifruit.xcodeproj
 The app is configured to connect to the Flask backend by default. The base URL is set in `/kiwifruit/Services/APIClient.swift`:
 
 ```swift
-static var shared: APIClientProtocol = RESTAPIClient(baseURL: URL(string: "http://127.0.0.1:5001")!)
+static var shared: APIClientProtocol = RESTAPIClient(baseURL: URL(string: "http://127.0.0.1:5000")!)
 ```
 
 If your Flask server runs on a different port or URL, update this line.

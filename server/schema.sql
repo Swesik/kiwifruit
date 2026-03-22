@@ -93,6 +93,15 @@ CREATE TABLE session_participants (
     FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
 );
 
+-- Seed catalog for recommendations (not user uploads; see epubs)
+CREATE TABLE catalog_books (
+    book_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL CHECK (LENGTH(title) <= 512),
+    author TEXT NOT NULL CHECK (LENGTH(author) <= 512),
+    genre TEXT NOT NULL DEFAULT '' CHECK (LENGTH(genre) <= 128),
+    cover_url TEXT NOT NULL CHECK (LENGTH(cover_url) <= 1024)
+);
+
 -- Epub uploads table (tracks uploaded epub files and parsing state)
 CREATE TABLE epubs (
     epubid INTEGER PRIMARY KEY AUTOINCREMENT,

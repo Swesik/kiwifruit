@@ -4,6 +4,7 @@ struct ContentView: View {
     @Environment(\.sessionStore) private var session: SessionStore
     @Environment(\.postsStore) private var postsStore: PostsStore
     @Environment(\.readingSessionStore) private var readingSessionStore: ReadingSessionStore
+    @Environment(\.recommendationsStore) private var recommendationsStore: RecommendationsStore
     @State private var selection: Int = 2
 
     @State private var bookSearchViewModel = BookSearchViewModel(api: AppAPI.shared)
@@ -28,13 +29,20 @@ struct ContentView: View {
         .onAppear {
             if session.isValidSession && session.userId != nil { Task { await postsStore.loadInitial() } }
         }
-        .onChange(of: session.userId) { new in
-            if new != nil { selection = 2; Task { await postsStore.loadInitial(force: true) } }
+        .onChange(of: session.userId) { _, new in
+            if new != nil {
+                selection = 2
+                Task { await postsStore.loadInitial(force: true) }
+                Task { await recommendationsStore.load(force: true) }
+            } else {
+                recommendationsStore.reset()
+            }
         }
-        .onChange(of: session.isValidSession) { valid in
+        .onChange(of: session.isValidSession) { _, valid in
             if valid && session.userId != nil {
                 selection = 2
                 Task { await postsStore.loadInitial(force: true) }
+                Task { await recommendationsStore.load(force: true) }
                 readingSessionStore.loadFriendSessions()
             }
         }

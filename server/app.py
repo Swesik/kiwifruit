@@ -11,6 +11,8 @@ import ebooklib
 from ebooklib import epub as epub_lib
 from bs4 import BeautifulSoup
 
+from recommendations import rank_recommendations
+
 BASE_DIR = os.path.dirname(__file__)
 DB_PATH = os.path.join(BASE_DIR, 'kiwifruit.db')
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
@@ -397,6 +399,64 @@ def search_books():
         }
     ]
     return jsonify(results)
+
+
+@app.route('/recommendations', methods=['GET'])
+def get_recommendations():
+    """Return personalized book recommendations for the authenticated user.
+
+    **GET** ``/recommendations``
+
+    Query params: ``limit`` (default 8, max 20).
+
+    Uses ``catalog_books`` and ``session_history`` for rule-based ranking.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    try:
+        limit = int(request.args.get('limit', 8))
+    except (TypeError, ValueError):
+        limit = 8
+    limit = max(1, min(limit, 20))
+
+    db = get_db()
+    try:
+        catalog = db.execute(
+            'SELECT book_id, title, author, genre, cover_url FROM catalog_books ORDER BY book_id'
+        ).fetchall()
+    except sqlite3.OperationalError:
+        logger.warning('recommendations: catalog_books missing (run schema + seed)')
+        return jsonify([])
+
+    if not catalog:
+        logger.info('recommendations: empty catalog')
+        return jsonify([])
+
+    history = db.execute(
+        'SELECT book_title FROM session_history WHERE username = ?',
+        (username,),
+    ).fetchall()
+
+    ranked = rank_recommendations(catalog, history, limit)
+    payload = [
+        {
+            'book_id': row['book_id'],
+            'title': row['title'],
+            'author': row['author'],
+            'cover_url': row['cover_url'],
+        }
+        for row in ranked
+    ]
+    logger.info(
+        'recommendations: catalog=%d history_rows=%d returned=%d',
+        len(catalog),
+        len(history),
+        len(payload),
+    )
+    return jsonify(payload)
+
 
 @app.route('/posts', methods=['GET', 'POST'])
 def posts_handler():
