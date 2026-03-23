@@ -6,8 +6,6 @@ import SwiftUI
 @Observable
 @MainActor
 final class UserPreferencesStore {
-    /// Default reading session length, in minutes.
-    var defaultSessionLengthMinutes: Int = UserPreferences.default.defaultSessionLengthMinutes
     /// Daily reading goal, in minutes.
     var dailyGoalMinutes: Int = UserPreferences.default.dailyGoalMinutes
     /// Preferred genres for the recommendation system.
@@ -17,7 +15,6 @@ final class UserPreferencesStore {
     func load() async {
         do {
             let loaded = try await AppAPI.shared.fetchPreferences()
-            defaultSessionLengthMinutes = loaded.defaultSessionLengthMinutes
             dailyGoalMinutes = loaded.dailyGoalMinutes
             preferredGenres = loaded.preferredGenres
         } catch {
@@ -26,12 +23,10 @@ final class UserPreferencesStore {
     }
 
     /// Updates preferences and persists them to the server.
-    func update(sessionLength: Int, dailyGoal: Int, genres: [String]) async {
-        defaultSessionLengthMinutes = sessionLength
+    func update(dailyGoal: Int, genres: [String]) async {
         dailyGoalMinutes = dailyGoal
         preferredGenres = genres
         let prefs = UserPreferences(
-            defaultSessionLengthMinutes: sessionLength,
             dailyGoalMinutes: dailyGoal,
             preferredGenres: genres
         )

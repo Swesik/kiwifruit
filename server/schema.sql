@@ -105,7 +105,6 @@ CREATE TABLE completed_books (
 -- User reading preferences (one row per user, upserted on save)
 CREATE TABLE user_preferences (
     username TEXT PRIMARY KEY CHECK (LENGTH(username) <= 20),
-    default_session_length_minutes INTEGER NOT NULL DEFAULT 30,
     daily_goal_minutes INTEGER NOT NULL DEFAULT 30,
     preferred_genres TEXT NOT NULL DEFAULT '[]',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

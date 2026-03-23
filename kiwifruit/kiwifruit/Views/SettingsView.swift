@@ -10,7 +10,6 @@ struct SettingsView: View {
     @Environment(\.userPreferencesStore) private var store: UserPreferencesStore
     @Environment(\.dismiss) private var dismiss
 
-    @State private var sessionLength: Int = 30
     @State private var dailyGoal: Int = 30
     @State private var selectedGenres: Set<String> = []
     @State private var isSaving = false
@@ -18,17 +17,6 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    Stepper(
-                        "\(sessionLength) min",
-                        value: $sessionLength,
-                        in: 5...120,
-                        step: 5
-                    )
-                } header: {
-                    Text("Default Session Length")
-                }
-
                 Section {
                     Stepper(
                         "\(dailyGoal) min",
@@ -73,7 +61,6 @@ struct SettingsView: View {
                         isSaving = true
                         Task {
                             await store.update(
-                                sessionLength: sessionLength,
                                 dailyGoal: dailyGoal,
                                 genres: Array(selectedGenres)
                             )
@@ -86,7 +73,6 @@ struct SettingsView: View {
                 }
             }
             .onAppear {
-                sessionLength = store.defaultSessionLengthMinutes
                 dailyGoal = store.dailyGoalMinutes
                 selectedGenres = Set(store.preferredGenres)
             }

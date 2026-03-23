@@ -1275,18 +1275,17 @@ def get_preferences():
         abort(403)
     db = get_db()
     row = db.execute(
-        'SELECT default_session_length_minutes, daily_goal_minutes, preferred_genres '
+        'SELECT daily_goal_minutes, preferred_genres '
         'FROM user_preferences WHERE username = ?',
         (username,)
     ).fetchone()
     if row:
         import json as _json
         return jsonify({
-            'default_session_length_minutes': row['default_session_length_minutes'],
             'daily_goal_minutes': row['daily_goal_minutes'],
             'preferred_genres': _json.loads(row['preferred_genres'] or '[]')
         })
-    return jsonify({'default_session_length_minutes': 30, 'daily_goal_minutes': 30, 'preferred_genres': []})
+    return jsonify({'daily_goal_minutes': 30, 'preferred_genres': []})
 
 
 @app.route('/preferences', methods=['PUT'])
@@ -1307,33 +1306,30 @@ def save_preferences():
         abort(403)
     import json as _json
     data = request.get_json(silent=True) or {}
-    session_len = data.get('default_session_length_minutes')
     daily_goal = data.get('daily_goal_minutes')
     genres = data.get('preferred_genres', [])
-    if session_len is None or daily_goal is None:
-        abort(400, description='default_session_length_minutes and daily_goal_minutes are required')
-    if not isinstance(session_len, int) or not isinstance(daily_goal, int):
-        abort(400, description='Fields must be integers')
-    if session_len < 1 or daily_goal < 1:
-        abort(400, description='Values must be positive')
+    if daily_goal is None:
+        abort(400, description='daily_goal_minutes is required')
+    if not isinstance(daily_goal, int):
+        abort(400, description='daily_goal_minutes must be an integer')
+    if daily_goal < 1:
+        abort(400, description='daily_goal_minutes must be positive')
     if not isinstance(genres, list) or not all(isinstance(g, str) for g in genres):
         abort(400, description='preferred_genres must be a list of strings')
     genres_json = _json.dumps(genres)
     db = get_db()
     db.execute(
         'INSERT INTO user_preferences '
-        '(username, default_session_length_minutes, daily_goal_minutes, preferred_genres, updated_at) '
-        'VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) '
+        '(username, daily_goal_minutes, preferred_genres, updated_at) '
+        'VALUES (?, ?, ?, CURRENT_TIMESTAMP) '
         'ON CONFLICT(username) DO UPDATE SET '
-        'default_session_length_minutes = excluded.default_session_length_minutes, '
         'daily_goal_minutes = excluded.daily_goal_minutes, '
         'preferred_genres = excluded.preferred_genres, '
         'updated_at = CURRENT_TIMESTAMP',
-        (username, session_len, daily_goal, genres_json)
+        (username, daily_goal, genres_json)
     )
     db.commit()
     return jsonify({
-        'default_session_length_minutes': session_len,
         'daily_goal_minutes': daily_goal,
         'preferred_genres': genres
     })
