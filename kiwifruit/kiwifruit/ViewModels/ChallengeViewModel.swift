@@ -11,6 +11,10 @@ final class ChallengeViewModel {
     var streak: Int = 0
     var activeDays: Set<Int> = []
     var recentlyCompleted: [Challenge] = []
+    var sessionHistory: [SessionHistoryEntry] = []
+    var hasSessionToday: Bool = false
+    var firstSessionMonth: Date? = nil
+    var sessionActiveDays: [String: Set<Int>] = [:]
 
     private let activeKey = "kiwifruit.activeChallenges"
     private let completedKey = "kiwifruit.completedChallenges"
@@ -56,6 +60,7 @@ final class ChallengeViewModel {
             async let historyTask = AppAPI.shared.fetchSessionHistory()
             async let completedTask = AppAPI.shared.fetchCompletedBooks()
             let (history, completedBooks) = try await (historyTask, completedTask)
+            sessionHistory = history
             applyProgress(history: history, completedBooks: completedBooks)
             checkExpiry()
             promoteCompleted()
@@ -140,33 +145,57 @@ final class ChallengeViewModel {
 
         // Collect unique calendar days (as date components) that had sessions
         var sessionDays: Set<DateComponents> = []
+        var activeDaysByMonth: [String: Set<Int>] = [:]
+        var earliestDate: Date?
+
         for entry in history {
             guard let date = iso.date(from: entry.endedAt) else { continue }
             let components = calendar.dateComponents([.year, .month, .day], from: date)
             sessionDays.insert(components)
+            if earliestDate == nil || date < earliestDate! {
+                earliestDate = date
+            }
+            if let year = components.year, let month = components.month, let day = components.day {
+                let key = "\(year)-\(month)"
+                activeDaysByMonth[key, default: []].insert(day)
+            }
+        }
+
+        sessionActiveDays = activeDaysByMonth
+
+        // First session month
+        if let earliest = earliestDate {
+            firstSessionMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: earliest))
+        } else {
+            firstSessionMonth = nil
         }
 
         // Active days in current month (day numbers)
         let currentYear = calendar.component(.year, from: now)
         let currentMonth = calendar.component(.month, from: now)
-        activeDays = Set(sessionDays.compactMap { dc in
-            guard dc.year == currentYear, dc.month == currentMonth else { return nil }
-            return dc.day
-        })
+        activeDays = activeDaysByMonth["\(currentYear)-\(currentMonth)"] ?? []
 
-        // Streak: count consecutive days ending today that have sessions
+        // Today check
+        let todayDC = calendar.dateComponents([.year, .month, .day], from: now)
+        hasSessionToday = sessionDays.contains(todayDC)
+
+        // Streak: count consecutive days ending yesterday, then check today
         var streakCount = 0
-        var checkDate = calendar.startOfDay(for: now)
-        while true {
-            let dc = calendar.dateComponents([.year, .month, .day], from: checkDate)
-            if sessionDays.contains(dc) {
-                streakCount += 1
-                guard let previous = calendar.date(byAdding: .day, value: -1, to: checkDate) else { break }
-                checkDate = previous
-            } else {
-                break
+        let todayStart = calendar.startOfDay(for: now)
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: todayStart) {
+            var checkDate = yesterday
+            while true {
+                let dc = calendar.dateComponents([.year, .month, .day], from: checkDate)
+                if sessionDays.contains(dc) {
+                    streakCount += 1
+                    guard let previous = calendar.date(byAdding: .day, value: -1, to: checkDate) else { break }
+                    checkDate = previous
+                } else {
+                    break
+                }
             }
         }
+        if hasSessionToday { streakCount += 1 }
         streak = streakCount
     }
 

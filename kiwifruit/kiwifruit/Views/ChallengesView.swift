@@ -40,7 +40,7 @@ struct ChallengesView: View {
                 .font(.system(size: 36, weight: .black))
                 .foregroundColor(ChallengesDesign.uiText)
             Spacer()
-            NavigationLink(destination: StreakTrackerView(streakDays: viewModel.streak, activeDays: viewModel.activeDays)) {
+            NavigationLink(destination: StreakTrackerView(streakDays: viewModel.streak, activeDays: viewModel.activeDays, hasSessionToday: viewModel.hasSessionToday, firstSessionMonth: viewModel.firstSessionMonth, sessionActiveDays: viewModel.sessionActiveDays)) {
                 streakBadge
             }
             .buttonStyle(.plain)
@@ -65,7 +65,7 @@ struct ChallengesView: View {
                 .foregroundColor(ChallengesDesign.uiText)
         }
         .frame(width: 80, height: 80)
-        .background(ChallengesDesign.kiwiLight)
+        .background(viewModel.hasSessionToday ? ChallengesDesign.kiwi : ChallengesDesign.kiwiLight)
         .clipShape(Circle())
         .overlay(Circle().stroke(ChallengesDesign.border, lineWidth: 2))
         .sketchShadowCircle()
