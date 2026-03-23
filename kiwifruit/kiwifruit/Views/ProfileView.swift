@@ -53,15 +53,7 @@ struct ProfileView: View {
         .background(Color.white)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showingSettings) {
-            NavigationStack {
-                Text("Settings")
-                    .navigationTitle("Settings")
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") { showingSettings = false }
-                        }
-                    }
-            }
+            SettingsView()
         }
     }
 

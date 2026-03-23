@@ -7,9 +7,7 @@ struct kiwifruitApp: App {
     private let postsStore = PostsStore()
     private let sessionStore = SessionStore()
     private let moodSessionStore = MoodSessionStore()
-    private let userPreferencesStore = UserPreferencesStore(
-        repository: UserDefaultsUserPreferencesRepository()
-    )
+    private let userPreferencesStore = UserPreferencesStore()
     private let readingSessionStore = ReadingSessionStore()
     private let challengeViewModel = ChallengeViewModel()
 
