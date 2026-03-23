@@ -100,6 +100,13 @@ CREATE TABLE catalog_books (
     author TEXT NOT NULL CHECK (LENGTH(author) <= 512),
     genre TEXT NOT NULL DEFAULT '' CHECK (LENGTH(genre) <= 128),
     cover_url TEXT NOT NULL CHECK (LENGTH(cover_url) <= 1024)
+-- Books the user has marked as fully completed
+CREATE TABLE completed_books (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    book_title TEXT NOT NULL CHECK (LENGTH(book_title) <= 256),
+    completed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
 );
 
 -- Epub uploads table (tracks uploaded epub files and parsing state)
