@@ -3,14 +3,11 @@ import SwiftUI
 struct StreakTrackerView: View {
     let streakDays: Int
     let activeDays: Set<Int>
-    let sessionHistory: [SessionHistoryEntry]
+    let hasSessionToday: Bool
+    let firstSessionMonth: Date?
+    let sessionActiveDays: [String: Set<Int>]
 
     @State private var displayMonth: Date = Date()
-
-    private var hasCompletedTodaysSession: Bool {
-        let today = Calendar.current.component(.day, from: Date())
-        return activeDays.contains(today)
-    }
 
     private var monthYearString: String {
         let formatter = DateFormatter()
@@ -19,48 +16,17 @@ struct StreakTrackerView: View {
     }
 
     private var canGoBack: Bool {
-        let calendar = Calendar.current
-        let firstSessionMonth = firstSessionMonthDate
-        guard let firstSessionMonth = firstSessionMonth else { return false }
-        return calendar.compare(displayMonth, to: firstSessionMonth, toGranularity: .month) == .orderedDescending // displayMonth after firstSessionMonth
-    }
-
-    private var firstSessionMonthDate: Date? {
-        let iso = ISO8601DateFormatter()
-        let calendar = Calendar.current
-        var earliestDate: Date?
-
-        for entry in sessionHistory {
-            guard let date = iso.date(from: entry.endedAt) else { continue }
-            if earliestDate == nil || date < earliestDate! {
-                earliestDate = date
-            }
-        }
-
-        guard let earliestDate = earliestDate else { return nil }
-        return calendar.date(from: calendar.dateComponents([.year, .month], from: earliestDate))
+        guard let firstSessionMonth else { return false }
+        return calendar.compare(displayMonth, to: firstSessionMonth, toGranularity: .month) == .orderedDescending
     }
 
     private func activeDaysForMonth(_ month: Date) -> Set<Int> {
-        let iso = ISO8601DateFormatter()
-        let calendar = Calendar.current
-        let monthComponents = calendar.dateComponents([.year, .month], from: month)
-
-        var activeDaysInMonth: Set<Int> = []
-        for entry in sessionHistory {
-            guard let date = iso.date(from: entry.endedAt) else { continue }
-            let components = calendar.dateComponents([.year, .month, .day], from: date)
-            if components.year == monthComponents.year && components.month == monthComponents.month {
-                if let day = components.day {
-                    activeDaysInMonth.insert(day)
-                }
-            }
-        }
-        return activeDaysInMonth
+        let year = calendar.component(.year, from: month)
+        let monthNum = calendar.component(.month, from: month)
+        return sessionActiveDays["\(year)-\(monthNum)"] ?? []
     }
 
     private func calendarDaysForMonth(_ month: Date) -> [Int?] {
-        let calendar = Calendar.current
         guard
             let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: month)),
             let range = calendar.range(of: .day, in: .month, for: month)
@@ -78,7 +44,7 @@ struct StreakTrackerView: View {
             VStack(spacing: 32) {
                 // Streak circle
                 Circle()
-                    .fill(hasCompletedTodaysSession ? Color(hex: "A3C985") : Color(hex: "E6F0DC"))
+                    .fill(hasSessionToday ? Color(hex: "A3C985") : Color(hex: "E6F0DC"))
                     .frame(width: 200, height: 200)
                     .overlay(Circle().stroke(Color(hex: "2D3748"), lineWidth: 2))
                     .sketchShadowCircle()
@@ -101,8 +67,7 @@ struct StreakTrackerView: View {
                 VStack(spacing: 16) {
                     // Month navigation
                     HStack {
-                        Button(action: { 
-                            let calendar = Calendar.current
+                        Button(action: {
                             if let previousMonth = calendar.date(byAdding: .month, value: -1, to: displayMonth) {
                                 displayMonth = previousMonth
                             }
@@ -120,7 +85,6 @@ struct StreakTrackerView: View {
                             .frame(maxWidth: .infinity)
 
                         Button(action: {
-                            let calendar = Calendar.current
                             let now = Date()
                             if let nextMonth = calendar.date(byAdding: .month, value: 1, to: displayMonth),
                                calendar.compare(nextMonth, to: now, toGranularity: .month) != .orderedDescending {
@@ -179,36 +143,9 @@ struct StreakTrackerView: View {
         StreakTrackerView(
             streakDays: 5,
             activeDays: [3, 11, 12, 17],
-            sessionHistory: [
-                SessionHistoryEntry(
-                    id: "1",
-                    bookTitle: "Test",
-                    durationSeconds: 1800,
-                    pagesRead: 10,
-                    endedAt: "2026-03-03T10:30:00Z"
-                ),
-                SessionHistoryEntry(
-                    id: "2",
-                    bookTitle: "Test",
-                    durationSeconds: 1800,
-                    pagesRead: 10,
-                    endedAt: "2026-03-11T10:30:00Z"
-                ),
-                SessionHistoryEntry(
-                    id: "3",
-                    bookTitle: "Test",
-                    durationSeconds: 1800,
-                    pagesRead: 10,
-                    endedAt: "2026-03-12T10:30:00Z"
-                ),
-                SessionHistoryEntry(
-                    id: "4",
-                    bookTitle: "Test",
-                    durationSeconds: 1800,
-                    pagesRead: 10,
-                    endedAt: "2026-03-17T10:30:00Z"
-                )
-            ]
+            hasSessionToday: false,
+            firstSessionMonth: Calendar.current.date(from: DateComponents(year: 2026, month: 3)),
+            sessionActiveDays: ["2026-3": [3, 11, 12, 17]]
         )
     }
 }
