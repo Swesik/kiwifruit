@@ -11,6 +11,7 @@ final class ChallengeViewModel {
     var streak: Int = 0
     var activeDays: Set<Int> = []
     var recentlyCompleted: [Challenge] = []
+    var sessionHistory: [SessionHistoryEntry] = []
 
     private let activeKey = "kiwifruit.activeChallenges"
     private let completedKey = "kiwifruit.completedChallenges"
@@ -56,6 +57,7 @@ final class ChallengeViewModel {
             async let historyTask = AppAPI.shared.fetchSessionHistory()
             async let completedTask = AppAPI.shared.fetchCompletedBooks()
             let (history, completedBooks) = try await (historyTask, completedTask)
+            sessionHistory = history
             applyProgress(history: history, completedBooks: completedBooks)
             checkExpiry()
             promoteCompleted()
@@ -154,19 +156,32 @@ final class ChallengeViewModel {
             return dc.day
         })
 
-        // Streak: count consecutive days ending today that have sessions
+        // Streak: count consecutive days ending yesterday, then check today
+        // This allows the streak count to persist even if today has no session yet
         var streakCount = 0
-        var checkDate = calendar.startOfDay(for: now)
-        while true {
-            let dc = calendar.dateComponents([.year, .month, .day], from: checkDate)
-            if sessionDays.contains(dc) {
-                streakCount += 1
-                guard let previous = calendar.date(byAdding: .day, value: -1, to: checkDate) else { break }
-                checkDate = previous
-            } else {
-                break
+        let todayStart = calendar.startOfDay(for: now)
+        
+        // Count consecutive days starting from yesterday going backwards
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: todayStart) {
+            var checkDate = yesterday
+            while true {
+                let dc = calendar.dateComponents([.year, .month, .day], from: checkDate)
+                if sessionDays.contains(dc) {
+                    streakCount += 1
+                    guard let previous = calendar.date(byAdding: .day, value: -1, to: checkDate) else { break }
+                    checkDate = previous
+                } else {
+                    break
+                }
             }
         }
+        
+        // If today has a session, add it to the streak
+        let todayDC = calendar.dateComponents([.year, .month, .day], from: now)
+        if sessionDays.contains(todayDC) {
+            streakCount += 1
+        }
+        
         streak = streakCount
     }
 

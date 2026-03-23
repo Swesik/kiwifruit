@@ -40,7 +40,7 @@ struct ChallengesView: View {
                 .font(.system(size: 36, weight: .black))
                 .foregroundColor(ChallengesDesign.uiText)
             Spacer()
-            NavigationLink(destination: StreakTrackerView(streakDays: viewModel.streak, activeDays: viewModel.activeDays)) {
+            NavigationLink(destination: StreakTrackerView(streakDays: viewModel.streak, activeDays: viewModel.activeDays, sessionHistory: viewModel.sessionHistory)) {
                 streakBadge
             }
             .buttonStyle(.plain)
@@ -65,11 +65,16 @@ struct ChallengesView: View {
                 .foregroundColor(ChallengesDesign.uiText)
         }
         .frame(width: 80, height: 80)
-        .background(ChallengesDesign.kiwiLight)
+        .background(hasCompletedTodaysSession ? ChallengesDesign.kiwi : ChallengesDesign.kiwiLight)
         .clipShape(Circle())
         .overlay(Circle().stroke(ChallengesDesign.border, lineWidth: 2))
         .sketchShadowCircle()
         .rotationEffect(.degrees(2))
+    }
+
+    private var hasCompletedTodaysSession: Bool {
+        let today = Calendar.current.component(.day, from: Date())
+        return viewModel.activeDays.contains(today)
     }
 
     // MARK: - Your Challenges
