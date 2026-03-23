@@ -2,9 +2,7 @@ import SwiftUI
 
 struct StreakTrackerView: View {
     let streakDays: Int
-
-    // Mock: days of current month that had reading activity
-    private let activeDays: Set<Int> = [3, 11, 12, 17]
+    let activeDays: Set<Int>
 
     private var calendarDays: [Int?] {
         let calendar = Calendar.current
@@ -84,6 +82,6 @@ struct StreakTrackerView: View {
 
 #Preview {
     NavigationStack {
-        StreakTrackerView(streakDays: 1)
+        StreakTrackerView(streakDays: 5, activeDays: [3, 11, 12, 17])
     }
 }
