@@ -1,16 +1,8 @@
 import SwiftUI
 
-struct Challenge: Identifiable {
-    let id = UUID()
-    let title: String
-    let subtitle: String
-    let description: String
-    let progress: Double
-    let progressLabel: String
-}
-
 struct ChallengeDetailView: View {
     let challenge: Challenge
+    let viewModel: ChallengeViewModel
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -19,8 +11,9 @@ struct ChallengeDetailView: View {
                 headerSection
                 VStack(alignment: .leading, spacing: 40) {
                     descriptionSection
+                    timeWindowSection
                     progressSection
-                    aiFeedbackSection
+                    actionSection
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 48)
@@ -121,34 +114,77 @@ struct ChallengeDetailView: View {
             .frame(height: 14)
     }
 
-    // MARK: - AI Feedback
+    // MARK: - Time Window
 
-    private var aiFeedbackSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Adaptive AI\nFeedback")
+    private var timeWindowSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Time window")
                 .font(.title2).fontWeight(.black)
                 .foregroundColor(Color(hex: "2D3748"))
+            HStack(spacing: 12) {
+                Text(challenge.windowLabel.isEmpty ? "No expiry" : challenge.windowLabel)
+                    .font(.subheadline).fontWeight(.semibold)
+                    .foregroundColor(Color(hex: "2D3748"))
+                if let remaining = challenge.timeRemainingLabel {
+                    Text(remaining)
+                        .font(.caption).fontWeight(.black)
+                        .foregroundColor(challenge.isExpired ? Color.red : Color(hex: "A3C985"))
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(challenge.isExpired ? Color.red.opacity(0.1) : Color(hex: "A3C985").opacity(0.15))
+                        )
+                }
+            }
+        }
+    }
 
-            Text("\"You're making great progress! Try reading 15 minutes before bed tonight to keep the momentum going.\"")
-                .font(.subheadline).fontWeight(.bold)
-                .italic()
-                .foregroundColor(Color(hex: "2D3748"))
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(hex: "E6F0DC"))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "2D3748"), lineWidth: 2))
-                .sketchShadow()
+    // MARK: - Action
+
+    @ViewBuilder
+    private var actionSection: some View {
+        switch challenge.state {
+        case .available:
+            Button("Join challenge") {
+                viewModel.accept(challenge)
+                dismiss()
+            }
+            .font(.subheadline).fontWeight(.bold)
+            .foregroundColor(Color(hex: "2D3748"))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color(hex: "A3C985"))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "2D3748"), lineWidth: 1.5))
+            .disabled(!viewModel.canAcceptChallenge)
+        case .accepted:
+            Button("Abandon challenge") {
+                viewModel.abandon(challenge)
+                dismiss()
+            }
+            .font(.subheadline).fontWeight(.bold)
+            .foregroundColor(Color(hex: "2D3748").opacity(0.6))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color(hex: "2D3748").opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "2D3748").opacity(0.3), lineWidth: 1.5))
+        case .completed:
+            EmptyView()
         }
     }
 }
 
 #Preview {
-    ChallengeDetailView(challenge: Challenge(
-        title: "Read 5 books in a month",
-        subtitle: "Sci-Fi Edition",
-        description: "Dive deep into the magical realms and complete 5 books within this month. Your consistency will unlock special badges!",
-        progress: 0.6,
-        progressLabel: "3/5 Books"
-    ))
+    ChallengeDetailView(
+        challenge: Challenge(
+            id: UUID(),
+            title: "Read 5 books in a month",
+            description: "Complete 5 books within a month.",
+            goalUnit: "books/month",
+            goalCount: 5,
+            progress: 0.4
+        ),
+        viewModel: ChallengeViewModel()
+    )
 }

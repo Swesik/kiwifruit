@@ -1174,6 +1174,92 @@ def leave_reading_session(session_id):
     return jsonify({'status': 'ok'})
 
 
+@app.route('/session-history', methods=['GET'])
+def get_session_history():
+    """Return completed reading sessions for the authenticated user.
+
+    **GET** ``/session-history``
+
+    Used by the iOS client to calculate challenge progress (minutes read,
+    books completed, pages read) over rolling time windows.
+
+    :returns: JSON list of session history objects ordered by most recent first.
+    :status 200: List returned (may be empty).
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    rows = db.execute(
+        'SELECT id, book_title, duration_seconds, pages_read, ended_at '
+        'FROM session_history WHERE username = ? ORDER BY ended_at DESC',
+        (username,)
+    ).fetchall()
+    return jsonify([{
+        'id': r['id'],
+        'book_title': r['book_title'],
+        'duration_seconds': r['duration_seconds'],
+        'pages_read': r['pages_read'],
+        'ended_at': _to_iso(r['ended_at'])
+    } for r in rows])
+
+
+@app.route('/completed-books', methods=['POST'])
+def add_completed_book():
+    """Mark a book as fully completed by the authenticated user.
+
+    **POST** ``/completed-books``
+
+    :json string book_title: Title of the completed book (required).
+    :returns: JSON object with the new record id and book_title.
+    :status 201: Book recorded.
+    :status 400: Missing or empty book_title.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    data = request.get_json(silent=True) or {}
+    book_title = (data.get('book_title') or '').strip()
+    if not book_title:
+        abort(400)
+    row_id = uuid.uuid4().hex
+    db = get_db()
+    db.execute(
+        'INSERT INTO completed_books (id, username, book_title) VALUES (?, ?, ?)',
+        (row_id, username, book_title)
+    )
+    db.commit()
+    return jsonify({'id': row_id, 'book_title': book_title}), 201
+
+
+@app.route('/completed-books', methods=['GET'])
+def get_completed_books():
+    """Return books the authenticated user has marked as completed.
+
+    **GET** ``/completed-books``
+
+    :returns: JSON list ordered by most recent completion first.
+    :status 200: List returned (may be empty).
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    rows = db.execute(
+        'SELECT id, book_title, completed_at FROM completed_books '
+        'WHERE username = ? ORDER BY completed_at DESC',
+        (username,)
+    ).fetchall()
+    return jsonify([{
+        'id': r['id'],
+        'book_title': r['book_title'],
+        'completed_at': _to_iso(r['completed_at'])
+    } for r in rows])
+
+
 @app.route('/api/epub', methods=['POST'])
 def epub_upload():
     """Upload an epub file for background parsing.
