@@ -18,6 +18,9 @@ struct ChallengesView: View {
                 headerSection
                 VStack(alignment: .leading, spacing: 32) {
                     yourChallengesSection
+                    if !viewModel.completedChallenges.isEmpty {
+                        completedChallengesSection
+                    }
                     discoverMoreSection
                 }
                 .padding(.horizontal, 24)
@@ -147,6 +150,52 @@ struct ChallengesView: View {
             .frame(height: 8)
     }
 
+    // MARK: - Completed
+
+    private var completedChallengesSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Completed")
+                .font(.title2).fontWeight(.black)
+                .foregroundColor(ChallengesDesign.uiText)
+
+            VStack(spacing: 12) {
+                ForEach(viewModel.completedChallenges) { challenge in
+                    NavigationLink(destination: ChallengeDetailView(challenge: challenge, viewModel: viewModel)) {
+                        completedChallengeCard(challenge: challenge)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func completedChallengeCard(challenge: Challenge) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(challenge.title)
+                    .font(.subheadline).fontWeight(.bold)
+                    .foregroundColor(ChallengesDesign.uiText)
+                Text("+\(challenge.rewardXP) XP")
+                    .font(.caption).fontWeight(.semibold)
+                    .foregroundColor(ChallengesDesign.uiText.opacity(0.6))
+            }
+            Spacer()
+            Text("Done")
+                .font(.caption).fontWeight(.black)
+                .foregroundColor(ChallengesDesign.uiText)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(ChallengesDesign.kiwi)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(ChallengesDesign.border, lineWidth: 2))
+        }
+        .padding(16)
+        .background(ChallengesDesign.kiwiLight)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(ChallengesDesign.border, lineWidth: 2))
+        .sketchShadow()
+    }
+
     // MARK: - Discover More
 
     private var discoverMoreSection: some View {
@@ -157,34 +206,26 @@ struct ChallengesView: View {
 
             VStack(spacing: 12) {
                 ForEach(viewModel.discoverChallenges) { challenge in
-                    discoverCard(challenge: challenge)
+                    NavigationLink(destination: ChallengeDetailView(challenge: challenge, viewModel: viewModel)) {
+                        discoverCard(challenge: challenge)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
     }
 
     private func discoverCard(challenge: Challenge) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(challenge.title)
-                    .font(.subheadline).fontWeight(.bold)
-                    .foregroundColor(ChallengesDesign.uiText)
-                Text(challenge.description)
-                    .font(.caption).fontWeight(.semibold)
-                    .foregroundColor(ChallengesDesign.uiText)
-            }
-
-            Button("JOIN NOW") { viewModel.accept(challenge) }
-                .font(.caption).fontWeight(.black)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(challenge.title)
+                .font(.subheadline).fontWeight(.bold)
                 .foregroundColor(ChallengesDesign.uiText)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(ChallengesDesign.kiwi)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(ChallengesDesign.border, lineWidth: 2))
-                .sketchShadow()
-                .disabled(viewModel.activeChallenges.count >= 3)
+            Text(challenge.description)
+                .font(.caption).fontWeight(.semibold)
+                .foregroundColor(ChallengesDesign.uiText)
+                .lineLimit(2)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background(ChallengesDesign.brownCard)
         .clipShape(RoundedRectangle(cornerRadius: 8))

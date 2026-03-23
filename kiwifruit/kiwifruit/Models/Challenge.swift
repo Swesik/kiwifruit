@@ -54,6 +54,40 @@ struct Challenge: Identifiable, Codable, Equatable {
         self.joinedAt = joinedAt
     }
 
+    var expiresAt: Date? {
+        guard let joined = joinedAt else { return nil }
+        let calendar = Calendar.current
+        let lower = goalUnit.lowercased()
+        if lower.contains("week") {
+            return calendar.dateInterval(of: .weekOfYear, for: joined)?.end
+        } else if lower.contains("month") {
+            return calendar.dateInterval(of: .month, for: joined)?.end
+        }
+        return nil
+    }
+
+    var timeRemainingLabel: String? {
+        guard let expiry = expiresAt else { return nil }
+        let now = Date()
+        guard expiry > now else { return "Expired" }
+        let components = Calendar.current.dateComponents([.day, .hour], from: now, to: expiry)
+        if let d = components.day, d > 0 { return "\(d)d left" }
+        if let h = components.hour, h > 0 { return "\(h)h left" }
+        return "Expires soon"
+    }
+
+    var isExpired: Bool {
+        guard let expiry = expiresAt else { return false }
+        return expiry < Date()
+    }
+
+    var windowLabel: String {
+        let lower = goalUnit.lowercased()
+        if lower.contains("week") { return "This week" }
+        if lower.contains("month") { return "This month" }
+        return ""
+    }
+
     var subtitle: String {
         let lower = goalUnit.lowercased()
         if lower.contains("minute") { return "Consistency is key" }

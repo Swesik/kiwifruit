@@ -10,6 +10,7 @@ final class ChallengeViewModel {
     var weatherChallenge: Challenge? = nil
     var streak: Int = 0
     var activeDays: Set<Int> = []
+    var recentlyCompleted: [Challenge] = []
 
     private let activeKey = "kiwifruit.activeChallenges"
     private let completedKey = "kiwifruit.completedChallenges"
@@ -56,6 +57,7 @@ final class ChallengeViewModel {
             async let completedTask = AppAPI.shared.fetchCompletedBooks()
             let (history, completedBooks) = try await (historyTask, completedTask)
             applyProgress(history: history, completedBooks: completedBooks)
+            checkExpiry()
             promoteCompleted()
             updateStreak(from: history)
             persistState()
@@ -71,31 +73,40 @@ final class ChallengeViewModel {
         for idx in activeChallenges.indices {
             let c = activeChallenges[idx]
             let since = c.joinedAt ?? Date.distantPast
+            let until = c.expiresAt ?? Date()
             let goal = max(1, c.goalCount)
             let lower = c.goalUnit.lowercased()
 
-            let sinceHistory = history.filter { entry in
+            let windowHistory = history.filter { entry in
                 guard let date = iso.date(from: entry.endedAt) else { return false }
-                return date >= since
+                return date >= since && date <= until
             }
-            let sinceCompleted = completedBooks.filter { entry in
+            let windowCompleted = completedBooks.filter { entry in
                 guard let date = iso.date(from: entry.completedAt) else { return false }
-                return date >= since
+                return date >= since && date <= until
             }
 
             let newProgress: Double
             if lower.contains("minute") {
-                let minutes = sinceHistory.reduce(0) { $0 + $1.durationSeconds / 60 }
+                let minutes = windowHistory.reduce(0) { $0 + $1.durationSeconds / 60 }
                 newProgress = min(1.0, Double(minutes) / Double(goal))
             } else if lower.contains("book") {
-                newProgress = min(1.0, Double(sinceCompleted.count) / Double(goal))
+                newProgress = min(1.0, Double(windowCompleted.count) / Double(goal))
             } else if lower.contains("page") {
-                let pages = sinceHistory.reduce(0) { $0 + ($1.pagesRead ?? 0) }
+                let pages = windowHistory.reduce(0) { $0 + ($1.pagesRead ?? 0) }
                 newProgress = min(1.0, Double(pages) / Double(goal))
             } else {
                 newProgress = c.progress
             }
             activeChallenges[idx].progress = newProgress
+        }
+    }
+
+    private func checkExpiry() {
+        let now = Date()
+        activeChallenges.removeAll { c in
+            guard let expiry = c.expiresAt else { return false }
+            return expiry < now && c.progress < 1.0
         }
     }
 
@@ -107,8 +118,17 @@ final class ChallengeViewModel {
                 c.state = .completed
                 c.progress = 1.0
                 completedChallenges.append(c)
+                recentlyCompleted.append(c)
             }
         }
+    }
+
+    func clearRecentlyCompleted() {
+        recentlyCompleted = []
+    }
+
+    var canAcceptChallenge: Bool {
+        activeChallenges.count < 3
     }
 
     // MARK: - Streak

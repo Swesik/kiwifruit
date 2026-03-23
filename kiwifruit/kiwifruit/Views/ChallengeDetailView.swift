@@ -11,8 +11,9 @@ struct ChallengeDetailView: View {
                 headerSection
                 VStack(alignment: .leading, spacing: 40) {
                     descriptionSection
+                    timeWindowSection
                     progressSection
-                    abandonSection
+                    actionSection
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 48)
@@ -113,20 +114,64 @@ struct ChallengeDetailView: View {
             .frame(height: 14)
     }
 
-    // MARK: - Abandon
+    // MARK: - Time Window
 
-    private var abandonSection: some View {
-        Button("Abandon challenge") {
-            viewModel.abandon(challenge)
-            dismiss()
+    private var timeWindowSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Time window")
+                .font(.title2).fontWeight(.black)
+                .foregroundColor(Color(hex: "2D3748"))
+            HStack(spacing: 12) {
+                Text(challenge.windowLabel.isEmpty ? "No expiry" : challenge.windowLabel)
+                    .font(.subheadline).fontWeight(.semibold)
+                    .foregroundColor(Color(hex: "2D3748"))
+                if let remaining = challenge.timeRemainingLabel {
+                    Text(remaining)
+                        .font(.caption).fontWeight(.black)
+                        .foregroundColor(challenge.isExpired ? Color.red : Color(hex: "A3C985"))
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(challenge.isExpired ? Color.red.opacity(0.1) : Color(hex: "A3C985").opacity(0.15))
+                        )
+                }
+            }
         }
-        .font(.subheadline).fontWeight(.bold)
-        .foregroundColor(Color(hex: "2D3748").opacity(0.6))
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .background(Color(hex: "2D3748").opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "2D3748").opacity(0.3), lineWidth: 1.5))
+    }
+
+    // MARK: - Action
+
+    @ViewBuilder
+    private var actionSection: some View {
+        switch challenge.state {
+        case .available:
+            Button("Join challenge") {
+                viewModel.accept(challenge)
+                dismiss()
+            }
+            .font(.subheadline).fontWeight(.bold)
+            .foregroundColor(Color(hex: "2D3748"))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color(hex: "A3C985"))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "2D3748"), lineWidth: 1.5))
+            .disabled(!viewModel.canAcceptChallenge)
+        case .accepted:
+            Button("Abandon challenge") {
+                viewModel.abandon(challenge)
+                dismiss()
+            }
+            .font(.subheadline).fontWeight(.bold)
+            .foregroundColor(Color(hex: "2D3748").opacity(0.6))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color(hex: "2D3748").opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "2D3748").opacity(0.3), lineWidth: 1.5))
+        case .completed:
+            EmptyView()
+        }
     }
 }
 

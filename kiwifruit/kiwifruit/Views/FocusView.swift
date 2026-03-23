@@ -685,6 +685,7 @@ struct FocusView: View {
         HStack {
             Button("close") {
                 sessionStore.closeCompletion()
+                challengeViewModel.clearRecentlyCompleted()
             }
             .font(.headline)
             .fontWeight(.bold)
@@ -738,26 +739,37 @@ struct FocusView: View {
     }
 
     private var challengeProgressSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        let allChallenges = challengeViewModel.activeChallenges + challengeViewModel.recentlyCompleted
+        return VStack(alignment: .leading, spacing: 16) {
             Text("Challenge Progress:")
                 .font(.headline)
                 .fontWeight(.black)
                 .foregroundStyle(FocusDesign.handDrawnBorder)
 
-            if challengeViewModel.activeChallenges.isEmpty {
+            if allChallenges.isEmpty {
                 Text("No active challenges — join one in the Challenges tab!")
                     .font(.subheadline)
                     .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.5))
                     .padding(.leading, 4)
             } else {
                 VStack(spacing: 12) {
-                    ForEach(challengeViewModel.activeChallenges) { challenge in
+                    ForEach(allChallenges) { challenge in
+                        let isCompleted = challenge.state == .completed
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(challenge.title)
-                                .font(.subheadline)
-                                .fontWeight(.bold)
-                                .foregroundStyle(FocusDesign.handDrawnBorder)
-                                    Rectangle()
+                            HStack {
+                                Text(challenge.title)
+                                    .font(.subheadline)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(FocusDesign.handDrawnBorder)
+                                Spacer()
+                                if isCompleted {
+                                    Text("Completed!")
+                                        .font(.caption)
+                                        .fontWeight(.black)
+                                        .foregroundStyle(FocusDesign.kiwi)
+                                }
+                            }
+                            Rectangle()
                                 .fill(FocusDesign.handDrawnBorder.opacity(0.15))
                                 .frame(height: 6)
                                 .overlay(alignment: .leading) {
@@ -775,8 +787,11 @@ struct FocusView: View {
                         .padding(12)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.white)
-                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(FocusDesign.handDrawnBorder, lineWidth: 2))
+                                .fill(isCompleted ? FocusDesign.kiwi.opacity(0.08) : Color.white)
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(
+                                    isCompleted ? FocusDesign.kiwi : FocusDesign.handDrawnBorder,
+                                    lineWidth: isCompleted ? 2 : 2
+                                ))
                         )
                     }
                 }

@@ -24,8 +24,11 @@ final class WeatherChallengeService: NSObject, CLLocationManagerDelegate {
         let location = await requestLocation()
         let lat = location?.coordinate.latitude ?? defaultLat
         let lon = location?.coordinate.longitude ?? defaultLon
+        let locationLabel = location != nil
+            ? String(format: "%.2f, %.2f", lat, lon)
+            : String(format: "%.2f, %.2f (default)", lat, lon)
         guard let condition = await fetchWeather(lat: lat, lon: lon) else { return nil }
-        return makeChallenge(from: condition)
+        return makeChallenge(from: condition, locationLabel: locationLabel)
     }
 
 
@@ -105,7 +108,7 @@ final class WeatherChallengeService: NSObject, CLLocationManagerDelegate {
     // 56-57=freezing drizzle, 61-65=rain, 66-67=freezing rain,
     // 71-77=snow, 80-82=showers, 85-86=snow showers, 95=thunderstorm, 96-99=hail
 
-    private func weatherLabel(for code: Int, temp: Double) -> String {
+    private func weatherLabel(for code: Int, temp: Double, locationLabel: String) -> String {
         let tempStr = "\(Int(temp.rounded()))°C"
         let condition: String
         switch code {
@@ -132,11 +135,11 @@ final class WeatherChallengeService: NSObject, CLLocationManagerDelegate {
         case 96...99:    condition = "Thunderstorm with hail"
         default:         condition = "Mixed conditions"
         }
-        return "Currently: \(condition), \(tempStr)."
+        return "Currently: \(condition), \(tempStr). [loc: \(locationLabel)]"
     }
 
-    private func makeChallenge(from c: WeatherCondition) -> Challenge? {
-        let weather = weatherLabel(for: c.weatherCode, temp: c.temperatureCelsius)
+    private func makeChallenge(from c: WeatherCondition, locationLabel: String) -> Challenge? {
+        let weather = weatherLabel(for: c.weatherCode, temp: c.temperatureCelsius, locationLabel: locationLabel)
         let code = c.weatherCode
         let tempF = c.temperatureCelsius * 9 / 5 + 32
 
