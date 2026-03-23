@@ -11,7 +11,7 @@ import ebooklib
 from ebooklib import epub as epub_lib
 from bs4 import BeautifulSoup
 
-from recommendations import rank_recommendations
+from .recommendations import rank_recommendations
 
 BASE_DIR = os.path.dirname(__file__)
 DB_PATH = os.path.join(BASE_DIR, 'kiwifruit.db')
@@ -435,7 +435,7 @@ def get_recommendations():
         return jsonify([])
 
     history = db.execute(
-        'SELECT book_title FROM session_history WHERE username = ?',
+        'SELECT book_title, duration_seconds, pages_read FROM session_history WHERE username = ?',
         (username,),
     ).fetchall()
 
