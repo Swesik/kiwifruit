@@ -25,9 +25,9 @@ final class RecommendationsStore {
         loadError = nil
     }
 
-    /// Fetches up to ``limit`` recommendations (default 8). Skips network if data exists unless ``force``.
-    func load(limit: Int = 8, force: Bool = false) async {
-        if !items.isEmpty && !force { return }
+    /// Fetches up to ``limit`` recommendations (default 8). Skips network if data exists unless ``refreshData``.
+    func load(limit: Int = 8, refreshData: Bool = false) async {
+        if !items.isEmpty && !refreshData { return }
         isLoading = true
         loadError = nil
         defer { isLoading = false }

@@ -33,7 +33,7 @@ struct ContentView: View {
             if new != nil {
                 selection = 2
                 Task { await postsStore.loadInitial(force: true) }
-                Task { await recommendationsStore.load(force: true) }
+                Task { await recommendationsStore.load(refreshData: true) }
             } else {
                 recommendationsStore.reset()
             }
@@ -42,7 +42,7 @@ struct ContentView: View {
             if valid && session.userId != nil {
                 selection = 2
                 Task { await postsStore.loadInitial(force: true) }
-                Task { await recommendationsStore.load(force: true) }
+                Task { await recommendationsStore.load(refreshData: true) }
                 readingSessionStore.loadFriendSessions()
             }
         }
