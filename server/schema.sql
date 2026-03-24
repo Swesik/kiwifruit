@@ -102,6 +102,14 @@ CREATE TABLE completed_books (
     FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
 );
 
+-- User reading preferences (one row per user, upserted on save)
+CREATE TABLE user_preferences (
+    username TEXT PRIMARY KEY CHECK (LENGTH(username) <= 20),
+    daily_goal_minutes INTEGER NOT NULL DEFAULT 30,
+    preferred_genres TEXT NOT NULL DEFAULT '[]',
+    FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
+);
+
 -- Epub uploads table (tracks uploaded epub files and parsing state)
 CREATE TABLE epubs (
     epubid INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -2,93 +2,50 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// Abstraction for loading and saving user preferences from a backing store.
-protocol UserPreferencesRepository {
-    func load() async throws -> UserPreferences
-    func save(_ preferences: UserPreferences) async throws
-}
-
-/// User preferences repository backed by UserDefaults.
-struct UserDefaultsUserPreferencesRepository: UserPreferencesRepository {
-    private let defaults: UserDefaults
-    private let defaultSessionLengthKey = "kiwifruit.preferences.defaultSessionLengthMinutes"
-
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-    }
-
-    /// Loads preferences from UserDefaults, falling back to the global default.
-    func load() async throws -> UserPreferences {
-        let storedMinutes = defaults.integer(forKey: defaultSessionLengthKey)
-        if storedMinutes <= 0 {
-            return .default
-        }
-        return UserPreferences(defaultSessionLengthMinutes: storedMinutes)
-    }
-
-    /// Persists the given preferences to UserDefaults.
-    func save(_ preferences: UserPreferences) async throws {
-        defaults.set(preferences.defaultSessionLengthMinutes, forKey: defaultSessionLengthKey)
-    }
-}
-
 /// Observable store exposing user preferences to SwiftUI views.
 @Observable
 @MainActor
 final class UserPreferencesStore {
-    private let repository: any UserPreferencesRepository
+    /// Daily reading goal, in minutes.
+    var dailyGoalMinutes: Int = UserPreferences.default.dailyGoalMinutes
+    /// Preferred genres for the recommendation system.
+    var preferredGenres: [String] = UserPreferences.default.preferredGenres
 
-    /// Default reading session length, in minutes.
-    var defaultSessionLengthMinutes: Int
-
-    /// Creates a store with the given repository and kicks off an async load.
-    init(repository: some UserPreferencesRepository) {
-        self.repository = repository
-        self.defaultSessionLengthMinutes = UserPreferences.default.defaultSessionLengthMinutes
-
-        Task {
-            await load()
-        }
-    }
-
-    /// Loads preferences from the repository and applies them to the store.
+    /// Loads preferences from the server. Falls back silently on error.
     func load() async {
         do {
-            let loaded = try await repository.load()
-            apply(loaded)
+            let loaded = try await AppAPI.shared.fetchPreferences()
+            dailyGoalMinutes = loaded.dailyGoalMinutes
+            preferredGenres = loaded.preferredGenres
         } catch {
+            print("[UserPreferencesStore] load failed: \(error)")
         }
     }
 
-    /// Updates the default session length and persists the change.
-    func updateDefaultSessionLength(_ minutes: Int) async {
-        defaultSessionLengthMinutes = minutes
-        let preferences = UserPreferences(defaultSessionLengthMinutes: minutes)
-
+    /// Updates preferences and persists them to the server.
+    func update(dailyGoal: Int, genres: [String]) async {
+        dailyGoalMinutes = dailyGoal
+        preferredGenres = genres
+        let prefs = UserPreferences(
+            dailyGoalMinutes: dailyGoal,
+            preferredGenres: genres
+        )
         do {
-            try await repository.save(preferences)
+            try await AppAPI.shared.savePreferences(prefs)
         } catch {
+            print("[UserPreferencesStore] update failed: \(error)")
         }
-    }
-
-    private func apply(_ preferences: UserPreferences) {
-        defaultSessionLengthMinutes = preferences.defaultSessionLengthMinutes
     }
 }
 
-/// Environment key used to inject a shared UserPreferencesStore.
+@MainActor
 private struct UserPreferencesStoreKey: EnvironmentKey {
-    static let defaultValue = UserPreferencesStore(
-        repository: UserDefaultsUserPreferencesRepository()
-    )
+    static let defaultValue = UserPreferencesStore()
 }
 
 extension EnvironmentValues {
-    /// Shared user preferences store available in the SwiftUI environment.
-    var userPreferencesStore: UserPreferencesStore {
+    @MainActor var userPreferencesStore: UserPreferencesStore {
         get { self[UserPreferencesStoreKey.self] }
         set { self[UserPreferencesStoreKey.self] = newValue }
     }
 }
-
-

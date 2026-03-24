@@ -48,6 +48,10 @@ protocol APIClientProtocol {
     func markBookCompleted(title: String) async throws
     /// Returns books the current user has marked as completed.
     func fetchCompletedBooks() async throws -> [CompletedBookEntry]
+    /// Returns the current user's reading preferences.
+    func fetchPreferences() async throws -> UserPreferences
+    /// Creates or updates the current user's reading preferences.
+    func savePreferences(_ preferences: UserPreferences) async throws
 }
 
 /// Simple in-memory/mock client used in previews and when no backend is configured.
@@ -147,6 +151,8 @@ final class MockAPIClient: APIClientProtocol {
     func fetchSessionHistory() async throws -> [SessionHistoryEntry] { return [] }
     func markBookCompleted(title: String) async throws {}
     func fetchCompletedBooks() async throws -> [CompletedBookEntry] { return [] }
+    func fetchPreferences() async throws -> UserPreferences { return .default }
+    func savePreferences(_ preferences: UserPreferences) async throws {}
     func sendBookScan(barcode: String?, ocrText: String?) async throws -> BookScanResponse {
         try await Task.sleep(nanoseconds: 120 * 1_000_000)
         return BookScanResponse(
@@ -565,6 +571,34 @@ final class RESTAPIClient: APIClientProtocol {
         decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode([BookSearchResult].self, from: data)
     }
+    func fetchPreferences() async throws -> UserPreferences {
+        let url = baseURL.appendingPathComponent("/preferences")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("fetchPreferences failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+        return try jsonDecoder.decode(UserPreferences.self, from: data)
+    }
+
+    func savePreferences(_ preferences: UserPreferences) async throws {
+        let url = baseURL.appendingPathComponent("/preferences")
+        var req = URLRequest(url: url); req.httpMethod = "PUT"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let encoder = JSONEncoder(); encoder.keyEncodingStrategy = .convertToSnakeCase
+        req.httpBody = try encoder.encode(preferences)
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("savePreferences failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+    }
+
     func sendBookScan(barcode: String?, ocrText: String?) async throws -> BookScanResponse {
         let url = baseURL.appendingPathComponent("/books/scan")
         var req = URLRequest(url: url)
