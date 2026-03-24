@@ -13,8 +13,18 @@ final class RecommendationsStore {
     static func previewPopulated() -> RecommendationsStore {
         let store = RecommendationsStore()
         store.items = [
-            BookRecommendation(bookId: 1, title: "Preview Apple", author: "Alex Author", coverUrl: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=200&h=300"),
-            BookRecommendation(bookId: 2, title: "Preview Birch", author: "Blake Booker", coverUrl: "https://images.unsplash.com/photo-1589829085413-56de8ae18c73?auto=format&fit=crop&q=80&w=200&h=300"),
+            BookRecommendation(
+                bookId: 1,
+                title: BookRecommendationMockAssets.titles[0],
+                author: BookRecommendationMockAssets.authors[0],
+                coverUrl: BookRecommendationMockAssets.coverUrl(forMockIndex: 0)
+            ),
+            BookRecommendation(
+                bookId: 2,
+                title: BookRecommendationMockAssets.titles[1],
+                author: BookRecommendationMockAssets.authors[1],
+                coverUrl: BookRecommendationMockAssets.coverUrl(forMockIndex: 1)
+            ),
         ]
         return store
     }

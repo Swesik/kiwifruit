@@ -61,8 +61,8 @@ def weighted_genre_scores(catalog_genre_by_norm_title, history_rows):
             }
         
         genre_stats[genre]['count'] += 1
-        duration = row.get('duration_seconds') or 0
-        pages = row.get('pages_read') or 0
+        duration = row['duration_seconds'] or 0
+        pages = row['pages_read'] or 0
         genre_stats[genre]['duration'] += duration
         genre_stats[genre]['pages'] += pages
     

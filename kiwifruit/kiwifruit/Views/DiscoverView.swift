@@ -250,32 +250,48 @@ struct DiscoverView: View {
         }
     }
 
+    @ViewBuilder
+    private func recommendationCoverImage(_ book: BookRecommendation) -> some View {
+        if let assetName = BookRecommendationMockAssets.mockAssetImageName(from: book.coverUrl) {
+            Image(assetName)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+        } else if let url = URL(string: book.coverUrl),
+                  let scheme = url.scheme?.lowercased(),
+                  scheme == "http" || scheme == "https" {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                case .failure:
+                    Color.clear
+                case .empty:
+                    ProgressView()
+                        .tint(DiscoverDesign.uiText.opacity(0.35))
+                @unknown default:
+                    Color.clear
+                }
+            }
+        } else {
+            Color.clear
+        }
+    }
+
     /// Grid covers: strict 2:3 box driven by `Rectangle` (not `AsyncImage` intrinsic size).
     /// Skip `sketchShadow` here — its offset `.background` draws outside the frame and overlaps other cells.
     private func recommendationCell(_ book: BookRecommendation) -> some View {
-        let coverURL = URL(string: book.coverUrl)
-        return VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
             Rectangle()
                 .fill(DiscoverDesign.tanLight)
                 .aspectRatio(2 / 3, contentMode: .fit)
                 .overlay {
-                    AsyncImage(url: coverURL) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .clipped()
-                        case .failure:
-                            Color.clear
-                        case .empty:
-                            ProgressView()
-                                .tint(DiscoverDesign.uiText.opacity(0.35))
-                        @unknown default:
-                            Color.clear
-                        }
-                    }
+                    recommendationCoverImage(book)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .overlay(

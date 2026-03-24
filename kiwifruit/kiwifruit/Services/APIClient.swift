@@ -149,25 +149,14 @@ final class MockAPIClient: APIClientProtocol {
 
     func fetchRecommendations(limit: Int) async throws -> [BookRecommendation] {
         try await Task.sleep(nanoseconds: 120 * 1_000_000)
-        let covers = [
-            "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=200&h=300",
-            "https://images.unsplash.com/photo-1589829085413-56de8ae18c73?auto=format&fit=crop&q=80&w=200&h=300",
-            "https://images.unsplash.com/photo-1614113489855-66422ad300a4?auto=format&fit=crop&q=80&w=200&h=300",
-            "https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&q=80&w=200&h=300",
-            "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=200&h=300",
-            "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=200&h=300",
-            "https://images.unsplash.com/photo-1495446815901-a7297e633e8d?auto=format&fit=crop&q=80&w=200&h=300",
-            "https://images.unsplash.com/photo-1519682337058-a94d519337bc?auto=format&fit=crop&q=80&w=200&h=300",
-        ]
-        let titles = [
-            "Mock Apple", "Mock Birch", "Mock Cedar", "Mock Dogwood", "Mock Elm", "Mock Fig", "Mock Grove", "Mock Hazel",
-        ]
-        let authors = [
-            "Alex Author", "Blake Booker", "Casey Crane", "Dana Draft", "Eden Editor", "Frank Fable", "Gale Genre", "Harper Haiku",
-        ]
         let count = min(max(limit, 1), 8)
         return (0..<count).map { i in
-            BookRecommendation(bookId: i + 1, title: titles[i], author: authors[i], coverUrl: covers[i])
+            BookRecommendation(
+                bookId: i + 1,
+                title: BookRecommendationMockAssets.titles[i],
+                author: BookRecommendationMockAssets.authors[i],
+                coverUrl: BookRecommendationMockAssets.coverUrl(forMockIndex: i)
+            )
         }
     }
 
