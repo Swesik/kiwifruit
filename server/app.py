@@ -1320,12 +1320,11 @@ def save_preferences():
     db = get_db()
     db.execute(
         'INSERT INTO user_preferences '
-        '(username, daily_goal_minutes, preferred_genres, updated_at) '
+        '(username, daily_goal_minutes, preferred_genres) '
         'VALUES (?, ?, ?, CURRENT_TIMESTAMP) '
         'ON CONFLICT(username) DO UPDATE SET '
         'daily_goal_minutes = excluded.daily_goal_minutes, '
         'preferred_genres = excluded.preferred_genres, '
-        'updated_at = CURRENT_TIMESTAMP',
         (username, daily_goal, genres_json)
     )
     db.commit()
