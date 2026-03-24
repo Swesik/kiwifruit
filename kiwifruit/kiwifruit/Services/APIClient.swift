@@ -654,9 +654,11 @@ final class RESTAPIClient: APIClientProtocol {
 }
 
 enum AppAPI {
+    /// Default API server base URL for local development.
+    static let defaultBaseURL = URL(string: "http://127.0.0.1:5000")!
+    
     /// Default shared client. Swap to `RESTAPIClient(baseURL:)` when you have a backend.
-    static var shared: APIClientProtocol = RESTAPIClient(baseURL:
-        URL(string: "http://127.0.0.1:5000")!)
+    static var shared: APIClientProtocol = RESTAPIClient(baseURL: defaultBaseURL)
 }
 
 

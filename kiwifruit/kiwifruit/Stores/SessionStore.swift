@@ -22,7 +22,7 @@ final class SessionStore {
     // If your Flask server runs on a different port, set that here
     // or set the `KIWIFRUIT_API_URL` env var and pass it when creating the store.
     
-    init(baseURL: URL = URL(string: "http://127.0.0.1:5000")!, previewLoggedIn: Bool = false) {
+    init(baseURL: URL = AppAPI.defaultBaseURL, previewLoggedIn: Bool = false) {
         self.apiClient = RESTAPIClient(baseURL: baseURL)
         if previewLoggedIn {
             isValidSession = true
