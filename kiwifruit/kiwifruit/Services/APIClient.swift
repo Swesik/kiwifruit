@@ -149,15 +149,11 @@ final class MockAPIClient: APIClientProtocol {
 
     func fetchRecommendations(limit: Int) async throws -> [BookRecommendation] {
         try await Task.sleep(nanoseconds: 120 * 1_000_000)
-        let count = min(max(limit, 1), 8)
-        return (0..<count).map { i in
-            BookRecommendation(
-                bookId: i + 1,
-                title: BookRecommendationMockAssets.titles[i],
-                author: BookRecommendationMockAssets.authors[i],
-                coverUrl: BookRecommendationMockAssets.coverUrl(forMockIndex: i)
-            )
+        guard limit > 0 else {
+            throw URLError(.badURL)
         }
+        let count = min(limit, 8)
+        return Array(BookRecommendationMockAssets.items.prefix(count))
     }
 
     func fetchSessionHistory() async throws -> [SessionHistoryEntry] { return [] }
@@ -583,7 +579,10 @@ final class RESTAPIClient: APIClientProtocol {
     }
 
     func fetchRecommendations(limit: Int) async throws -> [BookRecommendation] {
-        let capped = min(max(limit, 1), 20)
+        guard limit > 0 else {
+            throw URLError(.badURL)
+        }
+        let capped = min(limit, 20)
         var comps = URLComponents(
             url: baseURL.appendingPathComponent("/recommendations"),
             resolvingAgainstBaseURL: false

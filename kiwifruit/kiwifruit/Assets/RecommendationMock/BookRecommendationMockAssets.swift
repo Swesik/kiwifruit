@@ -16,6 +16,15 @@ enum BookRecommendationMockAssets {
         "Alex Author", "Blake Booker", "Casey Crane", "Dana Draft", "Eden Editor", "Frank Fable", "Gale Genre", "Harper Haiku",
     ]
 
+    static let items: [BookRecommendation] = (0..<8).map { i in
+        BookRecommendation(
+            bookId: i + 1,
+            title: titles[i],
+            author: authors[i],
+            coverUrl: mockSchemePrefix + catalogImageNames[i]
+        )
+    }
+
     static func coverUrl(forMockIndex index: Int) -> String {
         let i = min(max(index, 0), catalogImageNames.count - 1)
         return mockSchemePrefix + catalogImageNames[i]
