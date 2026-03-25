@@ -73,7 +73,6 @@ def weighted_genre_scores(catalog_genre_by_norm_title, history_rows, preferred_g
     # - pages/50 normalizes page counts (typical book ~300 pages, ~50 is 1/6 of book)
     # - preference_bonus: +50 points if genre is in user's preferred genres
     scores = {}
-    preferred_genres = preferred_genres
     for genre, stats in genre_stats.items():
         count_score = stats['count'] * 10  # 10 points per book
         duration_score = (stats['duration'] / 3600) * 5  # ~5 points per hour
