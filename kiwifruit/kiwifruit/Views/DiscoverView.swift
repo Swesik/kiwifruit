@@ -9,18 +9,11 @@ private enum DiscoverDesign {
     static let border = Color(hex: "2D3748")
 }
 
-private let recommendationURLs: [URL?] = [
-    URL(string: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=200&h=300"),
-    URL(string: "https://images.unsplash.com/photo-1589829085413-56de8ae18c73?auto=format&fit=crop&q=80&w=200&h=300"),
-    URL(string: "https://images.unsplash.com/photo-1614113489855-66422ad300a4?auto=format&fit=crop&q=80&w=200&h=300"),
-    URL(string: "https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&q=80&w=200&h=300"),
-    URL(string: "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=200&h=300"),
-    URL(string: "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=200&h=300")
-]
-
 struct DiscoverView: View {
     @Bindable var bookSearchViewModel: BookSearchViewModel
     @Bindable var bookScanViewModel: BookScanViewModel
+    @Environment(\.sessionStore) private var sessionStore
+    @Environment(\.recommendationsStore) private var recommendationsStore
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -34,7 +27,8 @@ struct DiscoverView: View {
                 recommendationsSection
             }
             .padding(.horizontal, 24)
-            .padding(.top, 48)
+            .safeAreaPadding(.top, 16)
+            .padding(.top, 8)
             .padding(.bottom, 32)
         }
         .background(Color.white)
@@ -208,19 +202,116 @@ struct DiscoverView: View {
                 .font(.title2).fontWeight(.black)
                 .foregroundColor(DiscoverDesign.uiText)
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
-                ForEach(Array(recommendationURLs.enumerated()), id: \.offset) { _, url in
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image { image.resizable().scaledToFill() }
-                        else { DiscoverDesign.tanLight }
+            if !sessionStore.isValidSession {
+                Text("Sign in to see personalized picks.")
+                    .font(.subheadline).fontWeight(.bold)
+                    .foregroundColor(DiscoverDesign.uiText.opacity(0.6))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24)
+                    .background(Color(hex: "F9FAFB"))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
+                    .sketchShadow()
+            } else if recommendationsStore.isLoading && recommendationsStore.items.isEmpty {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+                .padding(.vertical, 32)
+                .background(Color(hex: "F9FAFB"))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
+                .sketchShadow()
+            } else if let err = recommendationsStore.loadError, recommendationsStore.items.isEmpty {
+                Text(err)
+                    .font(.subheadline).fontWeight(.bold)
+                    .foregroundColor(DiscoverDesign.uiText.opacity(0.6))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24)
+                    .background(Color(hex: "F9FAFB"))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
+                    .sketchShadow()
+            } else {
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: 3),
+                    spacing: 20
+                ) {
+                    ForEach(recommendationsStore.items) { book in
+                        recommendationCell(book)
                     }
-                    .aspectRatio(2/3, contentMode: .fill)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(DiscoverDesign.border, lineWidth: 2))
-                    .sketchShadow(cornerRadius: 6)
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func recommendationCoverImage(_ book: BookRecommendation) -> some View {
+        if let assetName = BookRecommendationMockAssets.mockAssetImageName(from: book.coverUrl) {
+            Image(assetName)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+        } else if let url = URL(string: book.coverUrl),
+                  let scheme = url.scheme?.lowercased(),
+                  scheme == "http" || scheme == "https" {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                case .failure:
+                    Color.clear
+                case .empty:
+                    ProgressView()
+                        .tint(DiscoverDesign.uiText.opacity(0.35))
+                @unknown default:
+                    Color.clear
+                }
+            }
+        } else {
+            Color.clear
+        }
+    }
+
+    /// Grid covers: strict 2:3 box driven by `Rectangle` (not `AsyncImage` intrinsic size).
+    /// Skip `sketchShadow` here — its offset `.background` draws outside the frame and overlaps other cells.
+    private func recommendationCell(_ book: BookRecommendation) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Rectangle()
+                .fill(DiscoverDesign.tanLight)
+                .aspectRatio(2 / 3, contentMode: .fit)
+                .overlay {
+                    recommendationCoverImage(book)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(DiscoverDesign.border, lineWidth: 2)
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(book.title)
+                    .font(.caption).fontWeight(.black)
+                    .foregroundColor(DiscoverDesign.uiText)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(book.author)
+                    .font(.caption2).fontWeight(.bold)
+                    .foregroundColor(DiscoverDesign.uiText.opacity(0.65))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .frame(maxWidth: .infinity, minHeight: 52, alignment: .topLeading)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 }
 
@@ -229,4 +320,6 @@ struct DiscoverView: View {
         bookSearchViewModel: BookSearchViewModel(api: MockAPIClient()),
         bookScanViewModel: BookScanViewModel(scannerService: VisionBookScannerService(), api: MockAPIClient())
     )
+    .environment(\.recommendationsStore, RecommendationsStore.previewPopulated())
+    .environment(\.sessionStore, SessionStore(previewLoggedIn: true))
 }

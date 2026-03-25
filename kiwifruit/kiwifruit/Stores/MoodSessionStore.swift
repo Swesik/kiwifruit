@@ -2,8 +2,32 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// UserDefaults storage key
-private let moodMapSessionsKey = "kiwifruit.moodmap.sessions"
+/// Abstracts persistence of mood map sessions so MoodSessionStore
+/// does not depend on UserDefaults directly.
+public protocol MoodSessionStorageProtocol: Sendable {
+    func loadSessions() -> [MoodMapSession]
+    func saveSessions(_ sessions: [MoodMapSession])
+}
+
+/// Default implementation backed by UserDefaults.
+public struct UserDefaultsMoodSessionStorage: MoodSessionStorageProtocol {
+    public init() {}
+
+    private let key = "kiwifruit.moodmap.sessions"
+
+    public func loadSessions() -> [MoodMapSession] {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let decoded = try? JSONDecoder().decode([MoodMapSession].self, from: data) else {
+            return []
+        }
+        return decoded
+    }
+
+    public func saveSessions(_ sessions: [MoodMapSession]) {
+        guard let data = try? JSONEncoder().encode(sessions) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+}
 
 /// Reading/emotion session storage manager
 /// Manages Mood Map state, session data persistence, and calendar display functionality
@@ -19,7 +43,11 @@ public final class MoodSessionStore {
     /// Saved Mood Map session list (used for calendar and personalized display)
     public private(set) var savedSessions: [MoodMapSession] = []
 
-    public init() {}
+    private let storage: MoodSessionStorageProtocol
+
+    public init(storage: MoodSessionStorageProtocol = UserDefaultsMoodSessionStorage()) {
+        self.storage = storage
+    }
 
     // MARK: - Mood Map Capture
 
@@ -64,31 +92,6 @@ public final class MoodSessionStore {
         loadSessionsIfNeeded()
     }
 
-    /// Flag indicating whether sessions have been loaded
-    private var _hasLoadedSessions = false
-
-    /// Load sessions if not yet loaded
-    private func loadSessionsIfNeeded() {
-        guard !_hasLoadedSessions else { return }
-        _hasLoadedSessions = true
-        loadSessions()
-    }
-
-    /// Load sessions from UserDefaults
-    private func loadSessions() {
-        guard let data = UserDefaults.standard.data(forKey: moodMapSessionsKey),
-              let decoded = try? JSONDecoder().decode([MoodMapSession].self, from: data) else {
-            return
-        }
-        savedSessions = decoded
-    }
-
-    /// Persist sessions to UserDefaults
-    public func persistSessions() {
-        guard let data = try? JSONEncoder().encode(savedSessions) else { return }
-        UserDefaults.standard.set(data, forKey: moodMapSessionsKey)
-    }
-
     // MARK: - Calendar / Personalization
 
     /// Get sessions that ended on the specified date (for calendar emotion display)
@@ -97,18 +100,30 @@ public final class MoodSessionStore {
         let cal = Calendar.current
         return savedSessions.filter { cal.isDate($0.endedAt, inSameDayAs: date) }
     }
+
+    // MARK: - Private
+
+    private var _hasLoadedSessions = false
+
+    private func loadSessionsIfNeeded() {
+        guard !_hasLoadedSessions else { return }
+        _hasLoadedSessions = true
+        savedSessions = storage.loadSessions()
+    }
+
+    private func persistSessions() {
+        storage.saveSessions(savedSessions)
+    }
 }
 
 // MARK: - Environment
 
-/// EnvironmentKey for SwiftUI dependency injection
 @MainActor
 private struct MoodSessionStoreKey: EnvironmentKey {
     static let defaultValue: MoodSessionStore = MoodSessionStore()
 }
 
 extension EnvironmentValues {
-    /// Read session store Environment value
     var moodSessionStore: MoodSessionStore {
         get { self[MoodSessionStoreKey.self] }
         set { self[MoodSessionStoreKey.self] = newValue }

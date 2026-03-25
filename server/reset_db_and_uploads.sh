@@ -58,4 +58,4 @@ for r in rows:
 conn.close()
 PY
 
-echo "Reset complete. Start the server with: PORT=5001 python3 app.py"
+echo "Reset complete. Start the server with: python3 app.py   (default port 5000)"
