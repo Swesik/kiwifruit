@@ -1404,11 +1404,11 @@ def save_preferences():
     })
 
 
-@app.route('/api/epub', methods=['POST'])
+@app.route('/epub', methods=['POST'])
 def epub_upload():
     """Upload an epub file for background parsing.
 
-    **POST** ``/api/epub``
+    **POST** ``/epub``
 
     Accepts a multipart form with a ``file`` field containing an ``.epub`` file.
     Saves the file, creates an epub record with LOADING status, and starts
@@ -1477,11 +1477,11 @@ def epub_upload():
     }), 201
 
 
-@app.route('/api/epub/<epub_id>', methods=['GET'])
+@app.route('/epub/<epub_id>', methods=['GET'])
 def epub_detail(epub_id):
     """Retrieve epub metadata and parsing status.
 
-    **GET** ``/api/epub/<epub_id>``
+    **GET** ``/epub/<epub_id>``
 
     Requires authentication. Only the owner may access their epub.
 
@@ -1521,11 +1521,11 @@ def epub_detail(epub_id):
     })
 
 
-@app.route('/api/epub/<epub_id>/chapters', methods=['GET'])
+@app.route('/epub/<epub_id>/chapters', methods=['GET'])
 def epub_chapters(epub_id):
     """Retrieve all chapters for an epub.
 
-    **GET** ``/api/epub/<epub_id>/chapters``
+    **GET** ``/epub/<epub_id>/chapters``
 
     Requires authentication. Only the owner may access. Returns 409 if the
     epub is still being parsed or parsing failed.
@@ -1572,11 +1572,11 @@ def epub_chapters(epub_id):
     return jsonify(chapters)
 
 
-@app.route('/api/epubs', methods=['GET'])
+@app.route('/epubs', methods=['GET'])
 def epub_list():
     """List all epubs belonging to the authenticated user.
 
-    **GET** ``/api/epubs``
+    **GET** ``epubs``
 
     :returns: JSON list of epub metadata objects (no chapter data).
     :status 200: List returned.
