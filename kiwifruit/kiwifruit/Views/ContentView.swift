@@ -4,6 +4,7 @@ struct ContentView: View {
     @Environment(\.sessionStore) private var session: SessionStore
     @Environment(\.postsStore) private var postsStore: PostsStore
     @Environment(\.readingSessionStore) private var readingSessionStore: ReadingSessionStore
+    @Environment(\.userPreferencesStore) private var userPreferencesStore: UserPreferencesStore
     @Environment(\.recommendationsStore) private var recommendationsStore: RecommendationsStore
     @State private var selection: Int = 2
 
