@@ -16,10 +16,13 @@ from .recommendations import rank_recommendations
 BASE_DIR = os.path.dirname(__file__)
 DB_PATH = os.path.join(BASE_DIR, 'kiwifruit.db')
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
+EPUB_FOLDER = os.path.join(UPLOAD_FOLDER, 'epubs')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(EPUB_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['EPUB_FOLDER'] = EPUB_FOLDER
 
 # Basic logging configuration
 logging.basicConfig(level=logging.INFO)
@@ -144,7 +147,7 @@ def _write_chapter_file(item, chapter_number, epubid, db):
     text, chapter_title = parsed
 
     txt_filename = f"{uuid.uuid4().hex}.txt"
-    txt_filepath = os.path.join(UPLOAD_FOLDER, txt_filename)
+    txt_filepath = os.path.join(EPUB_FOLDER, txt_filename)
     with open(txt_filepath, 'w', encoding='utf-8') as f:
         f.write(text)
 
@@ -1438,7 +1441,7 @@ def epub_upload():
 
     stem = uuid.uuid4().hex
     stored_filename = f"{stem}{suffix}"
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], stored_filename)
+    filepath = os.path.join(app.config['EPUB_FOLDER'], stored_filename)
     file.save(filepath)
 
     title, author = _extract_epub_metadata(filepath, original_filename)

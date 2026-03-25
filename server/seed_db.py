@@ -22,11 +22,18 @@ from datetime import datetime, timedelta, timezone
 BASE_DIR = os.path.dirname(__file__)
 DB_PATH = os.path.join(BASE_DIR, 'kiwifruit.db')
 SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.sql')
+EPUB_FOLDER = os.path.join(BASE_DIR, 'uploads', 'epubs')
 
 def main():
     if os.path.exists(DB_PATH):
         print(f"Removing existing DB at {DB_PATH}")
         os.remove(DB_PATH)
+
+    if os.path.exists(EPUB_FOLDER):
+        import shutil
+        shutil.rmtree(EPUB_FOLDER)
+        print(f"Cleared epub uploads at {EPUB_FOLDER}")
+    os.makedirs(EPUB_FOLDER, exist_ok=True)
 
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
