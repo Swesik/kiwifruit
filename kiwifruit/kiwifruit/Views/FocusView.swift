@@ -69,6 +69,19 @@ struct FocusView: View {
         .sheet(isPresented: $showingMoodCameraActive) {
             moodCameraActiveSheet
         }
+        .alert("Camera Unavailable", isPresented: Binding(
+            get: { moodCaptureService?.cameraError != nil },
+            set: { if !$0 { moodCaptureService?.clearError() } }
+        )) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(moodCaptureService?.cameraError ?? "Camera access is not available.")
+        }
         .fullScreenCover(isPresented: $showingMoodCapture) {
             MoodCaptureSheet(
                 bookTitle: sessionStore.bookTitle,
