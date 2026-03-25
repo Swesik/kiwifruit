@@ -41,9 +41,25 @@ final class ChallengeViewModel {
     func markBookCompleted(title: String) async {
         do {
             try await AppAPI.shared.markBookCompleted(title: title)
+            await updateProgress()
         } catch {
             print("[ChallengeViewModel] markBookCompleted failed: \(error) — progress will update on next refresh")
         }
+    }
+
+    func createCustomChallenge(title: String, description: String, goalUnit: String, goalCount: Int) {
+        let challenge = Challenge(
+            title: title,
+            description: description,
+            goalUnit: goalUnit,
+            goalCount: goalCount,
+            rewardXP: 25,
+            state: .accepted,
+            joinedAt: Date()
+        )
+        guard activeChallenges.count < 3 else { return }
+        activeChallenges.append(challenge)
+        persistState()
     }
 
     func abandon(_ challenge: Challenge) {
