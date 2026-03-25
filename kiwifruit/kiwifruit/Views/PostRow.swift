@@ -172,7 +172,7 @@ struct PostRow: View {
 
 #Preview {
     NavigationStack {
-        PostRow(post: MockData.makePosts(count: 1, page: 0).first!)
+        PostRow(post: MockData.makePosts(count: 1, page: 0)[0])
             .padding()
     }
 }

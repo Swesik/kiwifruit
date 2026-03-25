@@ -13,7 +13,7 @@ enum MockData {
         let base = page * count
         for i in 0..<count {
             let id = UUID().uuidString
-            let imageURL = URL(string: "https://picsum.photos/seed/kiwi\(base + i)/600/600")!
+            guard let imageURL = URL(string: "https://picsum.photos/seed/kiwi\(base + i)/600/600") else { continue }
             let post = Post(
                 id: id,
                 author: sampleUser,

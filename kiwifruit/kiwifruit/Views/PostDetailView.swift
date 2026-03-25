@@ -92,5 +92,5 @@ struct PostDetailView: View {
 }
 
 #Preview {
-    NavigationStack { PostDetailView(post: MockData.makePosts(count: 1, page: 0).first!) }
+    NavigationStack { PostDetailView(post: MockData.makePosts(count: 1, page: 0)[0]) }
 }

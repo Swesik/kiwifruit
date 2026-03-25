@@ -22,7 +22,10 @@ final class SessionStore {
     // If your Flask server runs on a different port (e.g. 50001), set that here
     // or set the `KIWIFRUIT_API_URL` env var and pass it when creating the store.
     
-    init(baseURL: URL = URL(string: "http://127.0.0.1:5001")!) {
+    private static let defaultBaseURL = URL(string: "http://127.0.0.1:5001")
+        ?? URL(fileURLWithPath: "/")
+
+    init(baseURL: URL = SessionStore.defaultBaseURL) {
         self.apiClient = RESTAPIClient(baseURL: baseURL)
         load()
         // Ensure global API client uses this REST client by default
@@ -32,17 +35,14 @@ final class SessionStore {
         // Uses GET /users/me which requires auth — an expired/deleted token correctly fails
         // and triggers clear(), forcing the login screen.
         if token != nil {
-            Task {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
                 do {
-                    let user = try await fetchCurrentSessionUser()
-                    DispatchQueue.main.async {
-                        self.currentUser = user
-                        self.isValidSession = true
-                    }
+                    let user = try await self.fetchCurrentSessionUser()
+                    self.currentUser = user
+                    self.isValidSession = true
                 } catch {
-                    DispatchQueue.main.async {
-                        self.clear()
-                    }
+                    self.clear()
                 }
             }
         }
