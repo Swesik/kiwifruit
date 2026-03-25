@@ -16,12 +16,6 @@ public final class MoodSessionStore {
     /// Start time of current capture (only valid during capture)
     public private(set) var moodMapStartedAt: Date?
 
-    /// CV emotion samples collected during current capture
-    public private(set) var currentCvSamples: [MoodSample] = []
-
-    /// Emotion recognized from facial recognition after last capture (shown in results); cleared when user dismisses
-    public private(set) var lastRecognizedMood: QuickMood?
-
     /// Saved Mood Map session list (used for calendar and personalized display)
     public private(set) var savedSessions: [MoodMapSession] = []
 
@@ -33,47 +27,36 @@ public final class MoodSessionStore {
     public func startMoodMap() {
         guard case .idle = moodMapState else { return }
         moodMapStartedAt = Date()
-        currentCvSamples = []
         moodMapState = .capturing
     }
 
-    /// End Mood Map capture: aggregate facial recognition into a QuickMood, save session, set lastRecognizedMood for UI
+    /// End Mood Map capture and save session (mood is selected by user in MoodCaptureSheet)
     public func endMoodMap() {
         loadSessionsIfNeeded()
-        guard case .capturing = moodMapState,
-              let started = moodMapStartedAt else { return }
-        let ended = Date()
-        
-        // Aggregate samples to get final emotion
-        let recognized = aggregateSamplesToQuickMood(currentCvSamples)
-        
-        // Create new session
-        let session = MoodMapSession(
-            startedAt: started,
-            endedAt: ended,
-            cvSamples: currentCvSamples,
-            postSessionMood: recognized
-        )
-        
-        // Save to beginning of list
-        savedSessions.insert(session, at: 0)
-        persistSessions()
-        
-        // Set result emotion
-        lastRecognizedMood = recognized
         moodMapState = .idle
         moodMapStartedAt = nil
-        currentCvSamples = []
     }
 
-    /// Append a CV emotion sample (called by camera/Vision service during capture)
-    public func appendCvSample(_ sample: MoodSample) {
-        currentCvSamples.append(sample)
+    /// Cancel the current mood map capture without saving (user dismissed the camera).
+    public func cancelMoodMap() {
+        moodMapState = .idle
+        moodMapStartedAt = nil
     }
 
-    /// Clear lastRecognizedMood when user dismisses results
-    public func clearLastRecognizedMood() {
-        lastRecognizedMood = nil
+    /// Save a mood session directly
+    public func saveSession(_ session: MoodMapSession) {
+        loadSessionsIfNeeded()
+        savedSessions.insert(session, at: 0)
+        persistSessions()
+    }
+
+    /// Replace `postSessionMood` on the most recently saved session.
+    public func updateMostRecentSessionMood(_ mood: QuickMood) {
+        loadSessionsIfNeeded()
+        guard var first = savedSessions.first else { return }
+        first.postSessionMood = mood
+        savedSessions[0] = first
+        persistSessions()
     }
 
     /// Load saved sessions from disk if not yet loaded (e.g., when opening Focus tab)
@@ -101,7 +84,7 @@ public final class MoodSessionStore {
     }
 
     /// Persist sessions to UserDefaults
-    private func persistSessions() {
+    public func persistSessions() {
         guard let data = try? JSONEncoder().encode(savedSessions) else { return }
         UserDefaults.standard.set(data, forKey: moodMapSessionsKey)
     }

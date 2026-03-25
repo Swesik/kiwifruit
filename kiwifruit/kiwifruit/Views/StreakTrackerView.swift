@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct StreakTrackerView: View {
+    @Environment(\.moodSessionStore) private var moodStore: MoodSessionStore
+
     let streakDays: Int
     let activeDays: Set<Int>
     let hasSessionToday: Bool
@@ -37,6 +39,59 @@ struct StreakTrackerView: View {
         days.append(contentsOf: range.map { Int($0) })
         while days.count % 7 != 0 { days.append(nil) }
         return days
+    }
+
+    /// Most recent saved mood for that calendar day (from Mood Map / post-reading capture).
+    private func moodForDay(in month: Date, day: Int) -> QuickMood? {
+        let y = calendar.component(.year, from: month)
+        let m = calendar.component(.month, from: month)
+        guard let date = calendar.date(from: DateComponents(year: y, month: m, day: day)) else { return nil }
+        let sessions = moodStore.sessions(byDate: date)
+        return sessions
+            .sorted { $0.endedAt > $1.endedAt }
+            .first { $0.postSessionMood != nil }?
+            .postSessionMood
+    }
+
+    @ViewBuilder
+    private func streakDayCell(day: Int?, isReadingDay: Bool, mood: QuickMood?) -> some View {
+        let fill: Color = {
+            if isReadingDay {
+                return Color(hex: "A3C985")
+            }
+            if let mood {
+                return moodColor(mood).opacity(0.45)
+            }
+            return Color.clear
+        }()
+
+        ZStack {
+            Circle()
+                .fill(fill)
+            if let mood {
+                Text(moodEmoji(mood))
+                    .font(.system(size: 13))
+            }
+        }
+        .overlay(Circle().stroke(Color(hex: "2D3748"), lineWidth: 1.5))
+        .frame(width: 32, height: 32)
+        .opacity(day == nil ? 0 : 1)
+    }
+
+    private func moodEmoji(_ mood: QuickMood) -> String {
+        switch mood {
+        case .focused: return "🎯"
+        case .inspired: return "✨"
+        case .tired: return "😴"
+        }
+    }
+
+    private func moodColor(_ mood: QuickMood) -> Color {
+        switch mood {
+        case .focused: return Color(hex: "88C0D0")
+        case .inspired: return Color(hex: "A3C985")
+        case .tired: return Color(hex: "D1BFAe")
+        }
     }
 
     var body: some View {
@@ -113,12 +168,9 @@ struct StreakTrackerView: View {
 
                         ForEach(displayCalendarDays.indices, id: \.self) { i in
                             let day = displayCalendarDays[i]
-                            let isActive = day.map { displayActiveDays.contains($0) } ?? false
-                            Circle()
-                                .fill(isActive ? Color(hex: "A3C985") : Color.clear)
-                                .overlay(Circle().stroke(Color(hex: "2D3748"), lineWidth: 1.5))
-                                .frame(width: 32, height: 32)
-                                .opacity(day == nil ? 0 : 1)
+                            let isReadingDay = day.map { displayActiveDays.contains($0) } ?? false
+                            let mood = day.flatMap { moodForDay(in: displayMonth, day: $0) }
+                            streakDayCell(day: day, isReadingDay: isReadingDay, mood: mood)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -131,6 +183,9 @@ struct StreakTrackerView: View {
         .background(Color.white)
         .navigationTitle("Streak")
         .navigationBarTitleDisplayMode(.large)
+        .onAppear {
+            moodStore.refreshSessionsIfNeeded()
+        }
     }
 
     private var calendar: Calendar {
@@ -147,5 +202,6 @@ struct StreakTrackerView: View {
             firstSessionMonth: Calendar.current.date(from: DateComponents(year: 2026, month: 3)),
             sessionActiveDays: ["2026-3": [3, 11, 12, 17]]
         )
+        .environment(\.moodSessionStore, MoodSessionStore())
     }
 }

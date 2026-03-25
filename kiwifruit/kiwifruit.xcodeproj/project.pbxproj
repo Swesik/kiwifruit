@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		5E766B9A2F2C5EF500A95C40 /* kiwifruit/Views/kiwifruitApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C20 /* kiwifruit/Views/kiwifruitApp.swift */; };
+		5E766B9A2F2C5EF500A95C40 /* kiwifruitApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C20 /* kiwifruitApp.swift */; };
 		5E766B9A2F2C5EF500A95C41 /* kiwifruit/Views/ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C21 /* kiwifruit/Views/ContentView.swift */; };
 		5E766B9A2F2C5EF500A95C42 /* kiwifruit/Views/CreatePostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C22 /* kiwifruit/Views/CreatePostView.swift */; };
 		5E766B9A2F2C5EF500A95C43 /* kiwifruit/Views/CommentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C23 /* kiwifruit/Views/CommentsView.swift */; };
@@ -23,7 +23,6 @@
 		5E766B9A2F2C5EF500A95C4D /* kiwifruit/Views/FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C2D /* kiwifruit/Views/FeedView.swift */; };
 		5E766B9A2F2C5EF500A95C4E /* kiwifruit/Views/PostRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C2E /* kiwifruit/Views/PostRow.swift */; };
 		5E766B9A2F2C5EF500A95C4F /* kiwifruit/Views/ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C2F /* kiwifruit/Views/ProfileView.swift */; };
-		5E766B9A2F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift */; };
 		5E766B9A2F2C5EF500A95C50 /* kiwifruit/Models/BookScanModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C31 /* kiwifruit/Models/BookScanModels.swift */; };
 		5E766B9A2F2C5EF500A95C51 /* kiwifruit/Models/BookScanViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C32 /* kiwifruit/Models/BookScanViewModel.swift */; };
 		5E766B9A2F2C5EF500A95C52 /* kiwifruit/Models/BookSearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C33 /* kiwifruit/Models/BookSearchViewModel.swift */; };
@@ -41,7 +40,6 @@
 		5E766B9A2F2C5EF500A95C5E /* kiwifruit/Views/CustomTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C3F /* kiwifruit/Views/CustomTabBar.swift */; };
 		5E766B9A2F2C5EF500A95C5F /* kiwifruit/Views/DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C40 /* kiwifruit/Views/DiscoverView.swift */; };
 		5E766B9A2F2C5EF500A95C60 /* kiwifruit/Views/FocusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C41 /* kiwifruit/Views/FocusView.swift */; };
-		5E766B9A2F2C5EF500A95C61 /* kiwifruit/Views/MoodMapCameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C42 /* kiwifruit/Views/MoodMapCameraView.swift */; };
 		5E766B9A2F2C5EF500A95C62 /* kiwifruit/Views/PostDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C43 /* kiwifruit/Views/PostDetailView.swift */; };
 		5E766B9A2F2C5EF500A95C63 /* kiwifruit/Views/SignUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C44 /* kiwifruit/Views/SignUpView.swift */; };
 		5E766B9A2F2C5EF500A95C64 /* kiwifruit/Views/SketchStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C45 /* kiwifruit/Views/SketchStyle.swift */; };
@@ -54,7 +52,7 @@
 
 /* Begin PBXFileReference section */
 		3E766B9E2F2C5EF500A95C1B /* kiwifruit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = kiwifruit.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		4E766B952F2C5EF500A95C20 /* kiwifruit/Views/kiwifruitApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/kiwifruitApp.swift; sourceTree = "<group>"; };
+		4E766B952F2C5EF500A95C20 /* kiwifruitApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = kiwifruitApp.swift; path = kiwifruit/Views/kiwifruitApp.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C21 /* kiwifruit/Views/ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/ContentView.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C22 /* kiwifruit/Views/CreatePostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/CreatePostView.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C23 /* kiwifruit/Views/CommentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/CommentsView.swift; sourceTree = "<group>"; };
@@ -70,7 +68,6 @@
 		4E766B952F2C5EF500A95C2D /* kiwifruit/Views/FeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/FeedView.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C2E /* kiwifruit/Views/PostRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/PostRow.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C2F /* kiwifruit/Views/ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/ProfileView.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/SettingsView.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C30 /* kiwifruit/Assets.xcassets */ = {isa = PBXFileReference; explicitFileType = folder.assetcatalog; path = kiwifruit/Assets.xcassets; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C31 /* kiwifruit/Models/BookScanModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Models/BookScanModels.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C32 /* kiwifruit/Models/BookScanViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Models/BookScanViewModel.swift; sourceTree = "<group>"; };
@@ -89,7 +86,6 @@
 		4E766B952F2C5EF500A95C3F /* kiwifruit/Views/CustomTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/CustomTabBar.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C40 /* kiwifruit/Views/DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/DiscoverView.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C41 /* kiwifruit/Views/FocusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/FocusView.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C42 /* kiwifruit/Views/MoodMapCameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/MoodMapCameraView.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C43 /* kiwifruit/Views/PostDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/PostDetailView.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C44 /* kiwifruit/Views/SignUpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/SignUpView.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C45 /* kiwifruit/Views/SketchStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/SketchStyle.swift; sourceTree = "<group>"; };
@@ -98,27 +94,12 @@
 		4E766B952F2C5EF500A95C48 /* kiwifruit/Models/Challenge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Models/Challenge.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C49 /* kiwifruit/ViewModels/ChallengeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/ViewModels/ChallengeViewModel.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C4A /* kiwifruit/Services/WeatherChallengeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Services/WeatherChallengeService.swift; sourceTree = "<group>"; };
+		4E766B952F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		74A094812F676FD60083D4B4 /* Exceptions for "kiwifruit" folder in "kiwifruit" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Stores/CommentsStore.swift,
-				Stores/LikesStore.swift,
-				Stores/PostsStore.swift,
-				Stores/SessionStore.swift,
-			);
-			target = 3E766B9D2F2C5EF500A95C1B /* kiwifruit */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		3E766BA02F2C5EF500A95C1B /* kiwifruit */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				74A094812F676FD60083D4B4 /* Exceptions for "kiwifruit" folder in "kiwifruit" target */,
-			);
 			path = kiwifruit;
 			sourceTree = "<group>";
 		};
@@ -139,7 +120,6 @@
 			isa = PBXGroup;
 			children = (
 				3E766BA02F2C5EF500A95C1B /* kiwifruit */,
-				4E766B952F2C5EF500A95C20 /* kiwifruit/Views/kiwifruitApp.swift */,
 				4E766B952F2C5EF500A95C21 /* kiwifruit/Views/ContentView.swift */,
 				4E766B952F2C5EF500A95C22 /* kiwifruit/Views/CreatePostView.swift */,
 				4E766B952F2C5EF500A95C23 /* kiwifruit/Views/CommentsView.swift */,
@@ -149,6 +129,7 @@
 				4E766B952F2C5EF500A95C27 /* kiwifruit/Models/Models.swift */,
 				4E766B952F2C5EF500A95C28 /* kiwifruit/Models/MockData.swift */,
 				4E766B952F2C5EF500A95C29 /* kiwifruit/Stores/CommentsStore.swift */,
+				4E766B952F2C5EF500A95C20 /* kiwifruitApp.swift */,
 				4E766B952F2C5EF500A95C2A /* kiwifruit/Stores/LikesStore.swift */,
 				4E766B952F2C5EF500A95C2B /* kiwifruit/Stores/PostsStore.swift */,
 				4E766B952F2C5EF500A95C2C /* kiwifruit/Stores/SessionStore.swift */,
@@ -175,7 +156,6 @@
 				4E766B952F2C5EF500A95C3F /* kiwifruit/Views/CustomTabBar.swift */,
 				4E766B952F2C5EF500A95C40 /* kiwifruit/Views/DiscoverView.swift */,
 				4E766B952F2C5EF500A95C41 /* kiwifruit/Views/FocusView.swift */,
-				4E766B952F2C5EF500A95C42 /* kiwifruit/Views/MoodMapCameraView.swift */,
 				4E766B952F2C5EF500A95C43 /* kiwifruit/Views/PostDetailView.swift */,
 				4E766B952F2C5EF500A95C44 /* kiwifruit/Views/SignUpView.swift */,
 				4E766B952F2C5EF500A95C45 /* kiwifruit/Views/SketchStyle.swift */,
@@ -269,7 +249,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5E766B9A2F2C5EF500A95C40 /* kiwifruit/Views/kiwifruitApp.swift in Sources */,
+				5E766B9A2F2C5EF500A95C40 /* kiwifruitApp.swift in Sources */,
 				5E766B9A2F2C5EF500A95C41 /* kiwifruit/Views/ContentView.swift in Sources */,
 				5E766B9A2F2C5EF500A95C42 /* kiwifruit/Views/CreatePostView.swift in Sources */,
 				5E766B9A2F2C5EF500A95C43 /* kiwifruit/Views/CommentsView.swift in Sources */,
@@ -285,7 +265,6 @@
 				5E766B9A2F2C5EF500A95C4D /* kiwifruit/Views/FeedView.swift in Sources */,
 				5E766B9A2F2C5EF500A95C4E /* kiwifruit/Views/PostRow.swift in Sources */,
 				5E766B9A2F2C5EF500A95C4F /* kiwifruit/Views/ProfileView.swift in Sources */,
-				5E766B9A2F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift in Sources */,
 				5E766B9A2F2C5EF500A95C50 /* kiwifruit/Models/BookScanModels.swift in Sources */,
 				5E766B9A2F2C5EF500A95C51 /* kiwifruit/Models/BookScanViewModel.swift in Sources */,
 				5E766B9A2F2C5EF500A95C52 /* kiwifruit/Models/BookSearchViewModel.swift in Sources */,
@@ -304,7 +283,6 @@
 				5E766B9A2F2C5EF500A95C5E /* kiwifruit/Views/CustomTabBar.swift in Sources */,
 				5E766B9A2F2C5EF500A95C5F /* kiwifruit/Views/DiscoverView.swift in Sources */,
 				5E766B9A2F2C5EF500A95C60 /* kiwifruit/Views/FocusView.swift in Sources */,
-				5E766B9A2F2C5EF500A95C61 /* kiwifruit/Views/MoodMapCameraView.swift in Sources */,
 				5E766B9A2F2C5EF500A95C62 /* kiwifruit/Views/PostDetailView.swift in Sources */,
 				5E766B9A2F2C5EF500A95C63 /* kiwifruit/Views/SignUpView.swift in Sources */,
 				5E766B9A2F2C5EF500A95C64 /* kiwifruit/Views/SketchStyle.swift in Sources */,
@@ -444,7 +422,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = NX9P7FRPSV;
+				DEVELOPMENT_TEAM = CF5NLBP3VX;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kiwifruit uses the camera to scan book barcodes, capture book title and author text, and recognize your expression for Mood Map.";
@@ -460,7 +438,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.savvybrown.kiwifruit;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tingruiz.kiwifruit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -479,7 +457,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = NX9P7FRPSV;
+				DEVELOPMENT_TEAM = CF5NLBP3VX;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kiwifruit uses the camera to scan book barcodes, capture book title and author text, and recognize your expression for Mood Map.";
@@ -495,7 +473,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.savvybrown.kiwifruit;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tingruiz.kiwifruit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
