@@ -12,6 +12,7 @@ private enum FocusDesign {
 struct FocusView: View {
     @Environment(\.readingSessionStore) private var sessionStore: ReadingSessionStore
     @Environment(\.sessionStore) private var session: SessionStore
+    @Environment(\.challengeViewModel) private var challengeViewModel: ChallengeViewModel
 
     @State private var isSelectingBook = false
     @State private var tempBookTitle = ""
@@ -22,6 +23,7 @@ struct FocusView: View {
     @State private var tempJoinBookTitle = ""
     @State private var tempJoinStartingPage = ""
     @State private var showingSpeedReading = false
+    @State private var didFinishBook = false
 
     var body: some View {
         Group {
@@ -505,11 +507,26 @@ struct FocusView: View {
                     .foregroundStyle(Color.red.opacity(0.7))
             }
 
+            Toggle(isOn: $didFinishBook) {
+                Text("I finished this book")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(FocusDesign.handDrawnBorder)
+            }
+            .padding(.horizontal, 32)
+            .tint(FocusDesign.kiwi)
+
             Button("Done") {
                 let endPage = Int(tempEndingPage.trimmingCharacters(in: .whitespaces))
+                let bookTitle = sessionStore.bookTitle
+                let finished = didFinishBook
                 tempEndingPage = ""
+                didFinishBook = false
                 showEndPageSheet = false
                 sessionStore.stopSession(endingPage: endPage)
+                if finished, let title = bookTitle {
+                    Task { await challengeViewModel.markBookCompleted(title: title) }
+                }
             }
             .font(.headline)
             .fontWeight(.bold)
@@ -653,6 +670,7 @@ struct FocusView: View {
                     .frame(height: 40)
             }
         }
+        .task { await challengeViewModel.updateProgress() }
         .alert("Session not saved", isPresented: Binding(
             get: { sessionStore.saveError != nil },
             set: { if !$0 { sessionStore.saveError = nil } }
@@ -667,6 +685,7 @@ struct FocusView: View {
         HStack {
             Button("close") {
                 sessionStore.closeCompletion()
+                challengeViewModel.clearRecentlyCompleted()
             }
             .font(.headline)
             .fontWeight(.bold)
@@ -720,27 +739,62 @@ struct FocusView: View {
     }
 
     private var challengeProgressSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        let allChallenges = challengeViewModel.activeChallenges + challengeViewModel.recentlyCompleted
+        return VStack(alignment: .leading, spacing: 16) {
             Text("Challenge Progress:")
                 .font(.headline)
                 .fontWeight(.black)
                 .foregroundStyle(FocusDesign.handDrawnBorder)
 
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Title")
-                        .font(.subheadline)
-                        .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.8))
-
-                    Slider(value: .constant(0.3), in: 0...1)
-                        .disabled(true)
+            if allChallenges.isEmpty {
+                Text("No active challenges — join one in the Challenges tab!")
+                    .font(.subheadline)
+                    .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.5))
+                    .padding(.leading, 4)
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(allChallenges) { challenge in
+                        let isCompleted = challenge.state == .completed
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(challenge.title)
+                                    .font(.subheadline)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(FocusDesign.handDrawnBorder)
+                                Spacer()
+                                if isCompleted {
+                                    Text("Completed!")
+                                        .font(.caption)
+                                        .fontWeight(.black)
+                                        .foregroundStyle(FocusDesign.kiwi)
+                                }
+                            }
+                            Rectangle()
+                                .fill(FocusDesign.handDrawnBorder.opacity(0.15))
+                                .frame(height: 6)
+                                .overlay(alignment: .leading) {
+                                    Rectangle()
+                                        .fill(FocusDesign.kiwi)
+                                        .frame(height: 6)
+                                        .scaleEffect(x: challenge.progress, y: 1, anchor: .leading)
+                                }
+                                .clipShape(RoundedRectangle(cornerRadius: 3))
+                            Text(challenge.progressLabel)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.7))
+                        }
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(isCompleted ? FocusDesign.kiwi.opacity(0.08) : Color.white)
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(
+                                    isCompleted ? FocusDesign.kiwi : FocusDesign.handDrawnBorder,
+                                    lineWidth: isCompleted ? 2 : 2
+                                ))
+                        )
+                    }
                 }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white)
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(FocusDesign.handDrawnBorder, lineWidth: 2))
-                )
             }
         }
         .padding(.horizontal, 24)

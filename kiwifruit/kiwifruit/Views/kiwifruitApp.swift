@@ -7,10 +7,10 @@ struct kiwifruitApp: App {
     private let postsStore = PostsStore()
     private let sessionStore = SessionStore()
     private let moodSessionStore = MoodSessionStore()
-    private let userPreferencesStore = UserPreferencesStore(
-        repository: UserDefaultsUserPreferencesRepository()
-    )
+    private let userPreferencesStore = UserPreferencesStore()
     private let readingSessionStore = ReadingSessionStore()
+    private let recommendationsStore = RecommendationsStore()
+    private let challengeViewModel = ChallengeViewModel()
 
     var body: some Scene {
         WindowGroup {
@@ -20,6 +20,8 @@ struct kiwifruitApp: App {
                 .environment(\.moodSessionStore, moodSessionStore)
                 .environment(\.userPreferencesStore, userPreferencesStore)
                 .environment(\.readingSessionStore, readingSessionStore)
+                .environment(\.recommendationsStore, recommendationsStore)
+                .environment(\.challengeViewModel, challengeViewModel)
         }
     }
 }

@@ -93,6 +93,31 @@ CREATE TABLE session_participants (
     FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
 );
 
+-- Seed catalog for recommendations (not user uploads; see epubs)
+CREATE TABLE catalog_books (
+    book_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL CHECK (LENGTH(title) <= 512),
+    author TEXT NOT NULL CHECK (LENGTH(author) <= 512),
+    genre TEXT NOT NULL DEFAULT '' CHECK (LENGTH(genre) <= 128),
+    cover_url TEXT NOT NULL CHECK (LENGTH(cover_url) <= 1024)
+);
+-- Books the user has marked as fully completed
+CREATE TABLE completed_books (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    book_title TEXT NOT NULL CHECK (LENGTH(book_title) <= 256),
+    completed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
+);
+
+-- User reading preferences (one row per user, upserted on save)
+CREATE TABLE user_preferences (
+    username TEXT PRIMARY KEY CHECK (LENGTH(username) <= 20),
+    daily_goal_minutes INTEGER NOT NULL DEFAULT 30,
+    preferred_genres TEXT NOT NULL DEFAULT '[]',
+    FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
+);
+
 -- Epub uploads table (tracks uploaded epub files and parsing state)
 CREATE TABLE epubs (
     epubid INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -42,7 +42,18 @@ protocol APIClientProtocol {
     /// Removes the current user from a session they joined (does not end the host's session).
     func leaveReadingSession(sessionId: String, elapsedSeconds: Int, pagesRead: Int?, bookTitle: String?) async throws -> Void
     func sendBookScan(barcode: String?, ocrText: String?) async throws -> BookScanResponse
-    
+    /// Rule-based recommendations from catalog + session history (requires auth).
+    func fetchRecommendations(limit: Int) async throws -> [BookRecommendation]
+    /// Returns completed reading sessions for the current user (used for challenge progress).
+    func fetchSessionHistory() async throws -> [SessionHistoryEntry]
+    /// Records a book as fully read by the current user.
+    func markBookCompleted(title: String) async throws
+    /// Returns books the current user has marked as completed.
+    func fetchCompletedBooks() async throws -> [CompletedBookEntry]
+    /// Returns the current user's reading preferences.
+    func fetchPreferences() async throws -> UserPreferences
+    /// Creates or updates the current user's reading preferences.
+    func savePreferences(_ preferences: UserPreferences) async throws
 }
 
 /// Simple in-memory/mock client used in previews and when no backend is configured.
@@ -139,6 +150,21 @@ final class MockAPIClient: APIClientProtocol {
     }
 
     func leaveReadingSession(sessionId: String, elapsedSeconds: Int, pagesRead: Int?, bookTitle: String?) async throws { try await Task.sleep(nanoseconds: 80 * 1_000_000) }
+
+    func fetchRecommendations(limit: Int) async throws -> [BookRecommendation] {
+        try await Task.sleep(nanoseconds: 120 * 1_000_000)
+        guard limit > 0 else {
+            throw URLError(.badURL)
+        }
+        let count = min(limit, 8)
+        return Array(BookRecommendationMockAssets.items.prefix(count))
+    }
+
+    func fetchSessionHistory() async throws -> [SessionHistoryEntry] { return [] }
+    func markBookCompleted(title: String) async throws {}
+    func fetchCompletedBooks() async throws -> [CompletedBookEntry] { return [] }
+    func fetchPreferences() async throws -> UserPreferences { return .default }
+    func savePreferences(_ preferences: UserPreferences) async throws {}
     func sendBookScan(barcode: String?, ocrText: String?) async throws -> BookScanResponse {
         try await Task.sleep(nanoseconds: 120 * 1_000_000)
         return BookScanResponse(
@@ -490,6 +516,46 @@ final class RESTAPIClient: APIClientProtocol {
         }
     }
 
+    func fetchSessionHistory() async throws -> [SessionHistoryEntry] {
+        let url = baseURL.appendingPathComponent("/session-history")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("fetchSessionHistory failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+        return try jsonDecoder.decode([SessionHistoryEntry].self, from: data)
+    }
+
+    func markBookCompleted(title: String) async throws {
+        let url = baseURL.appendingPathComponent("/completed-books")
+        var req = URLRequest(url: url); req.httpMethod = "POST"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["book_title": title])
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("markBookCompleted failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+    }
+
+    func fetchCompletedBooks() async throws -> [CompletedBookEntry] {
+        let url = baseURL.appendingPathComponent("/completed-books")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("fetchCompletedBooks failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+        return try jsonDecoder.decode([CompletedBookEntry].self, from: data)
+    }
+
     func searchBooks(query: String) async throws -> [BookSearchResult] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return [] }
@@ -517,6 +583,64 @@ final class RESTAPIClient: APIClientProtocol {
         decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode([BookSearchResult].self, from: data)
     }
+
+    func fetchRecommendations(limit: Int) async throws -> [BookRecommendation] {
+        guard limit > 0 else {
+            throw URLError(.badURL)
+        }
+        let capped = min(limit, 20)
+        var comps = URLComponents(
+            url: baseURL.appendingPathComponent("/recommendations"),
+            resolvingAgainstBaseURL: false
+        )
+        comps?.queryItems = [URLQueryItem(name: "limit", value: String(capped))]
+        guard let url = comps?.url else {
+            throw URLError(.badURL)
+        }
+        var req = URLRequest(url: url)
+        if let token = authToken {
+            req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            let body = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+            print("fetchRecommendations failed HTTP \(http.statusCode): \(body)")
+            throw URLError(.badServerResponse)
+        }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode([BookRecommendation].self, from: data)
+    }
+
+    func fetchPreferences() async throws -> UserPreferences {
+        let url = baseURL.appendingPathComponent("/preferences")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("fetchPreferences failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+        return try jsonDecoder.decode(UserPreferences.self, from: data)
+    }
+
+    func savePreferences(_ preferences: UserPreferences) async throws {
+        let url = baseURL.appendingPathComponent("/preferences")
+        var req = URLRequest(url: url); req.httpMethod = "PUT"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let encoder = JSONEncoder(); encoder.keyEncodingStrategy = .convertToSnakeCase
+        req.httpBody = try encoder.encode(preferences)
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("savePreferences failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+    }
+
     func sendBookScan(barcode: String?, ocrText: String?) async throws -> BookScanResponse {
         let url = baseURL.appendingPathComponent("/books/scan")
         var req = URLRequest(url: url)
@@ -552,9 +676,11 @@ final class RESTAPIClient: APIClientProtocol {
 }
 
 enum AppAPI {
+    /// Default API server base URL for local development.
+    static let defaultBaseURL = URL(string: "http://127.0.0.1:5000")!
+    
     /// Default shared client. Swap to `RESTAPIClient(baseURL:)` when you have a backend.
-    static var shared: APIClientProtocol = RESTAPIClient(baseURL:
-        URL(string: "http://127.0.0.1:5001")!)
+    static var shared: APIClientProtocol = RESTAPIClient(baseURL: defaultBaseURL)
 }
 
 

@@ -11,6 +11,8 @@ import ebooklib
 from ebooklib import epub as epub_lib
 from bs4 import BeautifulSoup
 
+from .recommendations import rank_recommendations
+
 BASE_DIR = os.path.dirname(__file__)
 DB_PATH = os.path.join(BASE_DIR, 'kiwifruit.db')
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
@@ -397,6 +399,74 @@ def search_books():
         }
     ]
     return jsonify(results)
+
+
+@app.route('/recommendations', methods=['GET'])
+def get_recommendations():
+    """Return personalized book recommendations for the authenticated user.
+
+    **GET** ``/recommendations``
+
+    Query params: ``limit`` (default 8, max 20).
+
+    Uses ``catalog_books`` and ``session_history`` for rule-based ranking.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    try:
+        limit = int(request.args.get('limit', 8))
+    except (TypeError, ValueError):
+        limit = 8
+    limit = max(1, min(limit, 20))
+
+    db = get_db()
+    try:
+        catalog = db.execute(
+            'SELECT book_id, title, author, genre, cover_url FROM catalog_books ORDER BY book_id'
+        ).fetchall()
+    except sqlite3.OperationalError:
+        logger.warning('recommendations: catalog_books missing (run schema + seed)')
+        return jsonify([])
+
+    if not catalog:
+        logger.info('recommendations: empty catalog')
+        return jsonify([])
+
+    history = db.execute(
+        'SELECT book_title, duration_seconds, pages_read FROM session_history WHERE username = ?',
+        (username,),
+    ).fetchall()
+
+    # Fetch user's preferred genres
+    prefs_row = db.execute(
+        'SELECT preferred_genres FROM user_preferences WHERE username = ?',
+        (username,),
+    ).fetchone()
+    preferred_genres = []
+    if prefs_row and prefs_row['preferred_genres']:
+        import json as _json
+        preferred_genres = _json.loads(prefs_row['preferred_genres'])
+
+    ranked = rank_recommendations(catalog, history, limit, preferred_genres)
+    payload = [
+        {
+            'book_id': row['book_id'],
+            'title': row['title'],
+            'author': row['author'],
+            'cover_url': row['cover_url'],
+        }
+        for row in ranked
+    ]
+    logger.info(
+        'recommendations: catalog=%d history_rows=%d returned=%d',
+        len(catalog),
+        len(history),
+        len(payload),
+    )
+    return jsonify(payload)
+
 
 @app.route('/posts', methods=['GET', 'POST'])
 def posts_handler():
@@ -1172,6 +1242,166 @@ def leave_reading_session(session_id):
         raise
     logger.info('reading_session left: session_id=%s participant=%s', session_id, username)
     return jsonify({'status': 'ok'})
+
+
+@app.route('/session-history', methods=['GET'])
+def get_session_history():
+    """Return completed reading sessions for the authenticated user.
+
+    **GET** ``/session-history``
+
+    Used by the iOS client to calculate challenge progress (minutes read,
+    books completed, pages read) over rolling time windows.
+
+    :returns: JSON list of session history objects ordered by most recent first.
+    :status 200: List returned (may be empty).
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    rows = db.execute(
+        'SELECT id, book_title, duration_seconds, pages_read, ended_at '
+        'FROM session_history WHERE username = ? ORDER BY ended_at DESC',
+        (username,)
+    ).fetchall()
+    return jsonify([{
+        'id': r['id'],
+        'book_title': r['book_title'],
+        'duration_seconds': r['duration_seconds'],
+        'pages_read': r['pages_read'],
+        'ended_at': _to_iso(r['ended_at'])
+    } for r in rows])
+
+
+@app.route('/completed-books', methods=['POST'])
+def add_completed_book():
+    """Mark a book as fully completed by the authenticated user.
+
+    **POST** ``/completed-books``
+
+    :json string book_title: Title of the completed book (required).
+    :returns: JSON object with the new record id and book_title.
+    :status 201: Book recorded.
+    :status 400: Missing or empty book_title.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    data = request.get_json(silent=True) or {}
+    book_title = (data.get('book_title') or '').strip()
+    if not book_title:
+        abort(400)
+    row_id = uuid.uuid4().hex
+    db = get_db()
+    db.execute(
+        'INSERT INTO completed_books (id, username, book_title) VALUES (?, ?, ?)',
+        (row_id, username, book_title)
+    )
+    db.commit()
+    return jsonify({'id': row_id, 'book_title': book_title}), 201
+
+
+@app.route('/completed-books', methods=['GET'])
+def get_completed_books():
+    """Return books the authenticated user has marked as completed.
+
+    **GET** ``/completed-books``
+
+    :returns: JSON list ordered by most recent completion first.
+    :status 200: List returned (may be empty).
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    rows = db.execute(
+        'SELECT id, book_title, completed_at FROM completed_books '
+        'WHERE username = ? ORDER BY completed_at DESC',
+        (username,)
+    ).fetchall()
+    return jsonify([{
+        'id': r['id'],
+        'book_title': r['book_title'],
+        'completed_at': _to_iso(r['completed_at'])
+    } for r in rows])
+
+
+@app.route('/preferences', methods=['GET'])
+def get_preferences():
+    """Return the authenticated user's reading preferences.
+
+    **GET** ``/preferences``
+
+    :returns: JSON object with ``default_session_length_minutes`` and ``daily_goal_minutes``.
+    :status 200: Preferences returned (defaults used if not yet set).
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    row = db.execute(
+        'SELECT daily_goal_minutes, preferred_genres '
+        'FROM user_preferences WHERE username = ?',
+        (username,)
+    ).fetchone()
+    if row:
+        import json as _json
+        return jsonify({
+            'daily_goal_minutes': row['daily_goal_minutes'],
+            'preferred_genres': _json.loads(row['preferred_genres'] or '[]')
+        })
+    return jsonify({'daily_goal_minutes': 30, 'preferred_genres': []})
+
+
+@app.route('/preferences', methods=['PUT'])
+def save_preferences():
+    """Create or update the authenticated user's reading preferences.
+
+    **PUT** ``/preferences``
+
+    Accepts JSON with ``default_session_length_minutes`` and/or ``daily_goal_minutes``.
+
+    :returns: JSON with the saved preferences.
+    :status 200: Preferences saved.
+    :status 400: Invalid or missing fields.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    import json as _json
+    data = request.get_json(silent=True) or {}
+    daily_goal = data.get('daily_goal_minutes')
+    genres = data.get('preferred_genres', [])
+    if daily_goal is None:
+        abort(400, description='daily_goal_minutes is required')
+    if not isinstance(daily_goal, int):
+        abort(400, description='daily_goal_minutes must be an integer')
+    if daily_goal < 1:
+        abort(400, description='daily_goal_minutes must be positive')
+    if not isinstance(genres, list) or not all(isinstance(g, str) for g in genres):
+        abort(400, description='preferred_genres must be a list of strings')
+    genres_json = _json.dumps(genres)
+    db = get_db()
+    db.execute(
+        'INSERT INTO user_preferences '
+        '(username, daily_goal_minutes, preferred_genres) '
+        'VALUES (?, ?, ?) '
+        'ON CONFLICT(username) DO UPDATE SET '
+        'daily_goal_minutes = excluded.daily_goal_minutes, '
+        'preferred_genres = excluded.preferred_genres',
+        (username, daily_goal, genres_json)
+    )
+    db.commit()
+    return jsonify({
+        'daily_goal_minutes': daily_goal,
+        'preferred_genres': genres
+    })
 
 
 @app.route('/api/epub', methods=['POST'])

@@ -122,6 +122,52 @@ def main():
         (eve_session_id, 'eve', '1984', eve_started, 'active')
     )
 
+    # ------------------------------------------------------------------ #
+    # Recommendation catalog + demo session_history for alice             #
+    # ------------------------------------------------------------------ #
+    catalog = [
+        ('Dune', 'Frank Herbert', 'sci-fi', 'https://covers.openlibrary.org/b/isbn/9780441172719-M.jpg'),
+        ('1984', 'George Orwell', 'dystopian', 'https://covers.openlibrary.org/b/isbn/9780451524935-M.jpg'),
+        ('The Great Gatsby', 'F. Scott Fitzgerald', 'classic', 'https://covers.openlibrary.org/b/isbn/9780743273565-M.jpg'),
+        ('Pride and Prejudice', 'Jane Austen', 'classic', 'https://covers.openlibrary.org/b/isbn/9780141439518-M.jpg'),
+        ('The Hobbit', 'J.R.R. Tolkien', 'fantasy', 'https://covers.openlibrary.org/b/isbn/9780345339683-M.jpg'),
+        ('Murder on the Orient Express', 'Agatha Christie', 'mystery', 'https://covers.openlibrary.org/b/isbn/9780062693662-M.jpg'),
+        ('The Catcher in the Rye', 'J.D. Salinger', 'fiction', 'https://covers.openlibrary.org/b/isbn/9780316769177-M.jpg'),
+        ('To Kill a Mockingbird', 'Harper Lee', 'fiction', 'https://covers.openlibrary.org/b/isbn/9780061120084-M.jpg'),
+        ('Foundation', 'Isaac Asimov', 'sci-fi', 'https://covers.openlibrary.org/b/isbn/9780553293357-M.jpg'),
+        ('Neuromancer', 'William Gibson', 'sci-fi', 'https://covers.openlibrary.org/b/isbn/9780441569595-M.jpg'),
+        ('The Lord of the Rings', 'J.R.R. Tolkien', 'fantasy', 'https://covers.openlibrary.org/b/isbn/9780618640157-M.jpg'),
+        ('Jane Eyre', 'Charlotte Brontë', 'classic', 'https://covers.openlibrary.org/b/isbn/9780141441146-M.jpg'),
+        ('Crime and Punishment', 'Fyodor Dostoevsky', 'classic', 'https://covers.openlibrary.org/b/isbn/9780486415871-M.jpg'),
+        ('The Handmaid\'s Tale', 'Margaret Atwood', 'dystopian', 'https://covers.openlibrary.org/b/isbn/9780385490818-M.jpg'),
+        ('Educated', 'Tara Westover', 'memoir', 'https://covers.openlibrary.org/b/isbn/9780399590504-M.jpg'),
+        ('Sapiens', 'Yuval Noah Harari', 'nonfiction', 'https://covers.openlibrary.org/b/isbn/9780062316110-M.jpg'),
+        ('Thinking, Fast and Slow', 'Daniel Kahneman', 'nonfiction', 'https://covers.openlibrary.org/b/isbn/9780374533557-M.jpg'),
+        ('The Name of the Wind', 'Patrick Rothfuss', 'fantasy', 'https://covers.openlibrary.org/b/isbn/9780756404741-M.jpg'),
+        ('Circe', 'Madeline Miller', 'fantasy', 'https://covers.openlibrary.org/b/isbn/9780316556347-M.jpg'),
+        ('Project Hail Mary', 'Andy Weir', 'sci-fi', 'https://covers.openlibrary.org/b/isbn/9780593135204-M.jpg'),
+        ('The Love Hypothesis', 'Ali Hazelwood', 'romance', 'https://covers.openlibrary.org/b/isbn/9780593336823-M.jpg'),
+        ('People We Meet on Vacation', 'Emily Henry', 'romance', 'https://covers.openlibrary.org/b/isbn/9781984806758-M.jpg'),
+        ('King of Envy', 'Ana Huang', 'romance', 'https://covers.openlibrary.org/b/isbn/9780349436395-M.jpg'),
+        ('Twisted Love', 'Ana Huang', 'romance', 'https://covers.openlibrary.org/b/isbn/9781728274867-M.jpg')   
+    ]
+    for title, author, genre, cover in catalog:
+        cur.execute(
+            'INSERT INTO catalog_books (title, author, genre, cover_url) VALUES (?, ?, ?, ?)',
+            (title, author, genre, cover),
+        )
+
+    hist_time = now_utc.strftime('%Y-%m-%d %H:%M:%S')
+    # Alice has completed sessions for Dune + 1984 — recommendations exclude / deprioritize these
+    cur.execute(
+        'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read, ended_at) VALUES (?, ?, ?, ?, ?, ?)',
+        (uuid.uuid4().hex, 'alice', 'Dune', 3600, 42, hist_time),
+    )
+    cur.execute(
+        'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read, ended_at) VALUES (?, ?, ?, ?, ?, ?)',
+        (uuid.uuid4().hex, 'alice', '1984', 1800, 20, hist_time),
+    )
+
     conn.commit()
     conn.close()
     print(f"Seeded database created at: {DB_PATH}")
@@ -131,6 +177,9 @@ def main():
     print("  alice follows bob (~45min, carol inside), dave (~20min), eve (~2min) — all appear in the Join feed")
     print("  frank / password  — no follows, Join feed is empty")
     print("  grace / password  — follows bob, sees bob's Dune session (~45min) in the Join feed")
+    print()
+    print("Recommendations (Discover tab):")
+    print("  alice has session_history for Dune + 1984; GET /recommendations excludes those and boosts genre.")
 
 if __name__ == '__main__':
     main()
