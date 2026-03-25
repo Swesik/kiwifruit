@@ -2,7 +2,7 @@ import SwiftUI
 
 private let allGenres = [
     "fantasy", "sci-fi", "mystery", "classic", "dystopian",
-    "memoir", "nonfiction", "fiction"
+    "memoir", "nonfiction", "fiction", "romance"
 ]
 
 struct SettingsView: View {

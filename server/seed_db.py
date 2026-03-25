@@ -146,6 +146,10 @@ def main():
         ('The Name of the Wind', 'Patrick Rothfuss', 'fantasy', 'https://covers.openlibrary.org/b/isbn/9780756404741-M.jpg'),
         ('Circe', 'Madeline Miller', 'fantasy', 'https://covers.openlibrary.org/b/isbn/9780316556347-M.jpg'),
         ('Project Hail Mary', 'Andy Weir', 'sci-fi', 'https://covers.openlibrary.org/b/isbn/9780593135204-M.jpg'),
+        ('The Love Hypothesis', 'Ali Hazelwood', 'romance', 'https://covers.openlibrary.org/b/isbn/9780593336823-M.jpg'),
+        ('People We Meet on Vacation', 'Emily Henry', 'romance', 'https://covers.openlibrary.org/b/isbn/9781984806758-M.jpg'),
+        ('King of Envy', 'Ana Huang', 'romance', 'https://covers.openlibrary.org/b/isbn/9780349436395-M.jpg'),
+        ('Twisted Love', 'Ana Huang', 'romance', 'https://covers.openlibrary.org/b/isbn/9781728274867-M.jpg')   
     ]
     for title, author, genre, cover in catalog:
         cur.execute(
