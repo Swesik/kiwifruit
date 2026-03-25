@@ -37,7 +37,6 @@ final class RecommendationsStore {
 
     /// Fetches up to ``limit`` recommendations (default 8). 
     func load(limit: Int = 8) async {
-        if !items.isEmpty { return }
         isLoading = true
         loadError = nil
         defer { isLoading = false }

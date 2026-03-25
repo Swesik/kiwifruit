@@ -65,7 +65,6 @@ struct SettingsView: View {
                                 genres: Array(selectedGenres)
                             )
                             // Refresh recommendations to reflect new preferences
-                            recommendationsStore.reset()
                             await recommendationsStore.load()
                             isSaving = false
                             dismiss()
