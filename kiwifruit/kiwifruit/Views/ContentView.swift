@@ -27,7 +27,10 @@ struct ContentView: View {
             CustomTabBar(selection: $selection)
         }
         .onAppear {
-            if session.isValidSession && session.userId != nil { Task { await postsStore.loadInitial() } }
+            if session.isValidSession && session.userId != nil { 
+                Task { await postsStore.loadInitial() } 
+                Task { await userPreferencesStore.load() }
+            }
         }
         .onChange(of: session.userId) { _, new in
             if new != nil {
