@@ -244,18 +244,11 @@ struct MoodDayDetailView: View {
     // MARK: - Day Summary
 
     private var daySummarySection: some View {
-        HStack(spacing: 16) {
-            summaryPill(
-                icon: "book.fill",
-                label: isReadingDay ? "Read today" : "No reading",
-                color: isReadingDay ? StreakDesign.kiwi : StreakDesign.kiwiLight
-            )
-            summaryPill(
-                icon: "face.smiling",
-                label: sessions.isEmpty ? "No mood data" : "\(sessions.count) session\(sessions.count == 1 ? "" : "s")",
-                color: sessions.isEmpty ? StreakDesign.kiwiLight : StreakDesign.tealCard
-            )
-        }
+        summaryPill(
+            icon: "face.smiling",
+            label: sessions.isEmpty ? "No mood data" : "\(sessions.count) session\(sessions.count == 1 ? "" : "s")",
+            color: sessions.isEmpty ? StreakDesign.kiwiLight : StreakDesign.tealCard
+        )
     }
 
     private func summaryPill(icon: String, label: String, color: Color) -> some View {
