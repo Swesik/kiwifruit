@@ -42,6 +42,7 @@ struct FocusView: View {
                         completionView
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .background(FocusDesign.uiBg)
