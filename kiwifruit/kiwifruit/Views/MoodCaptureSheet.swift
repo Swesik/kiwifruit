@@ -1,5 +1,14 @@
 import SwiftUI
 
+private enum MoodCaptureDesign {
+    static let border = Color(hex: "2D3748")
+    static let uiText = Color(hex: "2D3748")
+    static let kiwi = Color(hex: "A3C985")
+    static let kiwiLight = Color(hex: "E6F0DC")
+    static let tealCard = Color(hex: "CFE6EC")
+    static let tan = Color(hex: "D1BFAe")
+}
+
 @MainActor
 struct MoodCaptureSheet: View {
     @Environment(\.moodSessionStore) private var moodStore: MoodSessionStore
@@ -8,122 +17,126 @@ struct MoodCaptureSheet: View {
     let bookTitle: String?
     let duration: String
     let onSkip: () -> Void
-    /// If true, updates the last saved session's mood instead of creating a new one
     let updateExisting: Bool
 
     @State private var selectedMood: QuickMood? = nil
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 0) {
             headerSection
             moodSelectionSection
-            actionButtons
             Spacer()
+            actionButtons
         }
         .padding(24)
-        .background(FocusDesign.uiBg)
+        .background(Color.white)
     }
 
-    private var headerSection: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "face.smiling")
-                .font(.system(size: 48))
-                .foregroundStyle(FocusDesign.kiwi)
+    // MARK: - Header
 
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
             Text("How did you feel?")
-                .font(.system(size: 28, weight: .black))
-                .foregroundStyle(FocusDesign.handDrawnBorder)
+                .font(.system(size: 30, weight: .black))
+                .foregroundColor(MoodCaptureDesign.uiText)
 
             if let book = bookTitle {
                 Text("while reading \"\(book)\"")
-                    .font(.subheadline)
-                    .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.6))
+                    .font(.subheadline).fontWeight(.semibold)
+                    .foregroundColor(MoodCaptureDesign.uiText.opacity(0.6))
             }
 
-            Text("for \(duration)")
-                .font(.caption)
-                .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.4))
+            Text(duration)
+                .font(.caption).fontWeight(.bold)
+                .foregroundColor(MoodCaptureDesign.uiText.opacity(0.4))
+                .padding(.top, 2)
         }
-        .padding(.top, 20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 24)
+        .padding(.bottom, 32)
     }
 
+    // MARK: - Mood Selection
+
     private var moodSelectionSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             ForEach(QuickMood.allCases) { mood in
                 moodButton(mood: mood)
             }
         }
-        .padding(.horizontal, 16)
     }
 
     private func moodButton(mood: QuickMood) -> some View {
         let isSelected = selectedMood == mood
 
         return Button {
-            selectedMood = mood
+            withAnimation(.easeInOut(duration: 0.15)) {
+                selectedMood = mood
+            }
         } label: {
-            HStack(spacing: 16) {
-                Text(moodEmoji(mood))
-                    .font(.system(size: 28))
-                    .frame(width: 50, height: 50)
-                    .background(
-                        Circle()
-                            .fill(moodColor(mood).opacity(0.15))
-                    )
-
+            HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(mood.displayName)
-                        .font(.headline)
-                        .fontWeight(.bold)
-                        .foregroundStyle(FocusDesign.handDrawnBorder)
-
+                        .font(.subheadline).fontWeight(.bold)
+                        .foregroundColor(MoodCaptureDesign.uiText)
                     Text(moodDescription(mood))
-                        .font(.caption)
-                        .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.5))
+                        .font(.caption).fontWeight(.semibold)
+                        .foregroundColor(MoodCaptureDesign.uiText.opacity(0.6))
                 }
-
                 Spacer()
-
                 if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundStyle(FocusDesign.kiwi)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .black))
+                        .foregroundColor(MoodCaptureDesign.uiText)
                 }
             }
             .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.white)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(isSelected ? FocusDesign.kiwi : FocusDesign.handDrawnBorder.opacity(0.2), lineWidth: isSelected ? 3 : 1)
-                    )
+            .background(isSelected ? moodCardColor(mood) : Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? MoodCaptureDesign.border : MoodCaptureDesign.border.opacity(0.3), lineWidth: 2)
             )
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(FocusDesign.handDrawnBorder)
-                    .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
-                    .opacity(isSelected ? 1 : 0)
-            )
+            .sketchShadow()
         }
         .buttonStyle(.plain)
     }
 
+    private func moodCardColor(_ mood: QuickMood) -> Color {
+        switch mood {
+        case .focused: return MoodCaptureDesign.tealCard
+        case .inspired: return MoodCaptureDesign.kiwiLight
+        case .tired: return Color(hex: "F5E6D3")
+        }
+    }
+
+    private func moodDescription(_ mood: QuickMood) -> String {
+        switch mood {
+        case .focused: return "Calm and concentrated"
+        case .inspired: return "Happy and energized"
+        case .tired: return "Low energy"
+        }
+    }
+
+    // MARK: - Actions
+
     private var actionButtons: some View {
         VStack(spacing: 12) {
-            Button {
-                saveMood()
-            } label: {
+            Button(action: saveMood) {
                 Text("Save")
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .foregroundStyle(selectedMood != nil ? FocusDesign.handDrawnBorder : FocusDesign.handDrawnBorder.opacity(0.3))
-                    .frame(width: 280, height: 50)
+                    .font(.subheadline).fontWeight(.bold)
+                    .foregroundColor(selectedMood != nil ? MoodCaptureDesign.uiText : MoodCaptureDesign.uiText.opacity(0.3))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(selectedMood != nil ? FocusDesign.kiwi : FocusDesign.kiwi.opacity(0.3))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(FocusDesign.handDrawnBorder.opacity(selectedMood != nil ? 1 : 0.3), lineWidth: 3))
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(selectedMood != nil ? MoodCaptureDesign.kiwi : MoodCaptureDesign.kiwi.opacity(0.3))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(MoodCaptureDesign.border.opacity(selectedMood != nil ? 1 : 0.3), lineWidth: 2)
+                            )
                     )
+                    .sketchShadow()
             }
             .buttonStyle(.plain)
             .disabled(selectedMood == nil)
@@ -133,13 +146,15 @@ struct MoodCaptureSheet: View {
                 dismiss()
             } label: {
                 Text("Skip")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.5))
+                    .font(.subheadline).fontWeight(.semibold)
+                    .foregroundColor(MoodCaptureDesign.uiText.opacity(0.4))
             }
             .buttonStyle(.plain)
         }
+        .padding(.bottom, 16)
     }
+
+    // MARK: - Save
 
     private func saveMood() {
         guard let mood = selectedMood else { return }
@@ -157,39 +172,6 @@ struct MoodCaptureSheet: View {
 
         dismiss()
     }
-
-    private func moodEmoji(_ mood: QuickMood) -> String {
-        switch mood {
-        case .focused: return "🎯"
-        case .inspired: return "✨"
-        case .tired: return "😴"
-        }
-    }
-
-    private func moodColor(_ mood: QuickMood) -> Color {
-        switch mood {
-        case .focused: return Color(hex: "88C0D0")
-        case .inspired: return Color(hex: "A3C985")
-        case .tired: return Color(hex: "D1BFAe")
-        }
-    }
-
-    private func moodDescription(_ mood: QuickMood) -> String {
-        switch mood {
-        case .focused: return "Calm and concentrated"
-        case .inspired: return "Happy and energized"
-        case .tired: return "Low energy"
-        }
-    }
-}
-
-private enum FocusDesign {
-    static let kiwi = Color(hex: "A3C985")
-    static let tan = Color(hex: "D1BFAe")
-    static let uiTeal = Color(hex: "88C0D0")
-    static let uiBg = Color(hex: "FAFAFA")
-    static let handDrawnBorder = Color.black
-    static let sketchOffset: CGFloat = 4
 }
 
 #Preview {
