@@ -26,7 +26,6 @@ struct FocusView: View {
     @State private var tempJoinStartingPage = ""
     @State private var showingSpeedReading = false
     @State private var didFinishBook = false
-    @State private var showingMoodMapStats = false
     @State private var showingMoodCapture = false
     @State private var showingMoodCameraActive = false
     /// True when user ended a mood capture before the end-page sheet; mood sheet should update that session, not insert a new one.
@@ -65,9 +64,6 @@ struct FocusView: View {
             sessionStore.loadFriendSessions()
         }
         .sheet(isPresented: $showingSpeedReading) { SpeedReadingView() }
-        .sheet(isPresented: $showingMoodMapStats) {
-            MoodMapStatsView()
-        }
         .sheet(isPresented: $showingMoodCameraActive) {
             moodCameraActiveSheet
         }
@@ -290,7 +286,6 @@ struct FocusView: View {
             VStack(spacing: 0) {
                 startSessionButton
                 speedReadingButton
-                moodMapHistoryButton
                 joinSection
                 Spacer()
                     .frame(height: 40)
@@ -352,28 +347,6 @@ struct FocusView: View {
         }
         .buttonStyle(.plain)
         .padding(.top, 32)
-    }
-
-    private var moodMapHistoryButton: some View {
-        Button(action: { showingMoodMapStats = true }) {
-            HStack {
-                Image(systemName: "face.smiling")
-                    .font(.system(size: 18))
-                Text("View mood history")
-                    .font(.system(size: 18, weight: .bold))
-            }
-            .tracking(0.5)
-            .foregroundStyle(FocusDesign.handDrawnBorder)
-            .padding(.horizontal, 24)
-            .padding(.vertical, 12)
-            .background(
-                Capsule()
-                    .fill(FocusDesign.tan.opacity(0.7))
-                    .overlay(Capsule().stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
-            )
-        }
-        .buttonStyle(.plain)
-        .padding(.top, 24)
     }
 
     private var joinSection: some View {
@@ -807,25 +780,6 @@ struct FocusView: View {
             VStack(spacing: 32) {
                 completionHeader
                 readingTimeSummary
-
-Button("mood session stats") {
-                showingMoodMapStats = true
-            }
-            .font(.headline)
-            .fontWeight(.bold)
-            .foregroundStyle(FocusDesign.handDrawnBorder)
-            .frame(width: 300, height: 50)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(FocusDesign.kiwi)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
-            )
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(FocusDesign.handDrawnBorder)
-                    .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
-            )
-
                 challengeProgressSection
 
                 Spacer()
