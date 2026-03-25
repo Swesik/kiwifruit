@@ -42,6 +42,8 @@ protocol APIClientProtocol {
     /// Removes the current user from a session they joined (does not end the host's session).
     func leaveReadingSession(sessionId: String, elapsedSeconds: Int, pagesRead: Int?, bookTitle: String?) async throws -> Void
     func sendBookScan(barcode: String?, ocrText: String?) async throws -> BookScanResponse
+    /// Rule-based recommendations from catalog + session history (requires auth).
+    func fetchRecommendations(limit: Int) async throws -> [BookRecommendation]
     /// Returns completed reading sessions for the current user (used for challenge progress).
     func fetchSessionHistory() async throws -> [SessionHistoryEntry]
     /// Records a book as fully read by the current user.
@@ -148,6 +150,16 @@ final class MockAPIClient: APIClientProtocol {
     }
 
     func leaveReadingSession(sessionId: String, elapsedSeconds: Int, pagesRead: Int?, bookTitle: String?) async throws { try await Task.sleep(nanoseconds: 80 * 1_000_000) }
+
+    func fetchRecommendations(limit: Int) async throws -> [BookRecommendation] {
+        try await Task.sleep(nanoseconds: 120 * 1_000_000)
+        guard limit > 0 else {
+            throw URLError(.badURL)
+        }
+        let count = min(limit, 8)
+        return Array(BookRecommendationMockAssets.items.prefix(count))
+    }
+
     func fetchSessionHistory() async throws -> [SessionHistoryEntry] { return [] }
     func markBookCompleted(title: String) async throws {}
     func fetchCompletedBooks() async throws -> [CompletedBookEntry] { return [] }
@@ -571,6 +583,36 @@ final class RESTAPIClient: APIClientProtocol {
         decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode([BookSearchResult].self, from: data)
     }
+
+    func fetchRecommendations(limit: Int) async throws -> [BookRecommendation] {
+        guard limit > 0 else {
+            throw URLError(.badURL)
+        }
+        let capped = min(limit, 20)
+        var comps = URLComponents(
+            url: baseURL.appendingPathComponent("/recommendations"),
+            resolvingAgainstBaseURL: false
+        )
+        comps?.queryItems = [URLQueryItem(name: "limit", value: String(capped))]
+        guard let url = comps?.url else {
+            throw URLError(.badURL)
+        }
+        var req = URLRequest(url: url)
+        if let token = authToken {
+            req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            let body = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+            print("fetchRecommendations failed HTTP \(http.statusCode): \(body)")
+            throw URLError(.badServerResponse)
+        }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode([BookRecommendation].self, from: data)
+    }
+
     func fetchPreferences() async throws -> UserPreferences {
         let url = baseURL.appendingPathComponent("/preferences")
         var req = URLRequest(url: url)
@@ -634,9 +676,11 @@ final class RESTAPIClient: APIClientProtocol {
 }
 
 enum AppAPI {
+    /// Default API server base URL for local development.
+    static let defaultBaseURL = URL(string: "http://127.0.0.1:5000")!
+    
     /// Default shared client. Swap to `RESTAPIClient(baseURL:)` when you have a backend.
-    static var shared: APIClientProtocol = RESTAPIClient(baseURL:
-        URL(string: "http://127.0.0.1:5001")!)
+    static var shared: APIClientProtocol = RESTAPIClient(baseURL: defaultBaseURL)
 }
 
 

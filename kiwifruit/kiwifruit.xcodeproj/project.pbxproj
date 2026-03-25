@@ -72,32 +72,6 @@
 		4E766B952F2C5EF500A95C2F /* kiwifruit/Views/ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/ProfileView.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/SettingsView.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C30 /* kiwifruit/Assets.xcassets */ = {isa = PBXFileReference; explicitFileType = folder.assetcatalog; path = kiwifruit/Assets.xcassets; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C31 /* kiwifruit/Models/BookScanModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Models/BookScanModels.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C32 /* kiwifruit/Models/BookScanViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Models/BookScanViewModel.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C33 /* kiwifruit/Models/BookSearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Models/BookSearchViewModel.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C34 /* kiwifruit/Models/MoodMapModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Models/MoodMapModels.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C35 /* kiwifruit/Models/UserPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Models/UserPreferences.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C36 /* kiwifruit/Services/BookScannerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Services/BookScannerService.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C37 /* kiwifruit/Services/MoodMapCaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Services/MoodMapCaptureService.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C38 /* kiwifruit/Stores/MoodSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Stores/MoodSessionStore.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C39 /* kiwifruit/Stores/ReadingSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Stores/ReadingSessionStore.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C3A /* kiwifruit/Stores/UserPreferencesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Stores/UserPreferencesStore.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C3B /* kiwifruit/Views/AllUpdatesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/AllUpdatesView.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C3C /* kiwifruit/Views/CameraPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/CameraPickerView.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C3D /* kiwifruit/Views/ChallengeDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/ChallengeDetailView.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C3E /* kiwifruit/Views/ChallengesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/ChallengesView.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C3F /* kiwifruit/Views/CustomTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/CustomTabBar.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C40 /* kiwifruit/Views/DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/DiscoverView.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C41 /* kiwifruit/Views/FocusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/FocusView.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C42 /* kiwifruit/Views/MoodMapCameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/MoodMapCameraView.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C43 /* kiwifruit/Views/PostDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/PostDetailView.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C44 /* kiwifruit/Views/SignUpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/SignUpView.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C45 /* kiwifruit/Views/SketchStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/SketchStyle.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C46 /* kiwifruit/Views/SpeedReadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/SpeedReadingView.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C47 /* kiwifruit/Views/StreakTrackerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/StreakTrackerView.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C48 /* kiwifruit/Models/Challenge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Models/Challenge.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C49 /* kiwifruit/ViewModels/ChallengeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/ViewModels/ChallengeViewModel.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C4A /* kiwifruit/Services/WeatherChallengeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Services/WeatherChallengeService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -157,32 +131,6 @@
 				4E766B952F2C5EF500A95C2F /* kiwifruit/Views/ProfileView.swift */,
 				4E766B952F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift */,
 				4E766B952F2C5EF500A95C30 /* kiwifruit/Assets.xcassets */,
-				4E766B952F2C5EF500A95C31 /* kiwifruit/Models/BookScanModels.swift */,
-				4E766B952F2C5EF500A95C32 /* kiwifruit/Models/BookScanViewModel.swift */,
-				4E766B952F2C5EF500A95C33 /* kiwifruit/Models/BookSearchViewModel.swift */,
-				4E766B952F2C5EF500A95C34 /* kiwifruit/Models/MoodMapModels.swift */,
-				4E766B952F2C5EF500A95C35 /* kiwifruit/Models/UserPreferences.swift */,
-				4E766B952F2C5EF500A95C36 /* kiwifruit/Services/BookScannerService.swift */,
-				4E766B952F2C5EF500A95C37 /* kiwifruit/Services/MoodMapCaptureService.swift */,
-				4E766B952F2C5EF500A95C4A /* kiwifruit/Services/WeatherChallengeService.swift */,
-				4E766B952F2C5EF500A95C38 /* kiwifruit/Stores/MoodSessionStore.swift */,
-				4E766B952F2C5EF500A95C39 /* kiwifruit/Stores/ReadingSessionStore.swift */,
-				4E766B952F2C5EF500A95C3A /* kiwifruit/Stores/UserPreferencesStore.swift */,
-				4E766B952F2C5EF500A95C3B /* kiwifruit/Views/AllUpdatesView.swift */,
-				4E766B952F2C5EF500A95C3C /* kiwifruit/Views/CameraPickerView.swift */,
-				4E766B952F2C5EF500A95C3D /* kiwifruit/Views/ChallengeDetailView.swift */,
-				4E766B952F2C5EF500A95C3E /* kiwifruit/Views/ChallengesView.swift */,
-				4E766B952F2C5EF500A95C3F /* kiwifruit/Views/CustomTabBar.swift */,
-				4E766B952F2C5EF500A95C40 /* kiwifruit/Views/DiscoverView.swift */,
-				4E766B952F2C5EF500A95C41 /* kiwifruit/Views/FocusView.swift */,
-				4E766B952F2C5EF500A95C42 /* kiwifruit/Views/MoodMapCameraView.swift */,
-				4E766B952F2C5EF500A95C43 /* kiwifruit/Views/PostDetailView.swift */,
-				4E766B952F2C5EF500A95C44 /* kiwifruit/Views/SignUpView.swift */,
-				4E766B952F2C5EF500A95C45 /* kiwifruit/Views/SketchStyle.swift */,
-				4E766B952F2C5EF500A95C46 /* kiwifruit/Views/SpeedReadingView.swift */,
-				4E766B952F2C5EF500A95C47 /* kiwifruit/Views/StreakTrackerView.swift */,
-				4E766B952F2C5EF500A95C48 /* kiwifruit/Models/Challenge.swift */,
-				4E766B952F2C5EF500A95C49 /* kiwifruit/ViewModels/ChallengeViewModel.swift */,
 				3E766B9F2F2C5EF500A95C1B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -448,7 +396,6 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kiwifruit uses the camera to scan book barcodes, capture book title and author text, and recognize your expression for Mood Map.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Kiwifruit uses your location to suggest reading challenges based on your local weather.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -483,7 +430,6 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kiwifruit uses the camera to scan book barcodes, capture book title and author text, and recognize your expression for Mood Map.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Kiwifruit uses your location to suggest reading challenges based on your local weather.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
