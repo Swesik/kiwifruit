@@ -3,14 +3,13 @@ import Observation
 import SwiftUI
 
 /// Loads Discover-tab recommendations from ``GET /recommendations``.
-@Observable
+@Observable @MainActor
 final class RecommendationsStore {
-    @MainActor private(set) var items: [BookRecommendation] = []
-    @MainActor private(set) var isLoading = false
-    @MainActor private(set) var loadError: String?
+    private(set) var items: [BookRecommendation] = []
+    private(set) var isLoading = false
+    private(set) var loadError: String?
 
     /// SwiftUI previews: seed rows without depending on ``AppAPI`` / ``SessionStore``.
-    @MainActor
     static func previewPopulated() -> RecommendationsStore {
         let store = RecommendationsStore()
         store.items = [
@@ -31,14 +30,12 @@ final class RecommendationsStore {
     }
 
     /// Clears cached rows (e.g. on logout).
-    @MainActor
     func reset() {
         items = []
         loadError = nil
     }
 
     /// Fetches up to ``limit`` recommendations (default 8).
-    @MainActor
     func load(limit: Int = 8) async {
         isLoading = true
         loadError = nil
@@ -54,10 +51,12 @@ final class RecommendationsStore {
 }
 
 private struct RecommendationsStoreKey: EnvironmentKey {
+    @MainActor
     static let defaultValue = RecommendationsStore()
 }
 
 extension EnvironmentValues {
+    @MainActor
     var recommendationsStore: RecommendationsStore {
         get { self[RecommendationsStoreKey.self] }
         set { self[RecommendationsStoreKey.self] = newValue }
