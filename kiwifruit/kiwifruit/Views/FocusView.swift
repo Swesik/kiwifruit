@@ -99,7 +99,7 @@ struct FocusView: View {
                 )
                 .font(.title3)
                 .foregroundStyle(FocusDesign.handDrawnBorder)
-                .colorScheme(.light)
+
                 .padding(.horizontal, 32)
 
             TextField("Starting page", text: $tempStartingPage)
@@ -118,7 +118,7 @@ struct FocusView: View {
                 )
                 .font(.title3)
                 .foregroundStyle(FocusDesign.handDrawnBorder)
-                .colorScheme(.light)
+
                 .padding(.horizontal, 32)
 
             let canStart = sessionStore.canStartSession(bookTitle: tempBookTitle, startingPage: tempStartingPage)
@@ -205,7 +205,7 @@ struct FocusView: View {
                 )
                 .font(.title3)
                 .foregroundStyle(FocusDesign.handDrawnBorder)
-                .colorScheme(.light)
+
                 .padding(.horizontal, 32)
 
             TextField("Starting page", text: $tempJoinStartingPage)
@@ -224,7 +224,7 @@ struct FocusView: View {
                 )
                 .font(.title3)
                 .foregroundStyle(FocusDesign.handDrawnBorder)
-                .colorScheme(.light)
+
                 .padding(.horizontal, 32)
 
             Button(action: {
@@ -504,7 +504,7 @@ struct FocusView: View {
                 )
                 .font(.title3)
                 .foregroundStyle(FocusDesign.handDrawnBorder)
-                .colorScheme(.light)
+
                 .padding(.horizontal, 32)
 
             if let end = endPage, let start = sessionStore.startingPage, end <= start {
