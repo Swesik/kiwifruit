@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 
 private enum FocusDesign {
@@ -13,6 +14,7 @@ struct FocusView: View {
     @Environment(\.readingSessionStore) private var sessionStore: ReadingSessionStore
     @Environment(\.sessionStore) private var session: SessionStore
     @Environment(\.challengeViewModel) private var challengeViewModel: ChallengeViewModel
+    @Environment(\.moodSessionStore) private var moodStore: MoodSessionStore
 
     @State private var isSelectingBook = false
     @State private var tempBookTitle = ""
@@ -24,6 +26,18 @@ struct FocusView: View {
     @State private var tempJoinStartingPage = ""
     @State private var showingSpeedReading = false
     @State private var didFinishBook = false
+    @State private var showingMoodCapture = false
+    @State private var showingMoodMapStats = false
+    @State private var showingMoodCameraActive = false
+    /// True when user ended a mood capture before the end-page sheet; mood sheet should update that session, not insert a new one.
+    @State private var moodCaptureUpdateExistingSession = false
+    /// Camera capture service — started when mood session begins, stopped when ended.
+    @State private var moodCaptureService: MoodMapCaptureService?
+
+    /// The live camera session, exposed for CameraPreviewView.
+    private var cameraPreviewSession: AVCaptureSession? {
+        moodCaptureService?.captureSession
+    }
 
     var body: some View {
         Group {
@@ -52,6 +66,33 @@ struct FocusView: View {
             sessionStore.loadFriendSessions()
         }
         .sheet(isPresented: $showingSpeedReading) { SpeedReadingView() }
+        .sheet(isPresented: $showingMoodMapStats) { MoodMapStatsView() }
+        .sheet(isPresented: $showingMoodCameraActive) {
+            moodCameraActiveSheet
+        }
+        .alert("Camera Unavailable", isPresented: Binding(
+            get: { moodCaptureService?.cameraError != nil },
+            set: { if !$0 { moodCaptureService?.clearError() } }
+        )) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(moodCaptureService?.cameraError ?? "Camera access is not available.")
+        }
+        .fullScreenCover(isPresented: $showingMoodCapture) {
+            MoodCaptureSheet(
+                bookTitle: sessionStore.bookTitle,
+                duration: formattedCompletedTime,
+                onSkip: {
+                    // User skipped mood capture - nothing to do
+                },
+                updateExisting: moodCaptureUpdateExistingSession
+            )
+        }
     }
 
     private var bookSelectionView: some View {
@@ -544,6 +585,8 @@ struct FocusView: View {
                             .fill(canSubmit ? FocusDesign.kiwi : FocusDesign.kiwi.opacity(0.3))
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(FocusDesign.handDrawnBorder.opacity(canSubmit ? 1 : 0.3), lineWidth: 3))
                     )
+                // Show mood capture after session ends
+                showingMoodCapture = true
             }
             .buttonStyle(.plain)
             .disabled(!canSubmit)
@@ -553,6 +596,105 @@ struct FocusView: View {
         .padding(.horizontal, 24)
         .background(FocusDesign.uiBg)
         .presentationDetents([.medium])
+        .interactiveDismissDisabled(true)
+    }
+
+    private var moodCameraActiveSheet: some View {
+        return VStack(spacing: 32) {
+            HStack {
+                Spacer()
+                Button(action: {
+                    moodCaptureService?.stopSession()
+                    moodCaptureService = nil
+                    moodStore.cancelMoodMap()
+                    showingMoodCameraActive = false
+                }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(FocusDesign.handDrawnBorder)
+                        .frame(width: 36, height: 36)
+                        .background(
+                            Circle()
+                                .fill(Color.white)
+                                .overlay(Circle().stroke(FocusDesign.handDrawnBorder, lineWidth: 2))
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.top, 16)
+
+            // Camera preview — small floating window
+            if let session = cameraPreviewSession {
+                CameraPreviewView(session: session)
+                    .frame(width: 180, height: 240)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(FocusDesign.handDrawnBorder, lineWidth: 3)
+                    )
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(FocusDesign.handDrawnBorder)
+                            .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
+                    )
+            } else {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.black.opacity(0.1))
+                    .frame(width: 180, height: 240)
+                    .overlay(
+                        Text("Camera loading...")
+                            .font(.caption)
+                            .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.5))
+                    )
+            }
+
+            // Camera Active indicator
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: 10, height: 10)
+                Text("Camera Active")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Color.red)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.red.opacity(0.1))
+            )
+
+            Text("Detecting your mood...")
+                .font(.system(size: 20, weight: .black))
+                .foregroundStyle(FocusDesign.handDrawnBorder)
+                .multilineTextAlignment(.center)
+
+            Spacer()
+
+            Button("End Mood") {
+                moodCaptureService?.stopSession()
+                moodCaptureService = nil
+                moodStore.endMoodMap()
+                showingMoodCameraActive = false
+                moodCaptureUpdateExistingSession = true
+                showEndPageSheet = true
+            }
+            .font(.headline)
+            .fontWeight(.bold)
+            .foregroundStyle(FocusDesign.handDrawnBorder)
+            .frame(width: 280, height: 50)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(FocusDesign.kiwi)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
+            )
+            .buttonStyle(.plain)
+
+            Spacer()
+        }
+        .padding(.horizontal, 24)
+        .background(FocusDesign.uiBg)
+        .presentationDetents([.large])
         .interactiveDismissDisabled(true)
     }
 
@@ -613,6 +755,7 @@ struct FocusView: View {
                 Button("Stop") {
                     // Freeze the timer now so the sheet doesn't add extra seconds.
                     if sessionStore.status == .active { sessionStore.togglePause() }
+                    moodCaptureUpdateExistingSession = false
                     showEndPageSheet = true
                 }
                 .font(.headline)
@@ -631,21 +774,26 @@ struct FocusView: View {
                 )
             }
 
-            Button("mood session") {}
-                .font(.headline)
-                .fontWeight(.bold)
-                .foregroundStyle(FocusDesign.handDrawnBorder)
-                .frame(width: 300, height: 50)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(FocusDesign.kiwi)
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
-                )
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(FocusDesign.handDrawnBorder)
-                        .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
-                )
+            Button("mood session") {
+                moodStore.startMoodMap()
+                moodCaptureService = MoodMapCaptureService()
+                moodCaptureService?.startSession()
+                showingMoodCameraActive = true
+            }
+            .font(.headline)
+            .fontWeight(.bold)
+            .foregroundStyle(FocusDesign.handDrawnBorder)
+            .frame(width: 300, height: 50)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(FocusDesign.kiwi)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
+            )
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(FocusDesign.handDrawnBorder)
+                    .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
+            )
         }
         .padding(.bottom, 80)
     }
@@ -656,21 +804,25 @@ struct FocusView: View {
                 completionHeader
                 readingTimeSummary
 
-                Button("mood session stats") {}
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .foregroundStyle(FocusDesign.handDrawnBorder)
-                    .frame(width: 300, height: 50)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(FocusDesign.kiwi)
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
-                    )
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(FocusDesign.handDrawnBorder)
-                            .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
-                    )
+                if !moodStore.savedSessions.isEmpty {
+                    Button(action: { showingMoodMapStats = true }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "face.smiling")
+                                .font(.system(size: 16, weight: .bold))
+                            Text("View mood stats")
+                                .font(.subheadline).fontWeight(.bold)
+                        }
+                        .foregroundStyle(FocusDesign.handDrawnBorder)
+                        .padding(.horizontal, 24).padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color(hex: "CFE6EC"))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(FocusDesign.handDrawnBorder, lineWidth: 2))
+                        )
+                        .sketchShadow()
+                    }
+                    .buttonStyle(.plain)
+                }
 
                 challengeProgressSection
 
@@ -818,6 +970,30 @@ struct FocusView: View {
         let minutes = sessionStore.completedSeconds / 60
         let seconds = sessionStore.completedSeconds % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    private func moodEmoji(_ mood: QuickMood) -> String {
+        switch mood {
+        case .focused: return "target"
+        case .inspired: return "sparkles"
+        case .tired: return "zzz"
+        }
+    }
+
+    private func moodColor(_ mood: QuickMood) -> Color {
+        switch mood {
+        case .focused: return Color(hex: "88C0D0")
+        case .inspired: return Color(hex: "A3C985")
+        case .tired: return Color(hex: "D1BFAe")
+        }
+    }
+
+    private func moodDescription(_ mood: QuickMood) -> String {
+        switch mood {
+        case .focused: return "Calm and concentrated"
+        case .inspired: return "Happy and energized"
+        case .tired: return "Low energy"
+        }
     }
 }
 
