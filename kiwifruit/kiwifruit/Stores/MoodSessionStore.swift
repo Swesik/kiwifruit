@@ -2,8 +2,32 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// UserDefaults storage key
-private let moodMapSessionsKey = "kiwifruit.moodmap.sessions"
+/// Abstracts persistence of mood map sessions so MoodSessionStore
+/// does not depend on UserDefaults directly.
+public protocol MoodSessionStorageProtocol: Sendable {
+    func loadSessions() -> [MoodMapSession]
+    func saveSessions(_ sessions: [MoodMapSession])
+}
+
+/// Default implementation backed by UserDefaults.
+public struct UserDefaultsMoodSessionStorage: MoodSessionStorageProtocol {
+    public init() {}
+
+    private let key = "kiwifruit.moodmap.sessions"
+
+    public func loadSessions() -> [MoodMapSession] {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let decoded = try? JSONDecoder().decode([MoodMapSession].self, from: data) else {
+            return []
+        }
+        return decoded
+    }
+
+    public func saveSessions(_ sessions: [MoodMapSession]) {
+        guard let data = try? JSONEncoder().encode(sessions) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+}
 
 /// Reading/emotion session storage manager
 /// Manages Mood Map state, session data persistence, and calendar display functionality
@@ -16,16 +40,14 @@ public final class MoodSessionStore {
     /// Start time of current capture (only valid during capture)
     public private(set) var moodMapStartedAt: Date?
 
-    /// CV emotion samples collected during current capture
-    public private(set) var currentCvSamples: [MoodSample] = []
-
-    /// Emotion recognized from facial recognition after last capture (shown in results); cleared when user dismisses
-    public private(set) var lastRecognizedMood: QuickMood?
-
     /// Saved Mood Map session list (used for calendar and personalized display)
     public private(set) var savedSessions: [MoodMapSession] = []
 
-    public init() {}
+    private let storage: MoodSessionStorageProtocol
+
+    public init(storage: MoodSessionStorageProtocol = UserDefaultsMoodSessionStorage()) {
+        self.storage = storage
+    }
 
     // MARK: - Mood Map Capture
 
@@ -33,77 +55,53 @@ public final class MoodSessionStore {
     public func startMoodMap() {
         guard case .idle = moodMapState else { return }
         moodMapStartedAt = Date()
-        currentCvSamples = []
         moodMapState = .capturing
     }
 
-    /// End Mood Map capture: aggregate facial recognition into a QuickMood, save session, set lastRecognizedMood for UI
+    /// End Mood Map capture and save session (mood is selected by user in MoodCaptureSheet)
     public func endMoodMap() {
+        guard let startedAt = moodMapStartedAt else {
+            moodMapState = .idle
+            moodMapStartedAt = nil
+            return
+        }
         loadSessionsIfNeeded()
-        guard case .capturing = moodMapState,
-              let started = moodMapStartedAt else { return }
-        let ended = Date()
-        
-        // Aggregate samples to get final emotion
-        let recognized = aggregateSamplesToQuickMood(currentCvSamples)
-        
-        // Create new session
         let session = MoodMapSession(
-            startedAt: started,
-            endedAt: ended,
-            cvSamples: currentCvSamples,
-            postSessionMood: recognized
+            startedAt: startedAt,
+            endedAt: Date(),
+            postSessionMood: nil
         )
-        
-        // Save to beginning of list
         savedSessions.insert(session, at: 0)
         persistSessions()
-        
-        // Set result emotion
-        lastRecognizedMood = recognized
         moodMapState = .idle
         moodMapStartedAt = nil
-        currentCvSamples = []
     }
 
-    /// Append a CV emotion sample (called by camera/Vision service during capture)
-    public func appendCvSample(_ sample: MoodSample) {
-        currentCvSamples.append(sample)
+    /// Cancel the current mood map capture without saving (user dismissed the camera).
+    public func cancelMoodMap() {
+        moodMapState = .idle
+        moodMapStartedAt = nil
     }
 
-    /// Clear lastRecognizedMood when user dismisses results
-    public func clearLastRecognizedMood() {
-        lastRecognizedMood = nil
+    /// Save a mood session directly
+    public func saveSession(_ session: MoodMapSession) {
+        loadSessionsIfNeeded()
+        savedSessions.insert(session, at: 0)
+        persistSessions()
+    }
+
+    /// Replace `postSessionMood` on the most recently saved session.
+    public func updateMostRecentSessionMood(_ mood: QuickMood) {
+        loadSessionsIfNeeded()
+        guard var first = savedSessions.first else { return }
+        first.postSessionMood = mood
+        savedSessions[0] = first
+        persistSessions()
     }
 
     /// Load saved sessions from disk if not yet loaded (e.g., when opening Focus tab)
     public func refreshSessionsIfNeeded() {
         loadSessionsIfNeeded()
-    }
-
-    /// Flag indicating whether sessions have been loaded
-    private var _hasLoadedSessions = false
-
-    /// Load sessions if not yet loaded
-    private func loadSessionsIfNeeded() {
-        guard !_hasLoadedSessions else { return }
-        _hasLoadedSessions = true
-        loadSessions()
-    }
-
-    /// Load sessions from UserDefaults
-    private func loadSessions() {
-        guard let data = UserDefaults.standard.data(forKey: moodMapSessionsKey),
-              let decoded = try? JSONDecoder().decode([MoodMapSession].self, from: data) else {
-            return
-        }
-        savedSessions = decoded
-    }
-
-    /// Persist sessions to UserDefaults
-    private func persistSessions() {
-        guard let data = try? JSONEncoder().encode(savedSessions) else { return }
-        UserDefaults.standard.set(data, forKey: moodMapSessionsKey)
     }
 
     // MARK: - Calendar / Personalization
@@ -114,18 +112,30 @@ public final class MoodSessionStore {
         let cal = Calendar.current
         return savedSessions.filter { cal.isDate($0.endedAt, inSameDayAs: date) }
     }
+
+    // MARK: - Private
+
+    private var _hasLoadedSessions = false
+
+    private func loadSessionsIfNeeded() {
+        guard !_hasLoadedSessions else { return }
+        _hasLoadedSessions = true
+        savedSessions = storage.loadSessions()
+    }
+
+    private func persistSessions() {
+        storage.saveSessions(savedSessions)
+    }
 }
 
 // MARK: - Environment
 
-/// EnvironmentKey for SwiftUI dependency injection
 @MainActor
 private struct MoodSessionStoreKey: EnvironmentKey {
     static let defaultValue: MoodSessionStore = MoodSessionStore()
 }
 
 extension EnvironmentValues {
-    /// Read session store Environment value
     var moodSessionStore: MoodSessionStore {
         get { self[MoodSessionStoreKey.self] }
         set { self[MoodSessionStoreKey.self] = newValue }
