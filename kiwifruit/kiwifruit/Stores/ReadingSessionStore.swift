@@ -254,6 +254,7 @@ final class ReadingSessionStore {
     }
 }
 
+@MainActor
 private struct ReadingSessionStoreKey: EnvironmentKey {
     static let defaultValue: ReadingSessionStore = ReadingSessionStore()
 }

@@ -112,6 +112,7 @@ final class SessionStore {
 }
 
 // Environment key for SessionStore
+@MainActor
 private struct SessionStoreKey: EnvironmentKey {
     static let defaultValue: SessionStore = SessionStore()
 }
