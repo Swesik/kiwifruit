@@ -16,10 +16,18 @@ final class ChallengeViewModel {
     var firstSessionMonth: Date? = nil
     var sessionActiveDays: [String: Set<Int>] = [:]
 
-    private let activeKey = "kiwifruit.activeChallenges"
-    private let completedKey = "kiwifruit.completedChallenges"
+    private let api: APIClientProtocol
+    private let storage: ChallengeStorageProtocol
+    private let weatherService: WeatherChallengeServiceProtocol
 
-    init() {
+    init(
+        api: APIClientProtocol = AppAPI.shared,
+        storage: ChallengeStorageProtocol = UserDefaultsChallengeStorage(),
+        weatherService: WeatherChallengeServiceProtocol = WeatherChallengeService.shared
+    ) {
+        self.api = api
+        self.storage = storage
+        self.weatherService = weatherService
         loadPersisted()
         refreshDiscover()
     }
@@ -40,7 +48,7 @@ final class ChallengeViewModel {
 
     func markBookCompleted(title: String) async {
         do {
-            try await AppAPI.shared.markBookCompleted(title: title)
+            try await api.markBookCompleted(title: title)
         } catch {
             print("[ChallengeViewModel] markBookCompleted failed: \(error) — progress will update on next refresh")
         }
@@ -55,10 +63,10 @@ final class ChallengeViewModel {
     // MARK: - Progress update from server
 
     func updateProgress() async {
-        async let weatherTask = WeatherChallengeService.shared.fetchWeatherChallenge()
+        async let weatherTask = weatherService.fetchWeatherChallenge()
         do {
-            async let historyTask = AppAPI.shared.fetchSessionHistory()
-            async let completedTask = AppAPI.shared.fetchCompletedBooks()
+            async let historyTask = api.fetchSessionHistory()
+            async let completedTask = api.fetchCompletedBooks()
             let (history, completedBooks) = try await (historyTask, completedTask)
             sessionHistory = history
             applyProgress(history: history, completedBooks: completedBooks)
@@ -143,7 +151,6 @@ final class ChallengeViewModel {
         let iso = ISO8601DateFormatter()
         let now = Date()
 
-        // Collect unique calendar days (as date components) that had sessions
         var sessionDays: Set<DateComponents> = []
         var activeDaysByMonth: [String: Set<Int>] = [:]
         var earliestDate: Date?
@@ -152,7 +159,9 @@ final class ChallengeViewModel {
             guard let date = iso.date(from: entry.endedAt) else { continue }
             let components = calendar.dateComponents([.year, .month, .day], from: date)
             sessionDays.insert(components)
-            if earliestDate == nil || date < earliestDate! {
+            if let earliest = earliestDate {
+                if date < earliest { earliestDate = date }
+            } else {
                 earliestDate = date
             }
             if let year = components.year, let month = components.month, let day = components.day {
@@ -163,23 +172,19 @@ final class ChallengeViewModel {
 
         sessionActiveDays = activeDaysByMonth
 
-        // First session month
         if let earliest = earliestDate {
             firstSessionMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: earliest))
         } else {
             firstSessionMonth = nil
         }
 
-        // Active days in current month (day numbers)
         let currentYear = calendar.component(.year, from: now)
         let currentMonth = calendar.component(.month, from: now)
         activeDays = activeDaysByMonth["\(currentYear)-\(currentMonth)"] ?? []
 
-        // Today check
         let todayDC = calendar.dateComponents([.year, .month, .day], from: now)
         hasSessionToday = sessionDays.contains(todayDC)
 
-        // Streak: count consecutive days ending yesterday, then check today
         var streakCount = 0
         let todayStart = calendar.startOfDay(for: now)
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: todayStart) {
@@ -202,27 +207,12 @@ final class ChallengeViewModel {
     // MARK: - Persistence
 
     private func persistState() {
-        let encoder = JSONEncoder()
-        do {
-            UserDefaults.standard.set(try encoder.encode(activeChallenges), forKey: activeKey)
-            UserDefaults.standard.set(try encoder.encode(completedChallenges), forKey: completedKey)
-        } catch {
-            print("[ChallengeViewModel] persistState failed: \(error)")
-        }
+        storage.save(active: activeChallenges, completed: completedChallenges)
     }
 
     private func loadPersisted() {
-        let decoder = JSONDecoder()
-        do {
-            if let data = UserDefaults.standard.data(forKey: activeKey) {
-                activeChallenges = try decoder.decode([Challenge].self, from: data)
-            }
-            if let data = UserDefaults.standard.data(forKey: completedKey) {
-                completedChallenges = try decoder.decode([Challenge].self, from: data)
-            }
-        } catch {
-            print("[ChallengeViewModel] loadPersisted failed: \(error)")
-        }
+        activeChallenges = storage.loadActiveChallenges()
+        completedChallenges = storage.loadCompletedChallenges()
     }
 
     private func refreshDiscover() {

@@ -23,7 +23,6 @@
 		5E766B9A2F2C5EF500A95C4D /* kiwifruit/Views/FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C2D /* kiwifruit/Views/FeedView.swift */; };
 		5E766B9A2F2C5EF500A95C4E /* kiwifruit/Views/PostRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C2E /* kiwifruit/Views/PostRow.swift */; };
 		5E766B9A2F2C5EF500A95C4F /* kiwifruit/Views/ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C2F /* kiwifruit/Views/ProfileView.swift */; };
-		5E766B9A2F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift */; };
 		5E766B9A2F2C5EF500A95C50 /* kiwifruit/Models/BookScanModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C31 /* kiwifruit/Models/BookScanModels.swift */; };
 		5E766B9A2F2C5EF500A95C51 /* kiwifruit/Models/BookScanViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C32 /* kiwifruit/Models/BookScanViewModel.swift */; };
 		5E766B9A2F2C5EF500A95C52 /* kiwifruit/Models/BookSearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C33 /* kiwifruit/Models/BookSearchViewModel.swift */; };
@@ -70,7 +69,6 @@
 		4E766B952F2C5EF500A95C2D /* kiwifruit/Views/FeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/FeedView.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C2E /* kiwifruit/Views/PostRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/PostRow.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C2F /* kiwifruit/Views/ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/ProfileView.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/SettingsView.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C30 /* kiwifruit/Assets.xcassets */ = {isa = PBXFileReference; explicitFileType = folder.assetcatalog; path = kiwifruit/Assets.xcassets; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C31 /* kiwifruit/Models/BookScanModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Models/BookScanModels.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C32 /* kiwifruit/Models/BookScanViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Models/BookScanViewModel.swift; sourceTree = "<group>"; };
@@ -98,6 +96,7 @@
 		4E766B952F2C5EF500A95C48 /* kiwifruit/Models/Challenge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Models/Challenge.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C49 /* kiwifruit/ViewModels/ChallengeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/ViewModels/ChallengeViewModel.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C4A /* kiwifruit/Services/WeatherChallengeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Services/WeatherChallengeService.swift; sourceTree = "<group>"; };
+		4E766B952F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -285,7 +284,7 @@
 				5E766B9A2F2C5EF500A95C4D /* kiwifruit/Views/FeedView.swift in Sources */,
 				5E766B9A2F2C5EF500A95C4E /* kiwifruit/Views/PostRow.swift in Sources */,
 				5E766B9A2F2C5EF500A95C4F /* kiwifruit/Views/ProfileView.swift in Sources */,
-				5E766B9A2F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift in Sources */,
+				5E766B9A2F2C5EF500A95C60 /* kiwifruit/Views/FocusView.swift in Sources */,
 				5E766B9A2F2C5EF500A95C50 /* kiwifruit/Models/BookScanModels.swift in Sources */,
 				5E766B9A2F2C5EF500A95C51 /* kiwifruit/Models/BookScanViewModel.swift in Sources */,
 				5E766B9A2F2C5EF500A95C52 /* kiwifruit/Models/BookSearchViewModel.swift in Sources */,
