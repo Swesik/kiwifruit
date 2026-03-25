@@ -27,6 +27,7 @@ struct FocusView: View {
     @State private var showingSpeedReading = false
     @State private var didFinishBook = false
     @State private var showingMoodCapture = false
+    @State private var showingMoodMapStats = false
     @State private var showingMoodCameraActive = false
     /// True when user ended a mood capture before the end-page sheet; mood sheet should update that session, not insert a new one.
     @State private var moodCaptureUpdateExistingSession = false
@@ -64,6 +65,7 @@ struct FocusView: View {
             sessionStore.loadFriendSessions()
         }
         .sheet(isPresented: $showingSpeedReading) { SpeedReadingView() }
+        .sheet(isPresented: $showingMoodMapStats) { MoodMapStatsView() }
         .sheet(isPresented: $showingMoodCameraActive) {
             moodCameraActiveSheet
         }
@@ -780,6 +782,27 @@ struct FocusView: View {
             VStack(spacing: 32) {
                 completionHeader
                 readingTimeSummary
+
+                if !moodStore.savedSessions.isEmpty {
+                    Button(action: { showingMoodMapStats = true }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "face.smiling")
+                                .font(.system(size: 16, weight: .bold))
+                            Text("View mood stats")
+                                .font(.subheadline).fontWeight(.bold)
+                        }
+                        .foregroundStyle(FocusDesign.handDrawnBorder)
+                        .padding(.horizontal, 24).padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color(hex: "CFE6EC"))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(FocusDesign.handDrawnBorder, lineWidth: 2))
+                        )
+                        .sketchShadow()
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 challengeProgressSection
 
                 Spacer()
