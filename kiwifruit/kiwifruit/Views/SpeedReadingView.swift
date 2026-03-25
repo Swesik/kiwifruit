@@ -1,7 +1,11 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SpeedReadingView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var showFilePicker = false
+    @State private var isUploading = false
+    @State private var uploadMessage: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -39,11 +43,14 @@ struct SpeedReadingView: View {
                     }
 
                     // Upload section
-                    HStack(spacing: 16) {
-                        Text("Upload")
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundColor(Color(hex: "2D3748"))
-                        Button("files") {}
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 16) {
+                            Text("Upload")
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundColor(Color(hex: "2D3748"))
+                            Button("files") {
+                                showFilePicker = true
+                            }
                             .font(.system(size: 22, weight: .bold))
                             .foregroundColor(Color(hex: "2D3748"))
                             .padding(.horizontal, 32).padding(.vertical, 8)
@@ -51,6 +58,19 @@ struct SpeedReadingView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "2D3748"), lineWidth: 3))
                             .sketchShadow()
+                            .disabled(isUploading)
+                        }
+
+                        if isUploading {
+                            ProgressView("Uploading...")
+                                .foregroundColor(Color(hex: "2D3748"))
+                        }
+
+                        if let message = uploadMessage {
+                            Text(message)
+                                .font(.subheadline)
+                                .foregroundColor(Color(hex: "2D3748"))
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -60,6 +80,46 @@ struct SpeedReadingView: View {
         }
         .background(Color.white)
         .toolbar(.hidden, for: .navigationBar)
+        .fileImporter(
+            isPresented: $showFilePicker,
+            allowedContentTypes: [UTType(filenameExtension: "epub") ?? .data],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                uploadEpub(from: url)
+            case .failure(let error):
+                uploadMessage = "Failed to pick file: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func uploadEpub(from url: URL) {
+        guard url.startAccessingSecurityScopedResource() else {
+            uploadMessage = "Unable to access file."
+            return
+        }
+        defer { url.stopAccessingSecurityScopedResource() }
+
+        guard let fileData = try? Data(contentsOf: url) else {
+            uploadMessage = "Unable to read file."
+            return
+        }
+
+        let filename = url.lastPathComponent
+        isUploading = true
+        uploadMessage = nil
+        Task {
+            do {
+                let response = try await AppAPI.shared.uploadEpub(fileData: fileData, filename: filename)
+                isUploading = false
+                uploadMessage = "Uploaded \"\(response.title)\" by \(response.author)"
+            } catch {
+                isUploading = false
+                uploadMessage = "Upload failed: \(error.localizedDescription)"
+            }
+        }
     }
 }
 
