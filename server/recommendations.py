@@ -100,7 +100,6 @@ def rank_recommendations(catalog_rows, history_rows, limit, preferred_genres):
     :param preferred_genres: list of genre strings marked as preferred by user (optional)
     :returns: list of catalog rows (same objects as input)
     """
-    logger.info(f"rank_recommendations called with preferred_genres={preferred_genres}")
     
     read_titles = {_normalize_title(r['book_title']) for r in history_rows}
     catalog_genre_by_norm = {
@@ -109,7 +108,6 @@ def rank_recommendations(catalog_rows, history_rows, limit, preferred_genres):
     
     # Get engagement-weighted genre scores (including user preferences)
     genre_scores = weighted_genre_scores(catalog_genre_by_norm, history_rows, preferred_genres)
-    logger.info(f"genre_scores after weighting: {genre_scores}")
 
     scored = []
     for row in catalog_rows:
@@ -119,10 +117,8 @@ def rank_recommendations(catalog_rows, history_rows, limit, preferred_genres):
         # Base score from genre match
         score = genre_scores.get(row['genre'], 0)
         scored.append((score, row))
-        logger.debug(f"  {row['title']} ({row['genre']}): score={score}")
 
     # Sort by score (descending), then by book_id for stability
     scored.sort(key=lambda x: (-x[0], x[1]['book_id']))
     result = [pair[1] for pair in scored[:limit]]
-    logger.info(f"returning {len(result)} recommendations")
     return result
