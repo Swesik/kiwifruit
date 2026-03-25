@@ -56,6 +56,7 @@ struct FocusView: View {
                         completionView
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .background(FocusDesign.uiBg)
@@ -139,6 +140,7 @@ struct FocusView: View {
                 )
                 .font(.title3)
                 .foregroundStyle(FocusDesign.handDrawnBorder)
+
                 .padding(.horizontal, 32)
 
             TextField("Starting page", text: $tempStartingPage)
@@ -157,6 +159,7 @@ struct FocusView: View {
                 )
                 .font(.title3)
                 .foregroundStyle(FocusDesign.handDrawnBorder)
+
                 .padding(.horizontal, 32)
 
             let canStart = sessionStore.canStartSession(bookTitle: tempBookTitle, startingPage: tempStartingPage)
@@ -243,6 +246,7 @@ struct FocusView: View {
                 )
                 .font(.title3)
                 .foregroundStyle(FocusDesign.handDrawnBorder)
+
                 .padding(.horizontal, 32)
 
             TextField("Starting page", text: $tempJoinStartingPage)
@@ -261,6 +265,7 @@ struct FocusView: View {
                 )
                 .font(.title3)
                 .foregroundStyle(FocusDesign.handDrawnBorder)
+
                 .padding(.horizontal, 32)
 
             Button(action: {
@@ -540,6 +545,7 @@ struct FocusView: View {
                 )
                 .font(.title3)
                 .foregroundStyle(FocusDesign.handDrawnBorder)
+
                 .padding(.horizontal, 32)
 
             if let end = endPage, let start = sessionStore.startingPage, end <= start {
@@ -557,7 +563,7 @@ struct FocusView: View {
             .padding(.horizontal, 32)
             .tint(FocusDesign.kiwi)
 
-            Button("Done") {
+            Button(action: {
                 let endPage = Int(tempEndingPage.trimmingCharacters(in: .whitespaces))
                 let bookTitle = sessionStore.bookTitle
                 let finished = didFinishBook
@@ -568,18 +574,20 @@ struct FocusView: View {
                 if finished, let title = bookTitle {
                     Task { await challengeViewModel.markBookCompleted(title: title) }
                 }
+            }) {
+                Text("Done")
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundStyle(canSubmit ? FocusDesign.handDrawnBorder : FocusDesign.handDrawnBorder.opacity(0.3))
+                    .frame(width: 280, height: 50)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(canSubmit ? FocusDesign.kiwi : FocusDesign.kiwi.opacity(0.3))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(FocusDesign.handDrawnBorder.opacity(canSubmit ? 1 : 0.3), lineWidth: 3))
+                    )
                 // Show mood capture after session ends
                 showingMoodCapture = true
             }
-            .font(.headline)
-            .fontWeight(.bold)
-            .foregroundStyle(canSubmit ? FocusDesign.handDrawnBorder : FocusDesign.handDrawnBorder.opacity(0.3))
-            .frame(width: 280, height: 50)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(canSubmit ? FocusDesign.kiwi : FocusDesign.kiwi.opacity(0.3))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(FocusDesign.handDrawnBorder.opacity(canSubmit ? 1 : 0.3), lineWidth: 3))
-            )
             .buttonStyle(.plain)
             .disabled(!canSubmit)
 

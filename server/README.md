@@ -21,7 +21,6 @@ python3 app.py
   - Password: `password`
 
   The seed creates this account for you. Alice follows Bob, so Bob's active
-  Dune session (~45 min) will appear in the Focus tab Join feed.
 
 Notes
 - Database schema is in `schema.sql`.
