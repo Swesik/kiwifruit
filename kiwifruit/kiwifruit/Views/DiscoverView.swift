@@ -48,10 +48,6 @@ struct DiscoverView: View {
                 }
             }
         }
-        .task(id: sessionStore.isValidSession) {
-            guard sessionStore.isValidSession else { return }
-            await recommendationsStore.load(limit: 8)
-        }
     }
 
     // MARK: - Search

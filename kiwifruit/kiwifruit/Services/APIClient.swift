@@ -611,6 +611,8 @@ final class RESTAPIClient: APIClientProtocol {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode([BookRecommendation].self, from: data)
+    }
+
     func fetchPreferences() async throws -> UserPreferences {
         let url = baseURL.appendingPathComponent("/preferences")
         var req = URLRequest(url: url)

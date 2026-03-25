@@ -439,7 +439,17 @@ def get_recommendations():
         (username,),
     ).fetchall()
 
-    ranked = rank_recommendations(catalog, history, limit)
+    # Fetch user's preferred genres
+    prefs_row = db.execute(
+        'SELECT preferred_genres FROM user_preferences WHERE username = ?',
+        (username,),
+    ).fetchone()
+    preferred_genres = []
+    if prefs_row and prefs_row['preferred_genres']:
+        import json as _json
+        preferred_genres = _json.loads(prefs_row['preferred_genres'])
+
+    ranked = rank_recommendations(catalog, history, limit, preferred_genres)
     payload = [
         {
             'book_id': row['book_id'],
