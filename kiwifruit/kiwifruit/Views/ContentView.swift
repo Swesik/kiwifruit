@@ -5,7 +5,6 @@ struct ContentView: View {
     @Environment(\.postsStore) private var postsStore: PostsStore
     @Environment(\.readingSessionStore) private var readingSessionStore: ReadingSessionStore
     @Environment(\.recommendationsStore) private var recommendationsStore: RecommendationsStore
-    @Environment(\.userPreferencesStore) private var userPreferencesStore: UserPreferencesStore
     @State private var selection: Int = 2
 
     @State private var bookSearchViewModel = BookSearchViewModel(api: AppAPI.shared)
@@ -28,16 +27,13 @@ struct ContentView: View {
             CustomTabBar(selection: $selection)
         }
         .onAppear {
-            if session.isValidSession && session.userId != nil {
-                Task { await postsStore.loadInitial() }
-                Task { await userPreferencesStore.load() }
-            }
+            if session.isValidSession && session.userId != nil { Task { await postsStore.loadInitial() } }
         }
         .onChange(of: session.userId) { _, new in
             if new != nil {
                 selection = 2
                 Task { await postsStore.loadInitial(force: true) }
-                Task { await recommendationsStore.load(refreshData: true) }
+                Task { await recommendationsStore.load() }
             } else {
                 recommendationsStore.reset()
             }
@@ -46,9 +42,8 @@ struct ContentView: View {
             if valid && session.userId != nil {
                 selection = 2
                 Task { await postsStore.loadInitial(force: true) }
-                Task { await recommendationsStore.load(refreshData: true) }
+                Task { await recommendationsStore.load() }
                 readingSessionStore.loadFriendSessions()
-                Task { await userPreferencesStore.load() }
             }
         }
         .fullScreenCover(isPresented: Binding(get: { !(session.isValidSession && session.userId != nil) }, set: { _ in })) {

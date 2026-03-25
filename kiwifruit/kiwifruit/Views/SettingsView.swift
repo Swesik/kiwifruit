@@ -1,13 +1,13 @@
 import SwiftUI
 
 private let allGenres = [
-    "Fantasy", "Sci-Fi", "Mystery", "Thriller", "Romance",
-    "Historical Fiction", "Literary Fiction", "Non-Fiction",
-    "Biography", "Self-Help", "Horror", "Graphic Novel"
+    "fantasy", "sci-fi", "mystery", "classic", "dystopian",
+    "memoir", "nonfiction", "fiction"
 ]
 
 struct SettingsView: View {
     @Environment(\.userPreferencesStore) private var store: UserPreferencesStore
+    @Environment(\.recommendationsStore) private var recommendationsStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var dailyGoal: Int = 30
@@ -64,6 +64,9 @@ struct SettingsView: View {
                                 dailyGoal: dailyGoal,
                                 genres: Array(selectedGenres)
                             )
+                            // Refresh recommendations to reflect new preferences
+                            recommendationsStore.reset()
+                            await recommendationsStore.load()
                             isSaving = false
                             dismiss()
                         }
