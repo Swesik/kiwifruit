@@ -1,178 +1,176 @@
 import SwiftUI
 
+private enum MoodStatsDesign {
+    static let border = Color(hex: "2D3748")
+    static let uiText = Color(hex: "2D3748")
+    static let kiwi = Color(hex: "A3C985")
+    static let kiwiLight = Color(hex: "E6F0DC")
+    static let tealCard = Color(hex: "CFE6EC")
+    static let tan = Color(hex: "D1BFAe")
+}
+
 struct MoodMapStatsView: View {
     @Environment(\.moodSessionStore) private var moodStore: MoodSessionStore
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    headerSection
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                headerSection
+                VStack(alignment: .leading, spacing: 32) {
                     statsOverview
-                    sessionsList
-                }
-                .padding()
-            }
-            .background(Color(hex: "FAFAFA"))
-            .navigationTitle("Mood Map Stats")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        dismiss()
+                    if moodStore.savedSessions.isEmpty {
+                        emptyState
+                    } else {
+                        recentSessionsSection
                     }
                 }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 48)
             }
         }
-        .onAppear {
-            moodStore.refreshSessionsIfNeeded()
-        }
+        .background(Color.white)
+        .toolbar(.hidden, for: .navigationBar)
+        .onAppear { moodStore.refreshSessionsIfNeeded() }
     }
+
+    // MARK: - Header
 
     private var headerSection: some View {
-        VStack(spacing: 8) {
-            Text("Your Reading Moods")
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundStyle(Color(hex: "2D3748"))
+        VStack(alignment: .leading, spacing: 8) {
+            Button("close") { dismiss() }
+                .font(.subheadline).fontWeight(.bold)
+                .foregroundColor(MoodStatsDesign.uiText)
+                .padding(.horizontal, 16).padding(.vertical, 8)
+                .background(MoodStatsDesign.tan)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .overlay(RoundedRectangle(cornerRadius: 20).stroke(MoodStatsDesign.border, lineWidth: 2))
+                .sketchShadow(cornerRadius: 20)
 
-            Text("Track your emotional journey while reading")
-                .font(.subheadline)
-                .foregroundStyle(Color(hex: "2D3748").opacity(0.6))
+            Text("Mood Stats")
+                .font(.system(size: 36, weight: .black))
+                .foregroundColor(MoodStatsDesign.uiText)
+
+            Text("Your emotional journey while reading")
+                .font(.subheadline).fontWeight(.semibold)
+                .foregroundColor(MoodStatsDesign.uiText.opacity(0.6))
         }
-        .padding(.top)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 24)
+        .padding(.top, 48)
+        .padding(.bottom, 24)
     }
+
+    // MARK: - Stats Overview
 
     private var statsOverview: some View {
-        VStack(spacing: 16) {
-            HStack(spacing: 16) {
-                statCard(
-                    mood: .focused,
-                    count: focusedCount,
-                    total: totalSessions
-                )
-                statCard(
-                    mood: .inspired,
-                    count: inspiredCount,
-                    total: totalSessions
-                )
-                statCard(
-                    mood: .tired,
-                    count: tiredCount,
-                    total: totalSessions
-                )
-            }
+        HStack(spacing: 12) {
+            statCard(mood: .focused, count: focusedCount)
+            statCard(mood: .inspired, count: inspiredCount)
+            statCard(mood: .tired, count: tiredCount)
         }
     }
 
-    private func statCard(mood: QuickMood, count: Int, total: Int) -> some View {
-        let percentage = total > 0 ? Double(count) / Double(total) * 100 : 0
+    private func statCard(mood: QuickMood, count: Int) -> some View {
+        let percentage = totalSessions > 0 ? Int(Double(count) / Double(totalSessions) * 100) : 0
 
-        return         VStack(spacing: 8) {
-            Text(moodEmoji(mood))
-                .font(.system(size: 28))
-
+        return VStack(spacing: 8) {
             Text("\(count)")
-                .font(.title)
-                .fontWeight(.bold)
-                .foregroundStyle(Color(hex: "2D3748"))
+                .font(.system(size: 28, weight: .black))
+                .foregroundColor(MoodStatsDesign.uiText)
 
             Text(mood.displayName)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(Color(hex: "2D3748").opacity(0.7))
+                .font(.caption).fontWeight(.bold)
+                .foregroundColor(MoodStatsDesign.uiText)
 
-            Text(String(format: "%.0f%%", percentage))
-                .font(.caption2)
-                .foregroundStyle(Color(hex: "2D3748").opacity(0.5))
+            Text("\(percentage)%")
+                .font(.caption2).fontWeight(.semibold)
+                .foregroundColor(MoodStatsDesign.uiText.opacity(0.5))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white)
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: "2D3748").opacity(0.2), lineWidth: 1))
-        )
+        .background(moodCardColor(mood))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(MoodStatsDesign.border, lineWidth: 2))
+        .sketchShadow()
     }
 
-    private var sessionsList: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Recent Sessions")
-                .font(.headline)
-                .foregroundStyle(Color(hex: "2D3748"))
-                .padding(.top, 8)
+    private func moodCardColor(_ mood: QuickMood) -> Color {
+        switch mood {
+        case .focused: return MoodStatsDesign.tealCard
+        case .inspired: return MoodStatsDesign.kiwiLight
+        case .tired: return Color(hex: "F5E6D3")
+        }
+    }
 
-            if moodStore.savedSessions.isEmpty {
-                emptyState
-            } else {
+    // MARK: - Recent Sessions
+
+    private var recentSessionsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Recent sessions")
+                .font(.title2).fontWeight(.black)
+                .foregroundColor(MoodStatsDesign.uiText)
+
+            VStack(spacing: 12) {
                 ForEach(moodStore.savedSessions.prefix(10)) { session in
-                    sessionRow(session: session)
+                    sessionCard(session)
                 }
             }
         }
     }
 
+    private func sessionCard(_ session: MoodMapSession) -> some View {
+        let timeFormatter: DateFormatter = {
+            let f = DateFormatter()
+            f.dateFormat = "MMM d, h:mm a"
+            return f
+        }()
+
+        let duration = Int(session.endedAt.timeIntervalSince(session.startedAt))
+        let minutes = duration / 60
+
+        return HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(session.postSessionMood?.displayName ?? "No mood")
+                    .font(.subheadline).fontWeight(.bold)
+                    .foregroundColor(MoodStatsDesign.uiText)
+                Text(timeFormatter.string(from: session.endedAt))
+                    .font(.caption).fontWeight(.semibold)
+                    .foregroundColor(MoodStatsDesign.uiText.opacity(0.6))
+            }
+            Spacer()
+            Text("\(minutes)m")
+                .font(.caption).fontWeight(.black)
+                .foregroundColor(MoodStatsDesign.uiText)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(MoodStatsDesign.kiwiLight)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(MoodStatsDesign.border, lineWidth: 2))
+        }
+        .padding(16)
+        .background(MoodStatsDesign.tealCard)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(MoodStatsDesign.border, lineWidth: 2))
+        .sketchShadow()
+    }
+
+    // MARK: - Empty
+
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Image(systemName: "face.dashed")
-                .font(.system(size: 48))
-                .foregroundStyle(Color(hex: "2D3748").opacity(0.3))
-
             Text("No mood sessions yet")
-                .font(.headline)
-                .foregroundStyle(Color(hex: "2D3748").opacity(0.5))
-
-            Text("Start a mood session during your next reading to track your emotions")
-                .font(.subheadline)
-                .foregroundStyle(Color(hex: "2D3748").opacity(0.4))
+                .font(.title3).fontWeight(.black)
+                .foregroundColor(MoodStatsDesign.uiText)
+            Text("Start a mood capture during your next reading session to track how you feel.")
+                .font(.subheadline).fontWeight(.medium)
+                .foregroundColor(MoodStatsDesign.uiText.opacity(0.6))
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.vertical, 32)
     }
 
-    private func sessionRow(session: MoodMapSession) -> some View {
-        HStack(spacing: 12) {
-            if let mood = session.postSessionMood {
-                Text(moodEmoji(mood))
-                    .font(.system(size: 24))
-                    .frame(width: 40, height: 40)
-                    .background(
-                        Circle()
-                            .fill(moodColor(mood).opacity(0.15))
-                    )
-            } else {
-                Image(systemName: "questionmark.circle")
-                    .font(.system(size: 24))
-                    .foregroundStyle(Color.gray)
-                    .frame(width: 40, height: 40)
-                    .background(
-                        Circle()
-                            .fill(Color.gray.opacity(0.15))
-                    )
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(session.postSessionMood?.displayName ?? "Unknown")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color(hex: "2D3748"))
-
-                Text(formattedDate(session.endedAt))
-                    .font(.caption)
-                    .foregroundStyle(Color(hex: "2D3748").opacity(0.5))
-            }
-
-            Spacer()
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white)
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: "2D3748").opacity(0.1), lineWidth: 1))
-        )
-    }
+    // MARK: - Computed
 
     private var focusedCount: Int {
         moodStore.savedSessions.filter { $0.postSessionMood == .focused }.count
@@ -189,31 +187,9 @@ struct MoodMapStatsView: View {
     private var totalSessions: Int {
         moodStore.savedSessions.count
     }
-
-    private func moodEmoji(_ mood: QuickMood) -> String {
-        switch mood {
-        case .focused: return "🎯"
-        case .inspired: return "✨"
-        case .tired: return "😴"
-        }
-    }
-
-    private func moodColor(_ mood: QuickMood) -> Color {
-        switch mood {
-        case .focused: return Color(hex: "88C0D0")
-        case .inspired: return Color(hex: "A3C985")
-        case .tired: return Color(hex: "D1BFAe")
-        }
-    }
-
-    private func formattedDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
 }
 
 #Preview {
     MoodMapStatsView()
+        .environment(\.moodSessionStore, MoodSessionStore())
 }
