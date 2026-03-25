@@ -14,6 +14,16 @@ final class MoodMapCaptureService {
 
     /// Start the front camera
     func startSession() {
+        AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+            guard granted else { return }
+            Task { @MainActor [weak self] in
+                self?.setupSession()
+            }
+        }
+    }
+
+    @MainActor
+    private func setupSession() {
         let session = AVCaptureSession()
         session.sessionPreset = .medium
 

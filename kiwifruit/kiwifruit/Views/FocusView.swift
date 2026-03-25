@@ -974,7 +974,7 @@ Button("mood session stats") {
         return String(format: "%d:%02d", minutes, seconds)
     }
 
-    private func moodIcon(_ mood: QuickMood) -> String {
+    private func moodEmoji(_ mood: QuickMood) -> String {
         switch mood {
         case .focused: return "target"
         case .inspired: return "sparkles"

@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct MoodCaptureSheet: View {
     @Environment(\.moodSessionStore) private var moodStore: MoodSessionStore
     @Environment(\.dismiss) private var dismiss
@@ -62,9 +63,8 @@ struct MoodCaptureSheet: View {
             selectedMood = mood
         } label: {
             HStack(spacing: 16) {
-                Image(systemName: moodIcon(mood))
+                Text(moodEmoji(mood))
                     .font(.system(size: 28))
-                    .foregroundStyle(moodColor(mood))
                     .frame(width: 50, height: 50)
                     .background(
                         Circle()
@@ -158,11 +158,11 @@ struct MoodCaptureSheet: View {
         dismiss()
     }
 
-    private func moodIcon(_ mood: QuickMood) -> String {
+    private func moodEmoji(_ mood: QuickMood) -> String {
         switch mood {
-        case .focused: return "target"
-        case .inspired: return "sparkles"
-        case .tired: return "zzz"
+        case .focused: return "🎯"
+        case .inspired: return "✨"
+        case .tired: return "😴"
         }
     }
 

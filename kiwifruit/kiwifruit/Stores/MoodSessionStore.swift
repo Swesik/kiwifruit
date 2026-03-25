@@ -60,7 +60,19 @@ public final class MoodSessionStore {
 
     /// End Mood Map capture and save session (mood is selected by user in MoodCaptureSheet)
     public func endMoodMap() {
+        guard let startedAt = moodMapStartedAt else {
+            moodMapState = .idle
+            moodMapStartedAt = nil
+            return
+        }
         loadSessionsIfNeeded()
+        let session = MoodMapSession(
+            startedAt: startedAt,
+            endedAt: Date(),
+            postSessionMood: nil
+        )
+        savedSessions.insert(session, at: 0)
+        persistSessions()
         moodMapState = .idle
         moodMapStartedAt = nil
     }
