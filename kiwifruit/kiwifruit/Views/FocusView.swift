@@ -522,7 +522,7 @@ struct FocusView: View {
             .padding(.horizontal, 32)
             .tint(FocusDesign.kiwi)
 
-            Button("Done") {
+            Button(action: {
                 let endPage = Int(tempEndingPage.trimmingCharacters(in: .whitespaces))
                 let bookTitle = sessionStore.bookTitle
                 let finished = didFinishBook
@@ -533,16 +533,18 @@ struct FocusView: View {
                 if finished, let title = bookTitle {
                     Task { await challengeViewModel.markBookCompleted(title: title) }
                 }
+            }) {
+                Text("Done")
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundStyle(canSubmit ? FocusDesign.handDrawnBorder : FocusDesign.handDrawnBorder.opacity(0.3))
+                    .frame(width: 280, height: 50)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(canSubmit ? FocusDesign.kiwi : FocusDesign.kiwi.opacity(0.3))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(FocusDesign.handDrawnBorder.opacity(canSubmit ? 1 : 0.3), lineWidth: 3))
+                    )
             }
-            .font(.headline)
-            .fontWeight(.bold)
-            .foregroundStyle(canSubmit ? FocusDesign.handDrawnBorder : FocusDesign.handDrawnBorder.opacity(0.3))
-            .frame(width: 280, height: 50)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(canSubmit ? FocusDesign.kiwi : FocusDesign.kiwi.opacity(0.3))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(FocusDesign.handDrawnBorder.opacity(canSubmit ? 1 : 0.3), lineWidth: 3))
-            )
             .buttonStyle(.plain)
             .disabled(!canSubmit)
 
