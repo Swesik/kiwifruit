@@ -1,11 +1,38 @@
 import Foundation
 
-// Helper to build multipart body
+// Helper to build multipart/form-data requests.
 fileprivate extension Data {
     mutating func appendString(_ string: String) {
         if let data = string.data(using: .utf8) {
             append(data)
         }
+    }
+}
+
+/// Builds a multipart/form-data body from text fields and an optional file attachment.
+fileprivate struct MultipartFormData {
+    let boundary = "Boundary-\(UUID().uuidString)"
+    private var body = Data()
+
+    var contentType: String { "multipart/form-data; boundary=\(boundary)" }
+    var data: Data { body }
+
+    mutating func addField(name: String, value: String) {
+        body.appendString("--\(boundary)\r\n")
+        body.appendString("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
+        body.appendString("\(value)\r\n")
+    }
+
+    mutating func addFile(name: String, filename: String, mimeType: String, data fileData: Data) {
+        body.appendString("--\(boundary)\r\n")
+        body.appendString("Content-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\n")
+        body.appendString("Content-Type: \(mimeType)\r\n\r\n")
+        body.append(fileData)
+        body.appendString("\r\n")
+    }
+
+    mutating func finalize() {
+        body.appendString("--\(boundary)--\r\n")
     }
 }
 
@@ -54,6 +81,8 @@ protocol APIClientProtocol {
     func fetchPreferences() async throws -> UserPreferences
     /// Creates or updates the current user's reading preferences.
     func savePreferences(_ preferences: UserPreferences) async throws
+    /// Uploads an epub file to the server for background parsing.
+    func uploadEpub(fileData: Data, filename: String) async throws -> EpubUploadResponse
 }
 
 /// Simple in-memory/mock client used in previews and when no backend is configured.
@@ -173,6 +202,9 @@ final class MockAPIClient: APIClientProtocol {
             ocrText: ocrText
         )
     }
+    func uploadEpub(fileData: Data, filename: String) async throws -> EpubUploadResponse {
+        return EpubUploadResponse(id: "1", title: "Mock Book", author: "Mock Author", status: "LOADING", originalFilename: filename, createdAt: "2026-01-01T00:00:00Z")
+    }
 }
 
 /// A simple REST API client implementation using URLSession and async/await.
@@ -212,24 +244,14 @@ final class RESTAPIClient: APIClientProtocol {
         var req = URLRequest(url: url); req.httpMethod = "POST"
         if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
 
-        if let data = imageData {
-            let boundary = "Boundary-\(UUID().uuidString)"
-            req.addValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-            var body = Data()
-            body.appendString("--\(boundary)\r\n")
-            body.appendString("Content-Disposition: form-data; name=\"authorId\"\r\n\r\n")
-            body.appendString("\(authorId)\r\n")
-            if let caption = caption {
-                body.appendString("--\(boundary)\r\n")
-                body.appendString("Content-Disposition: form-data; name=\"caption\"\r\n\r\n")
-                body.appendString("\(caption)\r\n")
-            }
-            body.appendString("--\(boundary)\r\n")
-            body.appendString("Content-Disposition: form-data; name=\"file\"; filename=\"image.jpg\"\r\n")
-            body.appendString("Content-Type: image/jpeg\r\n\r\n")
-            body.append(data)
-            body.appendString("\r\n--\(boundary)--\r\n")
-            req.httpBody = body
+        if let imageData {
+            var form = MultipartFormData()
+            form.addField(name: "authorId", value: authorId)
+            if let caption { form.addField(name: "caption", value: caption) }
+            form.addFile(name: "file", filename: "image.jpg", mimeType: "image/jpeg", data: imageData)
+            form.finalize()
+            req.addValue(form.contentType, forHTTPHeaderField: "Content-Type")
+            req.httpBody = form.data
         } else {
             req.addValue("application/json", forHTTPHeaderField: "Content-Type")
             var body: [String: Any] = [:]
@@ -673,14 +695,36 @@ final class RESTAPIClient: APIClientProtocol {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(BookScanResponse.self, from: data)
     }
+
+    func uploadEpub(fileData: Data, filename: String) async throws -> EpubUploadResponse {
+        let url = baseURL.appendingPathComponent("/epub")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+
+        var form = MultipartFormData()
+        form.addFile(name: "file", filename: filename, mimeType: "application/epub+zip", data: fileData)
+        form.finalize()
+        req.addValue(form.contentType, forHTTPHeaderField: "Content-Type")
+        req.httpBody = form.data
+
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            let bodyText = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+            print("uploadEpub failed HTTP \(http.statusCode): \(bodyText)")
+            throw URLError(.badServerResponse)
+        }
+
+        let decoder = JSONDecoder()
+        return try decoder.decode(EpubUploadResponse.self, from: data)
+    }
 }
 
 enum AppAPI {
     /// Default API server base URL for local development.
     static let defaultBaseURL = URL(string: "http://127.0.0.1:5000")!
-    
+
     /// Default shared client. Swap to `RESTAPIClient(baseURL:)` when you have a backend.
     static var shared: APIClientProtocol = RESTAPIClient(baseURL: defaultBaseURL)
 }
-
-

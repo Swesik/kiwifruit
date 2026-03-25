@@ -73,9 +73,9 @@ The backend is a Flask application managing data persistence and API endpoints.
     ```bash
     python3 seed_db.py
     ```
-4.  Run the application:
+4.  Run the application from project root:
     ```bash
-    python3 app.py
+    cd .. && python3 -m server.app
     ```
 5.  Open the iOS app and **log in** (do not create a new account) with:
     - Username: `alice` — Password: `password`

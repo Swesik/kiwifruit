@@ -68,3 +68,13 @@ struct ActiveFriendSession: Identifiable, Codable, Hashable {
 
     var id: String { session.id }
 }
+
+/// Response from POST /api/epub upload.
+struct EpubUploadResponse: Identifiable, Codable {
+    let id: String
+    let title: String
+    let author: String
+    let status: String
+    let originalFilename: String
+    let createdAt: String
+}
