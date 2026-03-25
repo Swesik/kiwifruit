@@ -574,6 +574,8 @@ struct FocusView: View {
                 if finished, let title = bookTitle {
                     Task { await challengeViewModel.markBookCompleted(title: title) }
                 }
+                // Show mood capture after session ends
+                showingMoodCapture = true
             }) {
                 Text("Done")
                     .font(.headline)
@@ -585,8 +587,6 @@ struct FocusView: View {
                             .fill(canSubmit ? FocusDesign.kiwi : FocusDesign.kiwi.opacity(0.3))
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(FocusDesign.handDrawnBorder.opacity(canSubmit ? 1 : 0.3), lineWidth: 3))
                     )
-                // Show mood capture after session ends
-                showingMoodCapture = true
             }
             .buttonStyle(.plain)
             .disabled(!canSubmit)
