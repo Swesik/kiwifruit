@@ -67,6 +67,7 @@ final class PostsStore {
 // Environment key so a single PostsStore can be injected into SwiftUI view hierarchy.
 import SwiftUI
 
+@MainActor
 private struct PostsStoreKey: EnvironmentKey {
     static let defaultValue: PostsStore = PostsStore()
 }

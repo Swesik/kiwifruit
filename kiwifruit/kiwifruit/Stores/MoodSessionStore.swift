@@ -119,6 +119,7 @@ public final class MoodSessionStore {
 // MARK: - Environment
 
 /// EnvironmentKey for SwiftUI dependency injection
+@MainActor
 private struct MoodSessionStoreKey: EnvironmentKey {
     static let defaultValue: MoodSessionStore = MoodSessionStore()
 }

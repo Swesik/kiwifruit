@@ -11,6 +11,7 @@ private enum ChallengesDesign {
 
 struct ChallengesView: View {
     @Environment(\.challengeViewModel) private var viewModel: ChallengeViewModel
+    @State private var showCreateSheet = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -30,6 +31,9 @@ struct ChallengesView: View {
         .background(Color.white)
         .toolbar(.hidden, for: .navigationBar)
         .task { await viewModel.updateProgress() }
+        .sheet(isPresented: $showCreateSheet) {
+            CreateChallengeSheet(viewModel: viewModel)
+        }
     }
 
     // MARK: - Header
@@ -200,9 +204,25 @@ struct ChallengesView: View {
 
     private var discoverMoreSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Discover more")
-                .font(.title2).fontWeight(.black)
-                .foregroundColor(ChallengesDesign.uiText)
+            HStack {
+                Text("Discover more")
+                    .font(.title2).fontWeight(.black)
+                    .foregroundColor(ChallengesDesign.uiText)
+                Spacer()
+                if viewModel.canAcceptChallenge {
+                    Button { showCreateSheet = true } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 14, weight: .black))
+                            .foregroundColor(ChallengesDesign.uiText)
+                            .frame(width: 32, height: 32)
+                            .background(ChallengesDesign.kiwi)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(ChallengesDesign.border, lineWidth: 2))
+                            .sketchShadow()
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
 
             VStack(spacing: 12) {
                 ForEach(viewModel.discoverChallenges) { challenge in

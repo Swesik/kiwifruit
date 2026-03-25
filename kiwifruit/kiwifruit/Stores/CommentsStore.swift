@@ -73,6 +73,7 @@ final class CommentsStore {
     }
 }
 
+@MainActor
 private struct CommentsStoreKey: EnvironmentKey {
     static let defaultValue: CommentsStore = CommentsStore()
 }

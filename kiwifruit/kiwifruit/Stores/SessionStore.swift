@@ -19,14 +19,19 @@ final class SessionStore {
     let apiClient: RESTAPIClient
 
     // Default to local dev server. Change `baseURL` when pointing to a deployed API.
-    // If your Flask server runs on a different port (e.g. 50001), set that here
+    // If your Flask server runs on a different port, set that here
     // or set the `KIWIFRUIT_API_URL` env var and pass it when creating the store.
     
-    private static let defaultBaseURL = URL(string: "http://127.0.0.1:5001")
-        ?? URL(fileURLWithPath: "/")
-
-    init(baseURL: URL = SessionStore.defaultBaseURL) {
+    init(baseURL: URL = AppAPI.defaultBaseURL, previewLoggedIn: Bool = false) {
         self.apiClient = RESTAPIClient(baseURL: baseURL)
+        if previewLoggedIn {
+            isValidSession = true
+            userId = MockData.sampleUser.id
+            currentUser = MockData.sampleUser
+            AppAPI.shared = MockAPIClient()
+            apiClient.setAuthToken(nil)
+            return
+        }
         load()
         // Ensure global API client uses this REST client by default
         AppAPI.shared = apiClient
@@ -112,6 +117,7 @@ final class SessionStore {
 }
 
 // Environment key for SessionStore
+@MainActor
 private struct SessionStoreKey: EnvironmentKey {
     static let defaultValue: SessionStore = SessionStore()
 }

@@ -210,6 +210,39 @@ POST /comments
 
 ---
 
+### 5. Recommendations (skeleton)
+
+#### Get personalized recommendations
+
+```
+GET /recommendations?limit=8
+```
+
+**Query parameters**
+
+- `limit` (optional): number of books to return; default **8**, maximum **20**.
+
+**Requires authentication**: Yes (`Authorization: Bearer <token>`).
+
+**403**: Missing or invalid token.
+
+**200**: JSON array of book objects (snake_case keys; iOS decodes with `keyDecodingStrategy: .convertFromSnakeCase`):
+
+```json
+[
+  {
+    "book_id": 3,
+    "title": "The Great Gatsby",
+    "author": "F. Scott Fitzgerald",
+    "cover_url": "https://covers.openlibrary.org/b/isbn/9780743273565-M.jpg"
+  }
+]
+```
+
+**Behavior (skeleton):** Candidates come from the server `catalog_books` table. Titles the user has already completed (in `session_history`) are excluded. Remaining books are ranked with a simple genre boost derived from past sessions.
+
+---
+
 ## iOS Client Implementation
 
 ### APIClient Protocol
