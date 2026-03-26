@@ -168,7 +168,9 @@ final class ChallengeViewModel {
             guard let date = iso.date(from: entry.endedAt) else { continue }
             let components = calendar.dateComponents([.year, .month, .day], from: date)
             sessionDays.insert(components)
-            if earliestDate == nil || date < earliestDate! {
+            if let earliest = earliestDate {
+                if date < earliest { earliestDate = date }
+            } else {
                 earliestDate = date
             }
             if let year = components.year, let month = components.month, let day = components.day {

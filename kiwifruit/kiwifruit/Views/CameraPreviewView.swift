@@ -61,7 +61,7 @@ final class CameraPreviewUIView: UIView {
     /// safety net rather than a runtime concern.
     var previewLayer: AVCaptureVideoPreviewLayer {
         guard let preview = layer as? AVCaptureVideoPreviewLayer else {
-            fatalError("layerClass is AVCaptureVideoPreviewLayer but cast failed — this should never happen")
+            fatalError("layerClass must be AVCaptureVideoPreviewLayer")
         }
         return preview
     }
