@@ -24,7 +24,10 @@ final class CameraPreviewUIView: UIView {
     }
 
     var previewLayer: AVCaptureVideoPreviewLayer {
-        layer as! AVCaptureVideoPreviewLayer
+        guard let preview = layer as? AVCaptureVideoPreviewLayer else {
+            fatalError("layerClass must be AVCaptureVideoPreviewLayer")
+        }
+        return preview
     }
 
     override func layoutSubviews() {

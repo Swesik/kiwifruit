@@ -100,7 +100,10 @@ final class MockAPIClient: APIClientProtocol {
             try data.write(to: tmp)
             imageURL = tmp
         } else {
-            imageURL = URL(string: "https://picsum.photos/seed/kiwi/600/600")!
+            guard let fallback = URL(string: "https://picsum.photos/seed/kiwi/600/600") else {
+                throw URLError(.badURL)
+            }
+            imageURL = fallback
         }
         return Post(id: UUID().uuidString, author: MockData.sampleUser, imageURL: imageURL, caption: caption, likes: 0, createdAt: Date())
     }
@@ -230,9 +233,12 @@ final class RESTAPIClient: APIClientProtocol {
     func setAuthToken(_ token: String?) { self.authToken = token }
 
     func fetchPosts(page: Int, pageSize: Int) async throws -> [Post] {
-        var comps = URLComponents(url: baseURL.appendingPathComponent("/posts"), resolvingAgainstBaseURL: false)!
+        guard var comps = URLComponents(url: baseURL.appendingPathComponent("/posts"), resolvingAgainstBaseURL: false) else {
+            throw URLError(.badURL)
+        }
         comps.queryItems = [ URLQueryItem(name: "page", value: String(page)), URLQueryItem(name: "pageSize", value: String(pageSize)) ]
-        var req = URLRequest(url: comps.url!)
+        guard let url = comps.url else { throw URLError(.badURL) }
+        var req = URLRequest(url: url)
         if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         let (data, _) = try await session.data(for: req)
         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase; decoder.dateDecodingStrategy = .iso8601
@@ -582,13 +588,14 @@ final class RESTAPIClient: APIClientProtocol {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return [] }
 
-        var comps = URLComponents(
+        guard var comps = URLComponents(
             url: baseURL.appendingPathComponent("/books/search"),
             resolvingAgainstBaseURL: false
-        )!
+        ) else { throw URLError(.badURL) }
         comps.queryItems = [URLQueryItem(name: "q", value: trimmed)]
 
-        var req = URLRequest(url: comps.url!)
+        guard let searchURL = comps.url else { throw URLError(.badURL) }
+        var req = URLRequest(url: searchURL)
         if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
 
         debugLogRequest(req)
@@ -723,7 +730,12 @@ final class RESTAPIClient: APIClientProtocol {
 
 enum AppAPI {
     /// Default API server base URL for local development.
-    static let defaultBaseURL = URL(string: "http://127.0.0.1:5000")!
+    static let defaultBaseURL: URL = {
+        guard let url = URL(string: "http://127.0.0.1:5000") else {
+            fatalError("Invalid default API base URL")
+        }
+        return url
+    }()
 
     /// Default shared client. Swap to `RESTAPIClient(baseURL:)` when you have a backend.
     static var shared: APIClientProtocol = RESTAPIClient(baseURL: defaultBaseURL)

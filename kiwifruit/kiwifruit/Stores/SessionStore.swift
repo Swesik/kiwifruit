@@ -40,17 +40,13 @@ final class SessionStore {
         // Uses GET /users/me which requires auth — an expired/deleted token correctly fails
         // and triggers clear(), forcing the login screen.
         if token != nil {
-            Task {
+            Task { @MainActor in
                 do {
                     let user = try await fetchCurrentSessionUser()
-                    DispatchQueue.main.async {
-                        self.currentUser = user
-                        self.isValidSession = true
-                    }
+                    self.currentUser = user
+                    self.isValidSession = true
                 } catch {
-                    DispatchQueue.main.async {
-                        self.clear()
-                    }
+                    self.clear()
                 }
             }
         }

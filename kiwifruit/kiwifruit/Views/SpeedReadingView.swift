@@ -4,8 +4,7 @@ import UniformTypeIdentifiers
 struct SpeedReadingView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showFilePicker = false
-    @State private var isUploading = false
-    @State private var uploadMessage: String?
+    @State private var viewModel = SpeedReadingViewModel()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -58,15 +57,15 @@ struct SpeedReadingView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "2D3748"), lineWidth: 3))
                             .sketchShadow()
-                            .disabled(isUploading)
+                            .disabled(viewModel.isUploading)
                         }
 
-                        if isUploading {
+                        if viewModel.isUploading {
                             ProgressView("Uploading...")
                                 .foregroundColor(Color(hex: "2D3748"))
                         }
 
-                        if let message = uploadMessage {
+                        if let message = viewModel.uploadMessage {
                             Text(message)
                                 .font(.subheadline)
                                 .foregroundColor(Color(hex: "2D3748"))
@@ -88,39 +87,13 @@ struct SpeedReadingView: View {
             switch result {
             case .success(let urls):
                 guard let url = urls.first else { return }
-                uploadEpub(from: url)
+                viewModel.uploadEpub(from: url)
             case .failure(let error):
-                uploadMessage = "Failed to pick file: \(error.localizedDescription)"
+                viewModel.uploadMessage = "Failed to pick file: \(error.localizedDescription)"
             }
         }
     }
 
-    private func uploadEpub(from url: URL) {
-        guard url.startAccessingSecurityScopedResource() else {
-            uploadMessage = "Unable to access file."
-            return
-        }
-        defer { url.stopAccessingSecurityScopedResource() }
-
-        guard let fileData = try? Data(contentsOf: url) else {
-            uploadMessage = "Unable to read file."
-            return
-        }
-
-        let filename = url.lastPathComponent
-        isUploading = true
-        uploadMessage = nil
-        Task {
-            do {
-                let response = try await AppAPI.shared.uploadEpub(fileData: fileData, filename: filename)
-                isUploading = false
-                uploadMessage = "Uploaded \"\(response.title)\" by \(response.author)"
-            } catch {
-                isUploading = false
-                uploadMessage = "Upload failed: \(error.localizedDescription)"
-            }
-        }
-    }
 }
 
 #Preview {
