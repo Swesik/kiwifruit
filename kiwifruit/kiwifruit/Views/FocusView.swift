@@ -575,6 +575,7 @@ struct FocusView: View {
                 if finished, let title = bookTitle {
                     Task { await challengeViewModel.markBookCompleted(title: title) }
                 }
+                // Show mood capture after session ends
                 showingMoodCapture = true
             }) {
                 Text("Done")
