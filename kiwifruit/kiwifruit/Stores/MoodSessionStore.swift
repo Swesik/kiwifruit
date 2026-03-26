@@ -11,7 +11,7 @@ public protocol MoodSessionStorageProtocol: Sendable {
 
 /// Default implementation backed by UserDefaults.
 public struct UserDefaultsMoodSessionStorage: MoodSessionStorageProtocol {
-    public init() {}
+    nonisolated public init() {}
 
     private let key = "kiwifruit.moodmap.sessions"
 

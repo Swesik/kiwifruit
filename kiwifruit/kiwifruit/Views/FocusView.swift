@@ -15,6 +15,7 @@ struct FocusView: View {
     @Environment(\.sessionStore) private var session: SessionStore
     @Environment(\.challengeViewModel) private var challengeViewModel: ChallengeViewModel
     @Environment(\.moodSessionStore) private var moodStore: MoodSessionStore
+    @Environment(\.recommendationsStore) private var recommendationsStore: RecommendationsStore
 
     @State private var isSelectingBook = false
     @State private var tempBookTitle = ""
@@ -830,7 +831,10 @@ struct FocusView: View {
                     .frame(height: 40)
             }
         }
-        .task { await challengeViewModel.updateProgress() }
+        .task {
+            await challengeViewModel.updateProgress()
+            await recommendationsStore.load()
+        }
         .alert("Session not saved", isPresented: Binding(
             get: { sessionStore.saveError != nil },
             set: { if !$0 { sessionStore.saveError = nil } }
@@ -846,6 +850,9 @@ struct FocusView: View {
             Button("close") {
                 sessionStore.closeCompletion()
                 challengeViewModel.clearRecentlyCompleted()
+                Task {
+                    await recommendationsStore.load()
+                }
             }
             .font(.headline)
             .fontWeight(.bold)

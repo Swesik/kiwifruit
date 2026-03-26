@@ -1054,9 +1054,10 @@ def complete_reading_session(session_id):
             ).fetchone()
             if session_row:
                 db.execute(
-                    'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read) VALUES (?, ?, ?, ?, ?)',
+                    'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read, ended_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
                     (uuid.uuid4().hex, username, session_row['book_title'], session_row['elapsed_seconds'] or 0, data.get('pages_read'))
                 )
+                logger.info('session completed: user=%s book=%s duration=%d pages=%s', username, session_row['book_title'], session_row['elapsed_seconds'] or 0, data.get('pages_read'))
         db.commit()
     except Exception:
         db.rollback()
