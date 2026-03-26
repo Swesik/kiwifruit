@@ -6,15 +6,21 @@ import SwiftUI
 @Observable
 @MainActor
 final class UserPreferencesStore {
+    private let api: APIClientProtocol
+
     /// Daily reading goal, in minutes.
     var dailyGoalMinutes: Int = UserPreferences.default.dailyGoalMinutes
     /// Preferred genres for the recommendation system.
     var preferredGenres: [String] = UserPreferences.default.preferredGenres
 
+    init(api: APIClientProtocol = AppAPI.shared) {
+        self.api = api
+    }
+
     /// Loads preferences from the server. Falls back silently on error.
     func load() async {
         do {
-            let loaded = try await AppAPI.shared.fetchPreferences()
+            let loaded = try await api.fetchPreferences()
             dailyGoalMinutes = loaded.dailyGoalMinutes
             preferredGenres = loaded.preferredGenres
         } catch {
@@ -31,7 +37,7 @@ final class UserPreferencesStore {
             preferredGenres: genres
         )
         do {
-            try await AppAPI.shared.savePreferences(prefs)
+            try await api.savePreferences(prefs)
         } catch {
             print("[UserPreferencesStore] update failed: \(error)")
         }

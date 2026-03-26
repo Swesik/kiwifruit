@@ -7,8 +7,13 @@ final class PostsStore {
     private(set) var posts: [Post] = []
     private(set) var isLoading = false
 
+    private let api: APIClientProtocol
     private var page = 0
     private let pageSize = 10
+
+    init(api: APIClientProtocol = AppAPI.shared) {
+        self.api = api
+    }
 
     /// Load initial page (idempotent)
     func loadInitial(force: Bool = false) async {
@@ -24,7 +29,7 @@ final class PostsStore {
         isLoading = true
         defer { isLoading = false }
         do {
-            let new = try await AppAPI.shared.fetchPosts(page: page, pageSize: pageSize)
+            let new = try await api.fetchPosts(page: page, pageSize: pageSize)
             // append while avoiding duplicates
             for p in new {
                 if !posts.contains(where: { $0.id == p.id }) {

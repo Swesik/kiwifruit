@@ -5,9 +5,14 @@ import SwiftUI
 /// Loads Discover-tab recommendations from ``GET /recommendations``.
 @Observable
 final class RecommendationsStore {
+    private let api: APIClientProtocol
     @MainActor private(set) var items: [BookRecommendation] = []
     @MainActor private(set) var isLoading = false
     @MainActor private(set) var loadError: String?
+
+    init(api: APIClientProtocol = AppAPI.shared) {
+        self.api = api
+    }
 
     /// SwiftUI previews: seed rows without depending on ``AppAPI`` / ``SessionStore``.
     @MainActor
@@ -44,7 +49,7 @@ final class RecommendationsStore {
         loadError = nil
         defer { isLoading = false }
         do {
-            let fetched = try await AppAPI.shared.fetchRecommendations(limit: limit)
+            let fetched = try await api.fetchRecommendations(limit: limit)
             items = fetched
         } catch {
             loadError = "Could not load recommendations."

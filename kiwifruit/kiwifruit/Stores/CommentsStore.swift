@@ -5,8 +5,13 @@ import SwiftUI
 /// Simple comments store persisted in UserDefaults. Suitable for prototype/local usage.
 @Observable @MainActor
 final class CommentsStore {
+    private let api: APIClientProtocol
     private let key = "kiwifruit.comments"
     private(set) var commentsByPost: [String: [Comment]] = [:]
+
+    init(api: APIClientProtocol = AppAPI.shared) {
+        self.api = api
+    }
 
     func comments(for post: Post) -> [Comment] {
         loadIfNeeded()
@@ -29,7 +34,7 @@ final class CommentsStore {
     func fetchForPost(_ post: Post) async {
         loadIfNeeded()
         do {
-            let fetched = try await AppAPI.shared.fetchComments(postId: post.id)
+            let fetched = try await api.fetchComments(postId: post.id)
             commentsByPost[post.id] = fetched
             save()
         } catch {
@@ -42,7 +47,7 @@ final class CommentsStore {
     func createComment(_ text: String, post: Post, author: User?) async -> Bool {
         loadIfNeeded()
         do {
-            try await AppAPI.shared.createComment(postId: post.id, text: text)
+            try await api.createComment(postId: post.id, text: text)
             // refresh comments from server
             await fetchForPost(post)
             return true

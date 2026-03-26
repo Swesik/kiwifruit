@@ -3,11 +3,16 @@ import Observation
 
 @Observable @MainActor
 final class FeedViewModel {
+    private let api: APIClientProtocol
     private(set) var posts: [Post] = []
     private(set) var isLoading = false
 
     private var page = 0
     private let pageSize = 10
+
+    init(api: APIClientProtocol = AppAPI.shared) {
+        self.api = api
+    }
 
     func loadInitial() async {
         guard posts.isEmpty else { return }
@@ -33,7 +38,7 @@ final class FeedViewModel {
         defer { isLoading = false }
 
         do {
-            let new = try await AppAPI.shared.fetchPosts(page: page, pageSize: pageSize)
+            let new = try await api.fetchPosts(page: page, pageSize: pageSize)
             posts.append(contentsOf: new)
             page += 1
         } catch {
