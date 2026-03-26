@@ -249,6 +249,53 @@ Create a SwiftUI view for [feature]:
 - Use Task for async actions
 ```
 
+### Bug Fix with Root Cause
+```
+[Feature X] is not working as expected — [describe symptom].
+Find the root cause and fix it. Write integration tests to verify
+the fix covers the API data flow end-to-end.
+```
+
+### AI Rules Compliance Audit
+```
+Check the codebase against AI_RULES.md. Search every Swift file for:
+- Force unwrap (!) and try!
+- ObservableObject, @Published, @StateObject, @ObservedObject, @EnvironmentObject
+- DispatchQueue and RunLoop usage
+- GeometryReader and ZStack (unless z-axis elevation)
+- Business logic inside Views
+- ViewModels performing networking or persistence directly
+Report file, line number, offending code, and which rule it violates.
+```
+
+### Dependency Injection Refactor
+```
+Refactor [Store/ViewModel] to inject dependencies per AI Rules:
+- Extract persistence (e.g. UserDefaults) into a protocol
+- Extract service singletons into protocols
+- Inject all dependencies via init with default production implementations
+- Fix any force unwraps found in the process
+```
+
+### Swift 6 Concurrency Fix
+```
+Fix Swift 6 strict concurrency errors for device builds:
+- EnvironmentKey defaultValue calling @MainActor init() from
+  nonisolated context
+- Replace DispatchQueue.main.async with Task { @MainActor in }
+- Ensure all EnvironmentKey structs have @MainActor when their
+  Store types are @MainActor
+```
+
+### Error Handling & User Feedback
+```
+When [permission/service] is denied or fails, the app should provide
+a clear, user-friendly error message. Check if error handling exists;
+if not, add it with an alert that includes an action button
+(e.g. "Open Settings" for camera permission).
+```
+
+
 ---
 
 ## Honor Code Statement

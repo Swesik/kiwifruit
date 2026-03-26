@@ -45,7 +45,7 @@ struct CommentsView: View {
     }
 
     private func addComment() async {
-        guard let uid = session.userId else { return }
+        guard session.userId != nil else { return }
         // Use the signed-in user if available; otherwise fall back to a minimal placeholder
         let author: User? = session.currentUser ?? session.userId.map { User(id: $0, username: "", displayName: nil, avatarURL: nil) }
         let success = await commentsStore.createComment(newCommentText, post: post, author: author)

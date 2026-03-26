@@ -28,7 +28,7 @@ struct CreatePostView: View {
                             }
                         }
                     }
-                    .onChange(of: selectedItem) { newItem in
+                    .onChange(of: selectedItem) { _, newItem in
                         Task {
                             if let item = newItem {
                                 if let data = try? await item.loadTransferable(type: Data.self) {

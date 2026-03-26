@@ -15,6 +15,7 @@ struct kiwifruitApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .preferredColorScheme(.light)
                 .environment(\.postsStore, postsStore)
                 .environment(\.sessionStore, sessionStore)
                 .environment(\.moodSessionStore, moodSessionStore)

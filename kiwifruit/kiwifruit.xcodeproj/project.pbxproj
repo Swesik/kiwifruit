@@ -23,33 +23,32 @@
 		5E766B9A2F2C5EF500A95C4D /* kiwifruit/Views/FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C2D /* kiwifruit/Views/FeedView.swift */; };
 		5E766B9A2F2C5EF500A95C4E /* kiwifruit/Views/PostRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C2E /* kiwifruit/Views/PostRow.swift */; };
 		5E766B9A2F2C5EF500A95C4F /* kiwifruit/Views/ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C2F /* kiwifruit/Views/ProfileView.swift */; };
-		5E766B9A2F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift */; };
-		5E766B9A2F2C5EF500A95C50 /* kiwifruit/Models/BookScanModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C31 /* kiwifruit/Models/BookScanModels.swift */; };
-		5E766B9A2F2C5EF500A95C51 /* kiwifruit/Models/BookScanViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C32 /* kiwifruit/Models/BookScanViewModel.swift */; };
-		5E766B9A2F2C5EF500A95C52 /* kiwifruit/Models/BookSearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C33 /* kiwifruit/Models/BookSearchViewModel.swift */; };
-		5E766B9A2F2C5EF500A95C53 /* kiwifruit/Models/MoodMapModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C34 /* kiwifruit/Models/MoodMapModels.swift */; };
-		5E766B9A2F2C5EF500A95C54 /* kiwifruit/Models/UserPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C35 /* kiwifruit/Models/UserPreferences.swift */; };
-		5E766B9A2F2C5EF500A95C55 /* kiwifruit/Services/BookScannerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C36 /* kiwifruit/Services/BookScannerService.swift */; };
-		5E766B9A2F2C5EF500A95C56 /* kiwifruit/Services/MoodMapCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C37 /* kiwifruit/Services/MoodMapCaptureService.swift */; };
-		5E766B9A2F2C5EF500A95C57 /* kiwifruit/Stores/MoodSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C38 /* kiwifruit/Stores/MoodSessionStore.swift */; };
-		5E766B9A2F2C5EF500A95C58 /* kiwifruit/Stores/ReadingSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C39 /* kiwifruit/Stores/ReadingSessionStore.swift */; };
-		5E766B9A2F2C5EF500A95C59 /* kiwifruit/Stores/UserPreferencesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C3A /* kiwifruit/Stores/UserPreferencesStore.swift */; };
-		5E766B9A2F2C5EF500A95C5A /* kiwifruit/Views/AllUpdatesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C3B /* kiwifruit/Views/AllUpdatesView.swift */; };
-		5E766B9A2F2C5EF500A95C5B /* kiwifruit/Views/CameraPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C3C /* kiwifruit/Views/CameraPickerView.swift */; };
-		5E766B9A2F2C5EF500A95C5C /* kiwifruit/Views/ChallengeDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C3D /* kiwifruit/Views/ChallengeDetailView.swift */; };
-		5E766B9A2F2C5EF500A95C5D /* kiwifruit/Views/ChallengesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C3E /* kiwifruit/Views/ChallengesView.swift */; };
-		5E766B9A2F2C5EF500A95C5E /* kiwifruit/Views/CustomTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C3F /* kiwifruit/Views/CustomTabBar.swift */; };
-		5E766B9A2F2C5EF500A95C5F /* kiwifruit/Views/DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C40 /* kiwifruit/Views/DiscoverView.swift */; };
-		5E766B9A2F2C5EF500A95C60 /* kiwifruit/Views/FocusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C41 /* kiwifruit/Views/FocusView.swift */; };
-		5E766B9A2F2C5EF500A95C61 /* kiwifruit/Views/MoodMapCameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C42 /* kiwifruit/Views/MoodMapCameraView.swift */; };
-		5E766B9A2F2C5EF500A95C62 /* kiwifruit/Views/PostDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C43 /* kiwifruit/Views/PostDetailView.swift */; };
-		5E766B9A2F2C5EF500A95C63 /* kiwifruit/Views/SignUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C44 /* kiwifruit/Views/SignUpView.swift */; };
-		5E766B9A2F2C5EF500A95C64 /* kiwifruit/Views/SketchStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C45 /* kiwifruit/Views/SketchStyle.swift */; };
-		5E766B9A2F2C5EF500A95C65 /* kiwifruit/Views/SpeedReadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C46 /* kiwifruit/Views/SpeedReadingView.swift */; };
-		5E766B9A2F2C5EF500A95C66 /* kiwifruit/Views/StreakTrackerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C47 /* kiwifruit/Views/StreakTrackerView.swift */; };
-		5E766B9A2F2C5EF500A95C67 /* kiwifruit/Models/Challenge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C48 /* kiwifruit/Models/Challenge.swift */; };
-		5E766B9A2F2C5EF500A95C68 /* kiwifruit/ViewModels/ChallengeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C49 /* kiwifruit/ViewModels/ChallengeViewModel.swift */; };
-		5E766B9A2F2C5EF500A95C69 /* kiwifruit/Services/WeatherChallengeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C4A /* kiwifruit/Services/WeatherChallengeService.swift */; };
+		5E766B9A2F2C5EF500A95C50 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C51 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C52 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C53 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C54 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C55 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C56 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C57 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C58 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C59 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C5A /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C5B /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C5C /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C5D /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C5E /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C5F /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C60 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C61 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C62 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C63 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C64 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C65 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C66 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C67 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C68 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		5E766B9A2F2C5EF500A95C69 /* (null) in Sources */ = {isa = PBXBuildFile; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -70,8 +69,8 @@
 		4E766B952F2C5EF500A95C2D /* kiwifruit/Views/FeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/FeedView.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C2E /* kiwifruit/Views/PostRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/PostRow.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C2F /* kiwifruit/Views/ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/ProfileView.swift; sourceTree = "<group>"; };
-		4E766B952F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/SettingsView.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C30 /* kiwifruit/Assets.xcassets */ = {isa = PBXFileReference; explicitFileType = folder.assetcatalog; path = kiwifruit/Assets.xcassets; sourceTree = "<group>"; };
+		4E766B952F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -233,33 +232,33 @@
 				5E766B9A2F2C5EF500A95C4D /* kiwifruit/Views/FeedView.swift in Sources */,
 				5E766B9A2F2C5EF500A95C4E /* kiwifruit/Views/PostRow.swift in Sources */,
 				5E766B9A2F2C5EF500A95C4F /* kiwifruit/Views/ProfileView.swift in Sources */,
-				5E766B9A2F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift in Sources */,
-				5E766B9A2F2C5EF500A95C50 /* kiwifruit/Models/BookScanModels.swift in Sources */,
-				5E766B9A2F2C5EF500A95C51 /* kiwifruit/Models/BookScanViewModel.swift in Sources */,
-				5E766B9A2F2C5EF500A95C52 /* kiwifruit/Models/BookSearchViewModel.swift in Sources */,
-				5E766B9A2F2C5EF500A95C53 /* kiwifruit/Models/MoodMapModels.swift in Sources */,
-				5E766B9A2F2C5EF500A95C54 /* kiwifruit/Models/UserPreferences.swift in Sources */,
-				5E766B9A2F2C5EF500A95C55 /* kiwifruit/Services/BookScannerService.swift in Sources */,
-				5E766B9A2F2C5EF500A95C56 /* kiwifruit/Services/MoodMapCaptureService.swift in Sources */,
-				5E766B9A2F2C5EF500A95C69 /* kiwifruit/Services/WeatherChallengeService.swift in Sources */,
-				5E766B9A2F2C5EF500A95C57 /* kiwifruit/Stores/MoodSessionStore.swift in Sources */,
-				5E766B9A2F2C5EF500A95C58 /* kiwifruit/Stores/ReadingSessionStore.swift in Sources */,
-				5E766B9A2F2C5EF500A95C59 /* kiwifruit/Stores/UserPreferencesStore.swift in Sources */,
-				5E766B9A2F2C5EF500A95C5A /* kiwifruit/Views/AllUpdatesView.swift in Sources */,
-				5E766B9A2F2C5EF500A95C5B /* kiwifruit/Views/CameraPickerView.swift in Sources */,
-				5E766B9A2F2C5EF500A95C5C /* kiwifruit/Views/ChallengeDetailView.swift in Sources */,
-				5E766B9A2F2C5EF500A95C5D /* kiwifruit/Views/ChallengesView.swift in Sources */,
-				5E766B9A2F2C5EF500A95C5E /* kiwifruit/Views/CustomTabBar.swift in Sources */,
-				5E766B9A2F2C5EF500A95C5F /* kiwifruit/Views/DiscoverView.swift in Sources */,
-				5E766B9A2F2C5EF500A95C60 /* kiwifruit/Views/FocusView.swift in Sources */,
-				5E766B9A2F2C5EF500A95C61 /* kiwifruit/Views/MoodMapCameraView.swift in Sources */,
-				5E766B9A2F2C5EF500A95C62 /* kiwifruit/Views/PostDetailView.swift in Sources */,
-				5E766B9A2F2C5EF500A95C63 /* kiwifruit/Views/SignUpView.swift in Sources */,
-				5E766B9A2F2C5EF500A95C64 /* kiwifruit/Views/SketchStyle.swift in Sources */,
-				5E766B9A2F2C5EF500A95C65 /* kiwifruit/Views/SpeedReadingView.swift in Sources */,
-				5E766B9A2F2C5EF500A95C66 /* kiwifruit/Views/StreakTrackerView.swift in Sources */,
-				5E766B9A2F2C5EF500A95C67 /* kiwifruit/Models/Challenge.swift in Sources */,
-				5E766B9A2F2C5EF500A95C68 /* kiwifruit/ViewModels/ChallengeViewModel.swift in Sources */,
+				5E766B9A2F2C5EF500A95C60 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C50 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C51 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C52 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C53 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C54 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C55 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C56 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C69 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C57 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C58 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C59 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C5A /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C5B /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C5C /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C5D /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C5E /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C5F /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C60 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C61 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C62 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C63 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C64 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C65 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C66 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C67 /* (null) in Sources */,
+				5E766B9A2F2C5EF500A95C68 /* (null) in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
