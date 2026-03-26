@@ -1,10 +1,16 @@
 import CoreLocation
 import Foundation
 
+/// Abstracts weather challenge fetching for dependency injection.
+@MainActor
+protocol WeatherChallengeServiceProtocol {
+    func fetchWeatherChallenge() async -> Challenge?
+}
+
 /// Fetches the device's current location and weather from open-meteo.com (no API key required),
 /// then returns a single weather-appropriate Challenge.
 @MainActor
-final class WeatherChallengeService: NSObject, CLLocationManagerDelegate {
+final class WeatherChallengeService: NSObject, CLLocationManagerDelegate, WeatherChallengeServiceProtocol {
     static let shared = WeatherChallengeService()
 
     private let manager = CLLocationManager()

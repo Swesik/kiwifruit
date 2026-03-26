@@ -14,6 +14,7 @@ enum FocusSessionStatus {
 @Observable
 @MainActor
 final class ReadingSessionStore {
+    private let api: APIClientProtocol
     private var timerTask: Task<Void, Never>?
     /// Holds the in-flight POST /reading-sessions task so stopSession can await it
     /// if the user stops before the server has responded.
@@ -43,6 +44,10 @@ final class ReadingSessionStore {
     /// Set if the stop/leave API call fails so the UI can show an error alert.
     var saveError: String? = nil
 
+    init(api: APIClientProtocol = AppAPI.shared) {
+        self.api = api
+    }
+
     // MARK: - Start (own session)
 
     func startSession(bookTitle: String, startingPage: Int? = nil) {
@@ -61,7 +66,7 @@ final class ReadingSessionStore {
         // Fire the API call and hold the Task so stopSession can await it if needed.
         startSessionTask = Task {
             do {
-                return try await AppAPI.shared.startReadingSession(bookTitle: bookTitle)
+                return try await api.startReadingSession(bookTitle: bookTitle)
             } catch {
                 print("FocusSessionStore: startReadingSession failed: \(error)")
                 return nil
@@ -86,7 +91,7 @@ final class ReadingSessionStore {
             status = .paused
             if isHost, let sessionId = currentSession?.id {
                 Task {
-                    do { try await AppAPI.shared.pauseReadingSession(sessionId: sessionId) }
+                    do { try await api.pauseReadingSession(sessionId: sessionId) }
                     catch { print("ReadingSessionStore: pauseReadingSession failed: \(error)") }
                 }
             }
@@ -94,7 +99,7 @@ final class ReadingSessionStore {
             status = .active
             if isHost, let sessionId = currentSession?.id {
                 Task {
-                    do { try await AppAPI.shared.resumeReadingSession(sessionId: sessionId) }
+                    do { try await api.resumeReadingSession(sessionId: sessionId) }
                     catch { print("ReadingSessionStore: resumeReadingSession failed: \(error)") }
                 }
             }
@@ -141,10 +146,10 @@ final class ReadingSessionStore {
 
             do {
                 if wasHost {
-                    try await AppAPI.shared.endReadingSession(sessionId: sessionId, pagesRead: pagesRead)
+                    try await api.endReadingSession(sessionId: sessionId, pagesRead: pagesRead)
                 } else {
                     // Send the joiner's own book title so session_history records what they read.
-                    try await AppAPI.shared.leaveReadingSession(sessionId: sessionId, elapsedSeconds: capturedElapsed, pagesRead: pagesRead, bookTitle: capturedBookTitle)
+                    try await api.leaveReadingSession(sessionId: sessionId, elapsedSeconds: capturedElapsed, pagesRead: pagesRead, bookTitle: capturedBookTitle)
                 }
             } catch {
                 print("FocusSessionStore: stopSession remote call failed: \(error)")
@@ -164,7 +169,7 @@ final class ReadingSessionStore {
 
         Task {
             do {
-                let joined = try await AppAPI.shared.joinReadingSession(sessionId: friendSession.session.id)
+                let joined = try await api.joinReadingSession(sessionId: friendSession.session.id)
                 isHost = false
                 // Use the user's own book title if provided; fall back to the session's book.
                 self.bookTitle = bookTitle ?? joined.bookTitle
@@ -198,7 +203,7 @@ final class ReadingSessionStore {
     func loadFriendSessions() {
         Task {
             do {
-                activeFriendSessions = try await AppAPI.shared.fetchActiveFriendSessions()
+                activeFriendSessions = try await api.fetchActiveFriendSessions()
             } catch {
                 print("FocusSessionStore: fetchActiveFriendSessions failed: \(error)")
             }
