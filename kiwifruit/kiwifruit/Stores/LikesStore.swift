@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-@Observable
+@Observable @MainActor
 final class LikesStore {
     private(set) var likedIDs: Set<String> = []
     // optimistic pending like operations (post ids)

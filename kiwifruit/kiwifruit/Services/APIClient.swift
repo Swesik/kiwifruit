@@ -594,8 +594,8 @@ final class RESTAPIClient: APIClientProtocol {
         ) else { throw URLError(.badURL) }
         comps.queryItems = [URLQueryItem(name: "q", value: trimmed)]
 
-        guard let url = comps.url else { throw URLError(.badURL) }
-        var req = URLRequest(url: url)
+        guard let searchURL = comps.url else { throw URLError(.badURL) }
+        var req = URLRequest(url: searchURL)
         if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
 
         debugLogRequest(req)
@@ -730,8 +730,12 @@ final class RESTAPIClient: APIClientProtocol {
 
 enum AppAPI {
     /// Default API server base URL for local development.
-    static let defaultBaseURL = URL(string: "http://127.0.0.1:5000")
-        ?? URL(fileURLWithPath: "/")
+    static let defaultBaseURL: URL = {
+        guard let url = URL(string: "http://127.0.0.1:5000") else {
+            fatalError("Invalid default API base URL")
+        }
+        return url
+    }()
 
     /// Default shared client. Swap to `RESTAPIClient(baseURL:)` when you have a backend.
     static var shared: APIClientProtocol = RESTAPIClient(baseURL: defaultBaseURL)

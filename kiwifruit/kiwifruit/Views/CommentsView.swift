@@ -46,7 +46,6 @@ struct CommentsView: View {
 
     private func addComment() async {
         guard session.userId != nil else { return }
-        // Use the signed-in user if available; otherwise fall back to a minimal placeholder
         let author: User? = session.currentUser ?? session.userId.map { User(id: $0, username: "", displayName: nil, avatarURL: nil) }
         let success = await commentsStore.createComment(newCommentText, post: post, author: author)
         if !success {
@@ -58,5 +57,7 @@ struct CommentsView: View {
 }
 
 #Preview {
-    CommentsView(post: MockData.makePosts(count: 1, page: 0)[0])
+    if let post = MockData.makePosts(count: 1, page: 0).first {
+        CommentsView(post: post)
+    }
 }

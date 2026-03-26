@@ -3,19 +3,18 @@ import Observation
 import SwiftUI
 
 /// Loads Discover-tab recommendations from ``GET /recommendations``.
-@Observable
+@Observable @MainActor
 final class RecommendationsStore {
     private let api: APIClientProtocol
-    @MainActor private(set) var items: [BookRecommendation] = []
-    @MainActor private(set) var isLoading = false
-    @MainActor private(set) var loadError: String?
+    private(set) var items: [BookRecommendation] = []
+    private(set) var isLoading = false
+    private(set) var loadError: String?
 
     init(api: APIClientProtocol = AppAPI.shared) {
         self.api = api
     }
 
     /// SwiftUI previews: seed rows without depending on ``AppAPI`` / ``SessionStore``.
-    @MainActor
     static func previewPopulated() -> RecommendationsStore {
         let store = RecommendationsStore()
         store.items = [
@@ -36,14 +35,12 @@ final class RecommendationsStore {
     }
 
     /// Clears cached rows (e.g. on logout).
-    @MainActor
     func reset() {
         items = []
         loadError = nil
     }
 
     /// Fetches up to ``limit`` recommendations (default 8).
-    @MainActor
     func load(limit: Int = 8) async {
         isLoading = true
         loadError = nil
