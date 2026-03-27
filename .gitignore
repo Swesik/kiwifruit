@@ -174,3 +174,7 @@ server/*.db
 xcuserdata/
 *.xcworkspace
 !default.xcworkspace
+buildServer.json
+
+# Zed IDEs
+.zed/

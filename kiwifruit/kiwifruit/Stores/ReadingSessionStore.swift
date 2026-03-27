@@ -64,21 +64,14 @@ final class ReadingSessionStore {
         startTimer()
 
         // Fire the API call and hold the Task so stopSession can await it if needed.
-        startSessionTask = Task {
-            do {
-                return try await api.startReadingSession(bookTitle: bookTitle)
-            } catch {
-                print("FocusSessionStore: startReadingSession failed: \(error)")
-                return nil
-            }
-        }
-
         Task {
-            if let session = await startSessionTask?.value {
-                // Only apply if we're still in the same session (not stopped/reset)
+            do {
+                let session = try await api.startReadingSession(bookTitle: bookTitle)
                 if status == .active || status == .paused {
                     self.currentSession = session
                 }
+            } catch {
+                print("FocusSessionStore: startReadingSession failed: \(error)")
             }
         }
     }
