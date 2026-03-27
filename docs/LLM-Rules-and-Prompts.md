@@ -295,7 +295,10 @@ if not, add it with an alert that includes an action button
 (e.g. "Open Settings" for camera permission).
 ```
 
-
+ ### Plan Epub Upload Feature
+```
+Design an implementation plan for adding an epub upload and parsing feature to this Flask application.                              
+```
 ---
 
 ## Honor Code Statement
