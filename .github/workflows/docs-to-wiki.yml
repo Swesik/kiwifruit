@@ -34,9 +34,8 @@ jobs:
       - name: move server api docs to root docs folder
         run: mv server/docs/build/markdown/api.md docs/
 
-      - name: Copy docs to wiki
+      - name: Copy docs to wiki (merge, do not delete wiki-only pages)
         run: |
-          rm -rf wiki/*.md
           cp docs/*.md wiki/
 
       - name: Push to wiki
