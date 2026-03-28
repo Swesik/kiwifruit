@@ -21,38 +21,16 @@ struct CompletedBookEntry: Codable {
 }
 
 struct Challenge: Identifiable, Codable, Equatable {
-    let id: UUID
+    var id: UUID = UUID()
     var title: String
     var description: String
     /// e.g. "minutes/week", "books/month", "pages/month"
     var goalUnit: String
     var goalCount: Int
-    var progress: Double
-    var rewardXP: Int
-    var state: ChallengeState
-    var joinedAt: Date?
-
-    init(
-        id: UUID = UUID(),
-        title: String,
-        description: String,
-        goalUnit: String,
-        goalCount: Int,
-        progress: Double = 0,
-        rewardXP: Int = 20,
-        state: ChallengeState = .available,
-        joinedAt: Date? = nil
-    ) {
-        self.id = id
-        self.title = title
-        self.description = description
-        self.goalUnit = goalUnit
-        self.goalCount = goalCount
-        self.progress = progress
-        self.rewardXP = rewardXP
-        self.state = state
-        self.joinedAt = joinedAt
-    }
+    var progress: Double = 0
+    var rewardXP: Int = 20
+    var state: ChallengeState = .available
+    var joinedAt: Date? = nil
 
     var expiresAt: Date? {
         guard let joined = joinedAt else { return nil }
@@ -107,39 +85,14 @@ struct Challenge: Identifiable, Codable, Equatable {
 }
 
 extension Challenge {
-    /// Canonical challenge bank — stable UUIDs so UserDefaults persistence survives app restarts.
-    static let bank: [Challenge] = [
-        Challenge(
-            id: UUID(uuidString: "B0000001-0000-0000-0000-000000000000") ?? UUID(),
-            title: "Read 5 books in a month",
-            description: "Complete 5 books within a month. Your consistency will unlock special badges!",
-            goalUnit: "books/month",
-            goalCount: 5,
-            rewardXP: 50
-        ),
-        Challenge(
-            id: UUID(uuidString: "B0000002-0000-0000-0000-000000000000") ?? UUID(),
-            title: "Daily 30 mins",
-            description: "Build a daily reading habit by dedicating at least 30 minutes every day.",
-            goalUnit: "minutes/week",
-            goalCount: 210,
-            rewardXP: 30
-        ),
-        Challenge(
-            id: UUID(uuidString: "B0000003-0000-0000-0000-000000000000") ?? UUID(),
-            title: "Fantasy marathon: 1000 pages",
-            description: "Dive deep into magical realms and read 1000 pages this month.",
-            goalUnit: "pages/month",
-            goalCount: 1000,
-            rewardXP: 100
-        ),
-        Challenge(
-            id: UUID(uuidString: "B0000004-0000-0000-0000-000000000000") ?? UUID(),
-            title: "Read a classic",
-            description: "Time to tackle those must-reads. Finish one classic this month.",
-            goalUnit: "books/month",
-            goalCount: 1,
-            rewardXP: 20
-        ),
-    ]
+    /// Canonical challenge bank loaded from ChallengeBank.json.
+    /// Stable UUIDs so UserDefaults persistence survives app restarts.
+    static let bank: [Challenge] = {
+        guard let url = Bundle.main.url(forResource: "ChallengeBank", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let challenges = try? JSONDecoder().decode([Challenge].self, from: data) else {
+            return []
+        }
+        return challenges
+    }()
 }

@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import SwiftUI
 
-@Observable @MainActor
+@Observable
 final class ChallengeViewModel {
     var activeChallenges: [Challenge] = []
     var discoverChallenges: [Challenge] = []
@@ -245,13 +245,12 @@ final class ChallengeViewModel {
     }
 }
 
-@MainActor
 private struct ChallengeViewModelKey: EnvironmentKey {
     static let defaultValue = ChallengeViewModel()
 }
 
 extension EnvironmentValues {
-    @MainActor var challengeViewModel: ChallengeViewModel {
+    var challengeViewModel: ChallengeViewModel {
         get { self[ChallengeViewModelKey.self] }
         set { self[ChallengeViewModelKey.self] = newValue }
     }

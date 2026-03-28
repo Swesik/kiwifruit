@@ -4,14 +4,13 @@ import SwiftUI
 
 /// Observable store exposing user preferences to SwiftUI views.
 @Observable
-@MainActor
 final class UserPreferencesStore {
     private let api: APIClientProtocol
 
     /// Daily reading goal, in minutes.
-    var dailyGoalMinutes: Int = UserPreferences.default.dailyGoalMinutes
+    var dailyGoalMinutes: Int = UserPreferences().dailyGoalMinutes
     /// Preferred genres for the recommendation system.
-    var preferredGenres: [String] = UserPreferences.default.preferredGenres
+    var preferredGenres: [String] = UserPreferences().preferredGenres
 
     init(api: APIClientProtocol = AppAPI.shared) {
         self.api = api
@@ -44,13 +43,12 @@ final class UserPreferencesStore {
     }
 }
 
-@MainActor
 private struct UserPreferencesStoreKey: EnvironmentKey {
     static let defaultValue = UserPreferencesStore()
 }
 
 extension EnvironmentValues {
-    @MainActor var userPreferencesStore: UserPreferencesStore {
+    var userPreferencesStore: UserPreferencesStore {
         get { self[UserPreferencesStoreKey.self] }
         set { self[UserPreferencesStoreKey.self] = newValue }
     }
