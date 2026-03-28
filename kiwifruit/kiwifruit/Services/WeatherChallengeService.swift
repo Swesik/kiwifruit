@@ -2,7 +2,7 @@ import CoreLocation
 import Foundation
 
 /// Abstracts weather challenge fetching for dependency injection.
-protocol WeatherChallengeServiceProtocol {
+protocol WeatherChallengeServiceProtocol: Sendable {
     func fetchWeatherChallenge() async -> Challenge?
 }
 
@@ -12,7 +12,7 @@ final class WeatherChallengeService: NSObject, CLLocationManagerDelegate, Weathe
     static let shared = WeatherChallengeService()
 
     private let manager = CLLocationManager()
-    private var locationContinuation: CheckedContinuation<CLLocation?, Never>?
+    private nonisolated(unsafe) var locationContinuation: CheckedContinuation<CLLocation?, Never>?
 
     override init() {
         super.init()
@@ -54,30 +54,24 @@ final class WeatherChallengeService: NSObject, CLLocationManagerDelegate, Weathe
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        Task {
-            locationContinuation?.resume(returning: locations.first)
-            locationContinuation = nil
-        }
+        locationContinuation?.resume(returning: locations.first)
+        locationContinuation = nil
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        Task {
-            locationContinuation?.resume(returning: nil)
-            locationContinuation = nil
-        }
+        locationContinuation?.resume(returning: nil)
+        locationContinuation = nil
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        Task {
-            switch manager.authorizationStatus {
-            case .authorizedWhenInUse, .authorizedAlways:
-                manager.requestLocation()
-            case .denied, .restricted:
-                locationContinuation?.resume(returning: nil)
-                locationContinuation = nil
-            default:
-                break
-            }
+        switch manager.authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways:
+            manager.requestLocation()
+        case .denied, .restricted:
+            locationContinuation?.resume(returning: nil)
+            locationContinuation = nil
+        default:
+            break
         }
     }
 
