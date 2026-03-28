@@ -1,5 +1,6 @@
 import CoreLocation
 import Foundation
+import Synchronization
 
 /// Abstracts weather challenge fetching for dependency injection.
 protocol WeatherChallengeServiceProtocol: Sendable {
@@ -12,7 +13,7 @@ final class WeatherChallengeService: NSObject, CLLocationManagerDelegate, Weathe
     static let shared = WeatherChallengeService()
 
     private let manager = CLLocationManager()
-    private nonisolated(unsafe) var locationContinuation: CheckedContinuation<CLLocation?, Never>?
+    private let locationContinuation = Mutex<CheckedContinuation<CLLocation?, Never>?>(nil)
 
     override init() {
         super.init()
@@ -40,7 +41,9 @@ final class WeatherChallengeService: NSObject, CLLocationManagerDelegate, Weathe
 
     private func requestLocation() async -> CLLocation? {
         await withCheckedContinuation { continuation in
-            locationContinuation = continuation
+            locationContinuation.withLock { cont in
+                cont = continuation
+            }
             switch manager.authorizationStatus {
             case .notDetermined:
                 manager.requestWhenInUseAuthorization()
@@ -48,19 +51,25 @@ final class WeatherChallengeService: NSObject, CLLocationManagerDelegate, Weathe
                 manager.requestLocation()
             default:
                 continuation.resume(returning: nil)
-                locationContinuation = nil
+                locationContinuation.withLock { cont in
+                    cont = nil
+                }
             }
         }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        locationContinuation?.resume(returning: locations.first)
-        locationContinuation = nil
+        locationContinuation.withLock { cont in
+            cont?.resume(returning: locations.first)
+            cont = nil
+        }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        locationContinuation?.resume(returning: nil)
-        locationContinuation = nil
+        locationContinuation.withLock { cont in
+            cont?.resume(returning: nil)
+            cont = nil
+        }
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -68,8 +77,10 @@ final class WeatherChallengeService: NSObject, CLLocationManagerDelegate, Weathe
         case .authorizedWhenInUse, .authorizedAlways:
             manager.requestLocation()
         case .denied, .restricted:
-            locationContinuation?.resume(returning: nil)
-            locationContinuation = nil
+            locationContinuation.withLock { cont in
+                cont?.resume(returning: nil)
+                cont = nil
+            }
         default:
             break
         }
