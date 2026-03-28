@@ -4,7 +4,6 @@ import SwiftUI
 
 /// Observable store exposing user preferences to SwiftUI views.
 @Observable
-@MainActor
 final class UserPreferencesStore {
     private let api: APIClientProtocol
 
@@ -44,13 +43,12 @@ final class UserPreferencesStore {
     }
 }
 
-@MainActor
 private struct UserPreferencesStoreKey: EnvironmentKey {
     static let defaultValue = UserPreferencesStore()
 }
 
 extension EnvironmentValues {
-    @MainActor var userPreferencesStore: UserPreferencesStore {
+    var userPreferencesStore: UserPreferencesStore {
         get { self[UserPreferencesStoreKey.self] }
         set { self[UserPreferencesStoreKey.self] = newValue }
     }

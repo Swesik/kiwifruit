@@ -9,7 +9,6 @@ private enum MoodCaptureDesign {
     static let tan = Color(hex: "D1BFAe")
 }
 
-@MainActor
 struct MoodCaptureSheet: View {
     @Environment(\.moodSessionStore) private var moodStore: MoodSessionStore
     @Environment(\.dismiss) private var dismiss

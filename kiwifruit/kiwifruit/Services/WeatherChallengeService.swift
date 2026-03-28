@@ -2,14 +2,12 @@ import CoreLocation
 import Foundation
 
 /// Abstracts weather challenge fetching for dependency injection.
-@MainActor
 protocol WeatherChallengeServiceProtocol {
     func fetchWeatherChallenge() async -> Challenge?
 }
 
 /// Fetches the device's current location and weather from open-meteo.com (no API key required),
 /// then returns a single weather-appropriate Challenge.
-@MainActor
 final class WeatherChallengeService: NSObject, CLLocationManagerDelegate, WeatherChallengeServiceProtocol {
     static let shared = WeatherChallengeService()
 
@@ -56,21 +54,21 @@ final class WeatherChallengeService: NSObject, CLLocationManagerDelegate, Weathe
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        Task { @MainActor in
+        Task {
             locationContinuation?.resume(returning: locations.first)
             locationContinuation = nil
         }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        Task { @MainActor in
+        Task {
             locationContinuation?.resume(returning: nil)
             locationContinuation = nil
         }
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        Task { @MainActor in
+        Task {
             switch manager.authorizationStatus {
             case .authorizedWhenInUse, .authorizedAlways:
                 manager.requestLocation()

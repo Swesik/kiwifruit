@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 /// PostsStore centralizes feed data so multiple views (feed, profile) share a single source of truth.
-@Observable @MainActor
+@Observable
 final class PostsStore {
     private(set) var posts: [Post] = []
     private(set) var isLoading = false
@@ -72,7 +72,6 @@ final class PostsStore {
 // Environment key so a single PostsStore can be injected into SwiftUI view hierarchy.
 import SwiftUI
 
-@MainActor
 private struct PostsStoreKey: EnvironmentKey {
     static let defaultValue: PostsStore = PostsStore()
 }

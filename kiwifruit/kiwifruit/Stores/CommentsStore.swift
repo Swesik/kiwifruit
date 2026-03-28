@@ -3,7 +3,7 @@ import Observation
 import SwiftUI
 
 /// Simple comments store persisted in UserDefaults. Suitable for prototype/local usage.
-@Observable @MainActor
+@Observable
 final class CommentsStore {
     private let api: APIClientProtocol
     private let key = "kiwifruit.comments"
@@ -78,7 +78,6 @@ final class CommentsStore {
     }
 }
 
-@MainActor
 private struct CommentsStoreKey: EnvironmentKey {
     static let defaultValue: CommentsStore = CommentsStore()
 }
