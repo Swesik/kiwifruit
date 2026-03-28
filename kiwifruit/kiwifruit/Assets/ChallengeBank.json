@@ -1,0 +1,34 @@
+[
+    {
+        "id": "B0000001-0000-0000-0000-000000000000",
+        "title": "Read 5 books in a month",
+        "description": "Complete 5 books within a month. Your consistency will unlock special badges!",
+        "goalUnit": "books/month",
+        "goalCount": 5,
+        "rewardXP": 50
+    },
+    {
+        "id": "B0000002-0000-0000-0000-000000000000",
+        "title": "Daily 30 mins",
+        "description": "Build a daily reading habit by dedicating at least 30 minutes every day.",
+        "goalUnit": "minutes/week",
+        "goalCount": 210,
+        "rewardXP": 30
+    },
+    {
+        "id": "B0000003-0000-0000-0000-000000000000",
+        "title": "Fantasy marathon: 1000 pages",
+        "description": "Dive deep into magical realms and read 1000 pages this month.",
+        "goalUnit": "pages/month",
+        "goalCount": 1000,
+        "rewardXP": 100
+    },
+    {
+        "id": "B0000004-0000-0000-0000-000000000000",
+        "title": "Read a classic",
+        "description": "Time to tackle those must-reads. Finish one classic this month.",
+        "goalUnit": "books/month",
+        "goalCount": 1,
+        "rewardXP": 20
+    }
+]

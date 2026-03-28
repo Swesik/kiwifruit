@@ -85,9 +85,9 @@ This LLM Rule is created based on Slide 10 and Slide 11 of C6.2-StoryMap. Some r
 - Manual thread management  
 - `RunLoop` or `RunLoop`-based concurrency  
 
-### Rules  
-- UI state must be isolated to the main actor.  
-- ViewModels that update UI must be annotated with `@MainActor`.  
+### Rules
+- UI state must be isolated to the main actor.
+- Use of `@MainActor` must be justified — no indiscriminate use. Assume Swift 6.2, where `@Observable` classes used by SwiftUI views get implicit main-actor inference.
 - Never manually dispatch back to the main thread.
 
 ---
@@ -245,7 +245,7 @@ Design an iOS reading app architecture using Swift 6.2:
 ```
 Create a ViewModel for [feature] following Swift 6.2 observation:
 - Use @Observable macro at type level
-- Annotate with @MainActor for UI updates
+- Only use @MainActor when justified (Swift 6.2 infers it for @Observable + SwiftUI)
 - Use async/await for data operations
 - Inject repository dependencies
 ```

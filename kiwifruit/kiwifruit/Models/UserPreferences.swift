@@ -5,8 +5,8 @@ struct UserPreferences: Codable, Equatable {
     /// Preferred book genres for the recommendation system (e.g. ["Fantasy", "Sci-Fi"]).
     var preferredGenres: [String]
 
-    static let `default` = UserPreferences(
-        dailyGoalMinutes: 30,
-        preferredGenres: []
-    )
+    init(dailyGoalMinutes: Int = 30, preferredGenres: [String] = []) {
+        self.dailyGoalMinutes = dailyGoalMinutes
+        self.preferredGenres = preferredGenres
+    }
 }
