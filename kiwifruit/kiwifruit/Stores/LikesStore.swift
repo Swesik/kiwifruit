@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-@Observable @MainActor
+@Observable
 final class LikesStore {
     private(set) var likedIDs: Set<String> = []
     // optimistic pending like operations (post ids)
@@ -50,7 +50,6 @@ final class LikesStore {
 // Environment key to provide LikesStore via SwiftUI environment
 import SwiftUI
 
-@MainActor
 private struct LikesStoreKey: EnvironmentKey {
     static let defaultValue: LikesStore = LikesStore()
 }

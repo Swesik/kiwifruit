@@ -40,7 +40,7 @@ final class SessionStore {
         // Uses GET /users/me which requires auth — an expired/deleted token correctly fails
         // and triggers clear(), forcing the login screen.
         if token != nil {
-            Task { @MainActor in
+            Task {
                 do {
                     let user = try await fetchCurrentSessionUser()
                     self.currentUser = user
@@ -116,7 +116,6 @@ final class SessionStore {
 }
 
 // Environment key for SessionStore
-@MainActor
 private struct SessionStoreKey: EnvironmentKey {
     static let defaultValue: SessionStore = SessionStore()
 }

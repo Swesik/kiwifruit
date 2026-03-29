@@ -32,7 +32,6 @@ public struct UserDefaultsMoodSessionStorage: MoodSessionStorageProtocol {
 /// Reading/emotion session storage manager
 /// Manages Mood Map state, session data persistence, and calendar display functionality
 @Observable
-@MainActor
 public final class MoodSessionStore {
     /// Mood Map state: idle or capturing
     public private(set) var moodMapState: MoodMapState = .idle
@@ -130,7 +129,6 @@ public final class MoodSessionStore {
 
 // MARK: - Environment
 
-@MainActor
 private struct MoodSessionStoreKey: EnvironmentKey {
     static let defaultValue: MoodSessionStore = MoodSessionStore()
 }

@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-@Observable @MainActor
+@Observable
 final class FeedViewModel {
     private let api: APIClientProtocol
     private(set) var posts: [Post] = []

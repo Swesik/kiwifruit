@@ -12,7 +12,6 @@ enum FocusSessionStatus {
 /// Manages the state and timing of a single in-app focus reading session,
 /// and syncs session lifecycle events with the backend.
 @Observable
-@MainActor
 final class ReadingSessionStore {
     private let api: APIClientProtocol
     private var timerTask: Task<Void, Never>?
@@ -259,7 +258,6 @@ final class ReadingSessionStore {
     }
 }
 
-@MainActor
 private struct ReadingSessionStoreKey: EnvironmentKey {
     static let defaultValue: ReadingSessionStore = ReadingSessionStore()
 }

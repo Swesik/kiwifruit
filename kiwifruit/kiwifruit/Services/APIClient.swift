@@ -36,7 +36,7 @@ fileprivate struct MultipartFormData {
     }
 }
 
-protocol APIClientProtocol {
+protocol APIClientProtocol: Sendable {
     func fetchPosts(page: Int, pageSize: Int) async throws -> [Post]
     /// Create a post. `imageData` is optional; if provided the client should upload it.
     func createPost(authorId: String, imageData: Data?, caption: String?) async throws -> Post

@@ -3,7 +3,6 @@ import Observation
 import UIKit
 
 @Observable
-@MainActor
 final class BookScanViewModel {
     var isShowingCamera: Bool = false
     var isProcessing: Bool = false

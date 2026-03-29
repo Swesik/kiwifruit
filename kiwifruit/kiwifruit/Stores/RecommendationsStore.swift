@@ -3,7 +3,7 @@ import Observation
 import SwiftUI
 
 /// Loads Discover-tab recommendations from ``GET /recommendations``.
-@Observable @MainActor
+@Observable
 final class RecommendationsStore {
     private let api: APIClientProtocol
     private(set) var items: [BookRecommendation] = []

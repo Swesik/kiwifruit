@@ -2,7 +2,7 @@
 import Foundation
 import Observation
 
-@Observable @MainActor
+@Observable
 final class BookSearchViewModel {
     var query: String = ""
     var results: [BookSearchResult] = []

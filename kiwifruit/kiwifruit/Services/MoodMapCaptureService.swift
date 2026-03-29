@@ -5,7 +5,6 @@ import Observation
 /// Opens the front camera and exposes the capture session for live preview.
 /// No face detection or emotion analysis — mood selection is manual.
 @Observable
-@MainActor
 final class MoodMapCaptureService {
     /// Camera capture session
     private(set) var captureSession: AVCaptureSession?
@@ -25,9 +24,9 @@ final class MoodMapCaptureService {
             setupSession()
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-                Task { @MainActor [weak self] in
+                Task { [weak self] in
                     if granted {
-                        self?.setupSession()
+                        await self?.setupSession()
                     } else {
                         self?.cameraError = "Camera access was denied. Go to Settings > Privacy > Camera to enable it."
                     }
@@ -62,10 +61,8 @@ final class MoodMapCaptureService {
             session.addOutput(output)
         }
         captureSession = session
-
-        Task.detached { [weak session] in
-            session?.startRunning()
-        }
+        
+        session.startRunning()
     }
 
     /// Clear the error state
