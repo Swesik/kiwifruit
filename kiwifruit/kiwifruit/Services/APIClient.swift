@@ -195,7 +195,7 @@ final class MockAPIClient: APIClientProtocol {
     func fetchSessionHistory() async throws -> [SessionHistoryEntry] { return [] }
     func markBookCompleted(title: String) async throws {}
     func fetchCompletedBooks() async throws -> [CompletedBookEntry] { return [] }
-    func fetchPreferences() async throws -> UserPreferences { return .default }
+    func fetchPreferences() async throws -> UserPreferences { return UserPreferences() }
     func savePreferences(_ preferences: UserPreferences) async throws {}
     func sendBookScan(barcode: String?, ocrText: String?) async throws -> BookScanResponse {
         try await Task.sleep(nanoseconds: 120 * 1_000_000)
