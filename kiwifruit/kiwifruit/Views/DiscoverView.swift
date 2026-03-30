@@ -14,6 +14,8 @@ struct DiscoverView: View {
     @Bindable var bookScanViewModel: BookScanViewModel
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.recommendationsStore) private var recommendationsStore
+    @Environment(\.userBooksStore) private var userBooksStore
+    @State private var justAddedTitle: String? = nil
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -186,12 +188,53 @@ struct DiscoverView: View {
                 }
             }
             Spacer()
+
+            Button {
+                let userBook = UserBook(title: book.title, authors: book.authors, isbn13: book.isbn13)
+                userBooksStore.add(userBook)
+                justAddedTitle = book.title
+                Task {
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    justAddedTitle = nil
+                }
+            } label: {
+                Text("ADD")
+                    .font(.caption2).fontWeight(.bold)
+                    .foregroundColor(DiscoverDesign.uiText)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(DiscoverDesign.kiwiLight)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(DiscoverDesign.border, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
         }
         .padding(12)
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
         .sketchShadow()
+    }
+
+    // Simple inline confirmation banner when user adds a book.
+    @ViewBuilder
+    private func addedBanner() -> some View {
+        if let title = justAddedTitle {
+            HStack {
+                Text("Added")
+                    .font(.caption).fontWeight(.bold)
+                    .foregroundColor(.white)
+                Text(title)
+                    .font(.caption2).fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+            }
+            .padding(8)
+            .background(DiscoverDesign.kiwi)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 1))
+            .transition(.opacity)
+            .padding(.bottom, 8)
+        }
     }
 
     // MARK: - Recommendations

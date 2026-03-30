@@ -588,29 +588,78 @@ final class RESTAPIClient: APIClientProtocol {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return [] }
 
-        guard var comps = URLComponents(
-            url: baseURL.appendingPathComponent("/books/search"),
-            resolvingAgainstBaseURL: false
-        ) else { throw URLError(.badURL) }
-        comps.queryItems = [URLQueryItem(name: "q", value: trimmed)]
+        // First try the app backend search endpoint; if it fails or returns nothing,
+        // fall back to querying Open Library (no API key required) for metadata.
+        do {
+            guard var comps = URLComponents(
+                url: baseURL.appendingPathComponent("/books/search"),
+                resolvingAgainstBaseURL: false
+            ) else { throw URLError(.badURL) }
+            comps.queryItems = [URLQueryItem(name: "q", value: trimmed)]
 
-        guard let searchURL = comps.url else { throw URLError(.badURL) }
-        var req = URLRequest(url: searchURL)
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+            guard let searchURL = comps.url else { throw URLError(.badURL) }
+            var req = URLRequest(url: searchURL)
+            if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
 
-        debugLogRequest(req)
-        let (data, resp) = try await session.data(for: req)
+            debugLogRequest(req)
+            let (data, resp) = try await session.data(for: req)
 
+            if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                let body = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+                print("searchBooks failed HTTP \(http.statusCode): \(body)")
+                throw URLError(.badServerResponse)
+            }
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            decoder.dateDecodingStrategy = .iso8601
+            let results = try decoder.decode([BookSearchResult].self, from: data)
+            if !results.isEmpty { return results }
+            // If backend returned empty list, fall through to Open Library fallback below.
+        } catch {
+            print("searchBooks: backend search failed, falling back to Open Library: \(error)")
+        }
+
+        return try await searchOpenLibrary(query: trimmed)
+    }
+
+    /// Query Open Library's public search API for basic metadata
+    private func searchOpenLibrary(query: String) async throws -> [BookSearchResult] {
+        guard var comps = URLComponents(string: "https://openlibrary.org/search.json") else { throw URLError(.badURL) }
+        comps.queryItems = [ URLQueryItem(name: "q", value: query) ]
+        guard let url = comps.url else { throw URLError(.badURL) }
+
+        let (data, resp) = try await session.data(from: url)
         if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            let body = String(data: data, encoding: .utf8) ?? "<non-utf8>"
-            print("searchBooks failed HTTP \(http.statusCode): \(body)")
             throw URLError(.badServerResponse)
         }
 
+        struct OLDoc: Codable {
+            let key: String?
+            let title: String?
+            let author_name: [String]?
+            let isbn: [String]?
+        }
+        struct OLResponse: Codable {
+            let docs: [OLDoc]
+        }
+
         let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode([BookSearchResult].self, from: data)
+        let ol = try decoder.decode(OLResponse.self, from: data)
+        let mapped: [BookSearchResult] = ol.docs.prefix(20).enumerated().map { idx, doc in
+            let id = doc.key ?? "ol_\(idx)_\(UUID().uuidString)"
+            let title = doc.title ?? "Unknown title"
+            let authors = doc.author_name
+            // Prefer 13-digit isbn when available
+            var isbn13: String? = nil
+            if let isbns = doc.isbn {
+                if let exact13 = isbns.first(where: { $0.count == 13 }) { isbn13 = exact13 }
+                else { isbn13 = isbns.first }
+            }
+            return BookSearchResult(id: id, title: title, authors: authors, isbn13: isbn13)
+        }
+
+        return mapped
     }
 
     func fetchRecommendations(limit: Int) async throws -> [BookRecommendation] {

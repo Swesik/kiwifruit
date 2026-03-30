@@ -36,6 +36,23 @@ struct BookSearchResult: Identifiable, Codable, Hashable {
     let isbn13: String?
 }
 
+/// A book saved by the user from discovery/search results.
+struct UserBook: Identifiable, Codable, Hashable {
+    let id: String
+    let title: String
+    let authors: [String]?
+    let isbn13: String?
+    let addedAt: Date
+
+    init(id: String = UUID().uuidString, title: String, authors: [String]?, isbn13: String?) {
+        self.id = id
+        self.title = title
+        self.authors = authors
+        self.isbn13 = isbn13
+        self.addedAt = Date()
+    }
+}
+
 /// Server-driven personalized recommendation row (GET /recommendations).
 /// Property is ``coverUrl`` so JSON `cover_url` decodes with ``JSONDecoder.keyDecodingStrategy.convertFromSnakeCase`` (maps to `coverUrl`, not `coverURL`).
 struct BookRecommendation: Identifiable, Codable, Hashable {
