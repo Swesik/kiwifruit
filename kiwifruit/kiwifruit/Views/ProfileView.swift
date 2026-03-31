@@ -137,7 +137,10 @@ struct ProfileView: View {
                 .foregroundColor(ProfileDesign.uiText)
                 .padding(.horizontal, 20).padding(.top, 20)
 
-            ForEach(recentUpdates) { recentUpdateCard($0).padding(.horizontal, 20) }
+            ForEach(recentUpdates) { item in
+                recentUpdateCard(item)
+                    .padding(.horizontal, 20)
+            }
 
             NavigationLink(destination: AllUpdatesView(updates: recentUpdates)) {
                 Text("LOAD MORE")
@@ -206,7 +209,7 @@ struct ProfileView: View {
                                 .lineLimit(1)
                             if let authors = book.authors, !authors.isEmpty {
                                 Text(authors.joined(separator: ", "))
-                                    .font(.caption3).fontWeight(.bold)
+                                    .font(.caption2).fontWeight(.bold)
                                     .foregroundColor(ProfileDesign.uiText.opacity(0.7))
                                     .lineLimit(1)
                             }
