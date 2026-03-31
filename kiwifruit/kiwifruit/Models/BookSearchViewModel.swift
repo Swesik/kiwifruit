@@ -2,7 +2,6 @@
 import Foundation
 import Observation
 
-@MainActor
 @Observable
 final class BookSearchViewModel {
     var query: String = ""
@@ -17,14 +16,24 @@ final class BookSearchViewModel {
     }
 
     func submit() async {
-        isSearching = true
-        errorMessage = nil
-        defer { isSearching = false }
+        // Ensure UI state changes happen on the main thread without annotating the whole class.
+        DispatchQueue.main.async { [weak self] in
+            self?.isSearching = true
+            self?.errorMessage = nil
+        }
+        defer {
+            DispatchQueue.main.async { [weak self] in self?.isSearching = false }
+        }
 
         do {
-            results = try await api.searchBooks(query: query)
+            let fetched = try await api.searchBooks(query: query)
+            DispatchQueue.main.async { [weak self] in
+                self?.results = fetched
+            }
         } catch {
-            errorMessage = "Failed to search books."
+            DispatchQueue.main.async { [weak self] in
+                self?.errorMessage = "Failed to search books."
+            }
         }
     }
 }

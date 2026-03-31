@@ -1,7 +1,6 @@
 import XCTest
 @testable import kiwifruit
 
-@MainActor
 final class BookSearchAndUserBooksTests: XCTestCase {
 
     func testBookSearchViewModelReturnsMockResult() async throws {
