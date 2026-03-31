@@ -647,7 +647,10 @@ final class RESTAPIClient: APIClientProtocol {
 
         let decoder = JSONDecoder()
         let ol = try decoder.decode(OLResponse.self, from: data)
-        let mapped: [BookSearchResult] = ol.docs.prefix(20).enumerated().map { idx, doc in
+        var mapped: [BookSearchResult] = []
+        mapped.reserveCapacity(min(20, ol.docs.count))
+
+        for (idx, doc) in ol.docs.prefix(20).enumerated() {
             let id = doc.key ?? "ol_\(idx)_\(UUID().uuidString)"
             let title = doc.title ?? "Unknown title"
             let authors = doc.author_name
@@ -662,10 +665,44 @@ final class RESTAPIClient: APIClientProtocol {
             if let coverId = doc.cover_i {
                 coverUrl = "https://covers.openlibrary.org/b/id/\(coverId)-M.jpg"
             }
-            return BookSearchResult(id: id, title: title, authors: authors, isbn13: isbn13, coverUrl: coverUrl)
+
+            // If Open Library provided no cover, try Google Books (ISBN must be present)
+            if coverUrl == nil, let isbn = isbn13 {
+                if let googleCover = try? await fetchGoogleBooksCover(isbn13: isbn) {
+                    coverUrl = googleCover
+                }
+            }
+
+            mapped.append(BookSearchResult(id: id, title: title, authors: authors, isbn13: isbn13, coverUrl: coverUrl))
         }
 
         return mapped
+    }
+
+    /// Try Google Books volumes API to obtain a thumbnail for an ISBN.
+    private func fetchGoogleBooksCover(isbn13: String) async throws -> String? {
+        guard !isbn13.isEmpty else { return nil }
+        guard var comps = URLComponents(string: "https://www.googleapis.com/books/v1/volumes") else { return nil }
+        comps.queryItems = [ URLQueryItem(name: "q", value: "isbn:\(isbn13)") ]
+        guard let url = comps.url else { return nil }
+
+        let (data, resp) = try await session.data(from: url)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            return nil
+        }
+
+        struct GBImageLinks: Codable { let smallThumbnail: String?; let thumbnail: String? }
+        struct GBVolumeInfo: Codable { let imageLinks: GBImageLinks? }
+        struct GBItem: Codable { let volumeInfo: GBVolumeInfo? }
+        struct GBResponse: Codable { let items: [GBItem]? }
+
+        let decoder = JSONDecoder()
+        if let gb = try? decoder.decode(GBResponse.self, from: data), let first = gb.items?.first, let links = first.volumeInfo?.imageLinks {
+            // Prefer thumbnail then smallThumbnail
+            if let thumb = links.thumbnail { return thumb.replacingOccurrences(of: "http://", with: "https://") }
+            if let small = links.smallThumbnail { return small.replacingOccurrences(of: "http://", with: "https://") }
+        }
+        return nil
     }
 
     func fetchRecommendations(limit: Int) async throws -> [BookRecommendation] {
