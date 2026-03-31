@@ -34,6 +34,7 @@ struct BookSearchResult: Identifiable, Codable, Hashable {
     let title: String
     let authors: [String]?
     let isbn13: String?
+    let coverUrl: String?
 }
 
 /// A book saved by the user from discovery/search results.
@@ -43,13 +44,15 @@ struct UserBook: Identifiable, Codable, Hashable {
     let authors: [String]?
     let isbn13: String?
     let addedAt: Date
+    let coverUrl: String?
 
-    init(id: String = UUID().uuidString, title: String, authors: [String]?, isbn13: String?) {
+    init(id: String = UUID().uuidString, title: String, authors: [String]?, isbn13: String?, coverUrl: String? = nil) {
         self.id = id
         self.title = title
         self.authors = authors
         self.isbn13 = isbn13
         self.addedAt = Date()
+        self.coverUrl = coverUrl
     }
 }
 

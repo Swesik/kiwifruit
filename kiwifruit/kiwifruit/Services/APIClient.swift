@@ -639,6 +639,7 @@ final class RESTAPIClient: APIClientProtocol {
             let title: String?
             let author_name: [String]?
             let isbn: [String]?
+            let cover_i: Int?
         }
         struct OLResponse: Codable {
             let docs: [OLDoc]
@@ -656,7 +657,12 @@ final class RESTAPIClient: APIClientProtocol {
                 if let exact13 = isbns.first(where: { $0.count == 13 }) { isbn13 = exact13 }
                 else { isbn13 = isbns.first }
             }
-            return BookSearchResult(id: id, title: title, authors: authors, isbn13: isbn13)
+            // Cover image: Open Library uses cover_i
+            var coverUrl: String? = nil
+            if let coverId = doc.cover_i {
+                coverUrl = "https://covers.openlibrary.org/b/id/\(coverId)-M.jpg"
+            }
+            return BookSearchResult(id: id, title: title, authors: authors, isbn13: isbn13, coverUrl: coverUrl)
         }
 
         return mapped
