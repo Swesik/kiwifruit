@@ -15,7 +15,9 @@ struct DiscoverView: View {
     @Environment(\.sessionStore) private var sessionStore
     @Environment(\.recommendationsStore) private var recommendationsStore
     @Environment(\.userBooksStore) private var userBooksStore
+
     @State private var justAddedTitle: String? = nil
+    @State private var resultsLimit: Int = 3
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -25,10 +27,14 @@ struct DiscoverView: View {
                     .foregroundColor(DiscoverDesign.uiText)
 
                 searchSection
+
+                addedBanner()
+
                 resultsSection
                     .onChange(of: bookSearchViewModel.results.count) { newCount in
                         resultsLimit = min(3, newCount)
                     }
+
                 recommendationsSection
             }
             .padding(.horizontal, 24)
@@ -52,9 +58,7 @@ struct DiscoverView: View {
                     }
                 }
             }
-                    @State private var resultsLimit: Int = 3
-
-                    var body: some View {
+        }
     }
 
     // MARK: - Search
@@ -121,37 +125,28 @@ struct DiscoverView: View {
                 .padding(.vertical, 32)
                 .background(Color(hex: "F9FAFB"))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-                                VStack(spacing: 12) {
-                                    ForEach(Array(bookSearchViewModel.results.prefix(resultsLimit))) { book in
-                                        resultRow(book)
-                                    }
-                                    if bookSearchViewModel.results.count > resultsLimit {
-                                        Button("LOAD MORE") {
-                                            resultsLimit = min(bookSearchViewModel.results.count, min(6, resultsLimit + 3))
-                                        }
-                                        .font(.subheadline).fontWeight(.black)
-                                        .foregroundColor(DiscoverDesign.uiText)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 12)
-                                        .background(DiscoverDesign.kiwiLight)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
-                                        .sketchShadow()
-                                        .padding(.top, 8)
-                                    }
-                    .font(.subheadline).fontWeight(.bold)
-                    .foregroundColor(DiscoverDesign.uiText.opacity(0.6))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 32)
-                    .background(Color(hex: "F9FAFB"))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
-                    .sketchShadow()
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
+                .sketchShadow()
 
             } else if !bookSearchViewModel.results.isEmpty {
                 VStack(spacing: 12) {
-                    ForEach(bookSearchViewModel.results) { book in
+                    ForEach(Array(bookSearchViewModel.results.prefix(resultsLimit))) { book in
                         resultRow(book)
+                    }
+
+                    if bookSearchViewModel.results.count > resultsLimit {
+                        Button("LOAD MORE") {
+                            resultsLimit = min(bookSearchViewModel.results.count, min(6, resultsLimit + 3))
+                        }
+                        .font(.subheadline).fontWeight(.black)
+                        .foregroundColor(DiscoverDesign.uiText)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(DiscoverDesign.kiwiLight)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
+                        .sketchShadow()
+                        .padding(.top, 8)
                     }
                 }
 
@@ -167,31 +162,9 @@ struct DiscoverView: View {
                     .sketchShadow()
 
             } else {
-                            // Small cover image
-                            if let cover = book.coverUrl, let url = URL(string: cover) {
-                                AsyncImage(url: url) { phase in
-                                    switch phase {
-                                    case .success(let image):
-                                        image.resizable().scaledToFill()
-                                    case .failure:
-                                        DiscoverDesign.uiBorder.overlay(Image(systemName: "book.closed").foregroundStyle(DiscoverDesign.uiText.opacity(0.4)))
-                                    case .empty:
-                                        ProgressView()
-                                    @unknown default:
-                                        DiscoverDesign.uiBorder
-                                    }
-                                }
-                                .frame(width: 48, height: 72)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-                                .overlay(RoundedRectangle(cornerRadius: 6).stroke(DiscoverDesign.border, lineWidth: 2))
-                                .sketchShadow(cornerRadius: 6)
-                            } else {
-                                DiscoverDesign.uiBorder
-                                    .overlay(Image(systemName: "book.closed").foregroundStyle(DiscoverDesign.uiText.opacity(0.4)))
-                                    .frame(width: 48, height: 72)
-                                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(DiscoverDesign.border, lineWidth: 2))
-                                    .sketchShadow(cornerRadius: 6)
+                Text("No results")
+                    .font(.subheadline).fontWeight(.bold)
+                    .foregroundColor(DiscoverDesign.uiText.opacity(0.6))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 32)
                     .background(Color(hex: "F9FAFB"))
@@ -203,34 +176,58 @@ struct DiscoverView: View {
     }
 
     private func resultRow(_ book: BookSearchResult) -> some View {
-                                if let isbn = book.isbn13, !isbn.isEmpty {
-                                    Text("ISBN: \(isbn)")
-                                        .font(.caption2)
-                                        .foregroundColor(DiscoverDesign.uiText.opacity(0.5))
-                                }
+        HStack(spacing: 12) {
+            // Cover
+            if let cover = book.coverUrl, let url = URL(string: cover) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    case .failure:
+                        DiscoverDesign.uiBorder.overlay(Image(systemName: "book.closed").foregroundStyle(DiscoverDesign.uiText.opacity(0.4)))
+                    case .empty:
+                        ProgressView()
+                    @unknown default:
+                        DiscoverDesign.uiBorder
+                    }
+                }
+                .frame(width: 48, height: 72)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(DiscoverDesign.border, lineWidth: 2))
                 .sketchShadow(cornerRadius: 6)
+            } else {
+                DiscoverDesign.uiBorder
+                    .overlay(Image(systemName: "book.closed").foregroundStyle(DiscoverDesign.uiText.opacity(0.4)))
+                    .frame(width: 48, height: 72)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(DiscoverDesign.border, lineWidth: 2))
+                    .sketchShadow(cornerRadius: 6)
+            }
 
+            // Title / metadata
             VStack(alignment: .leading, spacing: 4) {
-                                let userBook = UserBook(title: book.title, authors: book.authors, isbn13: book.isbn13, coverUrl: book.coverUrl)
+                Text(book.title)
                     .font(.subheadline).fontWeight(.black)
                     .foregroundColor(DiscoverDesign.uiText)
                     .lineLimit(2)
+
                 if let authors = book.authors, !authors.isEmpty {
                     Text(authors.joined(separator: ", "))
                         .font(.caption).fontWeight(.bold)
                         .foregroundColor(DiscoverDesign.uiText.opacity(0.7))
                 }
+
                 if let isbn = book.isbn13, !isbn.isEmpty {
                     Text("ISBN: \(isbn)")
                         .font(.caption2)
                         .foregroundColor(DiscoverDesign.uiText.opacity(0.5))
                 }
             }
+
             Spacer()
 
             Button {
-                let userBook = UserBook(title: book.title, authors: book.authors, isbn13: book.isbn13)
+                let userBook = UserBook(title: book.title, authors: book.authors, isbn13: book.isbn13, coverUrl: book.coverUrl)
                 userBooksStore.add(userBook)
                 justAddedTitle = book.title
                 Task {
@@ -362,8 +359,6 @@ struct DiscoverView: View {
         }
     }
 
-    /// Grid covers: strict 2:3 box driven by `Rectangle` (not `AsyncImage` intrinsic size).
-    /// Skip `sketchShadow` here — its offset `.background` draws outside the frame and overlaps other cells.
     private func recommendationCell(_ book: BookRecommendation) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Rectangle()
@@ -396,13 +391,4 @@ struct DiscoverView: View {
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
-}
-
-#Preview {
-    DiscoverView(
-        bookSearchViewModel: BookSearchViewModel(api: MockAPIClient()),
-        bookScanViewModel: BookScanViewModel(scannerService: VisionBookScannerService(), api: MockAPIClient())
-    )
-    .environment(\.recommendationsStore, RecommendationsStore.previewPopulated())
-    .environment(\.sessionStore, SessionStore(previewLoggedIn: true))
 }
