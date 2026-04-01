@@ -16,24 +16,18 @@ final class BookSearchViewModel {
     }
 
     func submit() async {
-        // Ensure UI state changes happen on the main thread without annotating the whole class.
-        DispatchQueue.main.async { [weak self] in
-            self?.isSearching = true
-            self?.errorMessage = nil
-        }
-        defer {
-            DispatchQueue.main.async { [weak self] in self?.isSearching = false }
-        }
+        // Swift 6.2: @Observable types are main-actor isolated by default.
+        // Rely on that implicit isolation instead of explicit actor hops.
+        isSearching = true
+        errorMessage = nil
 
         do {
             let fetched = try await api.searchBooks(query: query)
-            DispatchQueue.main.async { [weak self] in
-                self?.results = fetched
-            }
+            results = fetched
         } catch {
-            DispatchQueue.main.async { [weak self] in
-                self?.errorMessage = "Failed to search books."
-            }
+            errorMessage = "Failed to search books."
         }
+
+        isSearching = false
     }
 }
