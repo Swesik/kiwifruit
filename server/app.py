@@ -71,6 +71,29 @@ def init_db():
             db.executescript(f.read())
 
 
+def _migrate_db():
+    """Apply incremental schema migrations to an existing database.
+
+    Creates any tables that were added after the initial schema.sql but may
+    not exist in databases created before those additions.
+    """
+    with app.app_context():
+        db = get_db()
+        db.execute('''
+            CREATE TABLE IF NOT EXISTS speed_reading_progress (
+                username TEXT NOT NULL CHECK (LENGTH(username) <= 20),
+                epubid INTEGER NOT NULL,
+                chapter_number INTEGER NOT NULL DEFAULT 1,
+                word_index INTEGER NOT NULL DEFAULT 0,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (username, epubid),
+                FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE,
+                FOREIGN KEY (epubid) REFERENCES epubs (epubid) ON DELETE CASCADE
+            )
+        ''')
+        db.commit()
+
+
 def _to_iso(ts):
     # ts is a SQLite DATETIME like 'YYYY-MM-DD HH:MM:SS' or already ISO; return ISO8601 with timezone
     if ts is None:
@@ -1615,6 +1638,146 @@ def epub_list():
     return jsonify(epubs)
 
 
+@app.route('/epub/<int:epub_id>/chapter/<int:chapter_num>/text', methods=['GET'])
+def epub_chapter_text(epub_id, chapter_num):
+    """Return the plaintext content of a single chapter.
+
+    **GET** ``/epub/<epub_id>/chapter/<chapter_num>/text``
+
+    Requires authentication. Only the owner may access. The epub must be
+    in PARSED status.
+
+    :param epub_id: ID of the epub.
+    :param chapter_num: 1-based chapter number.
+    :returns: JSON with ``text`` field containing the chapter plaintext.
+    :status 200: Text returned.
+    :status 403: Not authenticated or not the owner.
+    :status 404: Epub or chapter not found.
+    :status 409: Epub is still LOADING or FAILED.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    db = get_db()
+    epub_row = db.execute(
+        'SELECT epubid, owner, status FROM epubs WHERE epubid = ?', (epub_id,)
+    ).fetchone()
+    if not epub_row:
+        abort(404)
+    if epub_row['owner'] != username:
+        abort(403)
+    if epub_row['status'] == 'LOADING':
+        return jsonify({'error': 'epub_still_loading',
+                        'message': 'Epub is still being parsed'}), 409
+    if epub_row['status'] == 'FAILED':
+        return jsonify({'error': 'epub_parse_failed',
+                        'message': 'Epub parsing failed'}), 409
+
+    chapter_row = db.execute(
+        'SELECT filename FROM epub_chapters WHERE epubid = ? AND chapter_number = ?',
+        (epub_id, chapter_num)
+    ).fetchone()
+    if not chapter_row:
+        abort(404)
+
+    filepath = os.path.join(EPUB_FOLDER, chapter_row['filename'])
+    if not os.path.exists(filepath):
+        abort(404)
+
+    with open(filepath, 'r', encoding='utf-8') as f:
+        text = f.read()
+
+    return jsonify({'text': text})
+
+
+@app.route('/speed-reading/progress/<int:epub_id>', methods=['GET'])
+def get_speed_reading_progress(epub_id):
+    """Return the user's saved reading position in an epub.
+
+    **GET** ``/speed-reading/progress/<epub_id>``
+
+    :param epub_id: ID of the epub.
+    :returns: JSON with ``chapterNumber`` and ``wordIndex``.
+    :status 200: Progress returned (defaults to chapter 1, word 0 if none saved).
+    :status 403: Not authenticated or not the epub owner.
+    :status 404: Epub not found.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    db = get_db()
+    epub_row = db.execute(
+        'SELECT owner FROM epubs WHERE epubid = ?', (epub_id,)
+    ).fetchone()
+    if not epub_row:
+        abort(404)
+    if epub_row['owner'] != username:
+        abort(403)
+
+    row = db.execute(
+        'SELECT chapter_number, word_index FROM speed_reading_progress '
+        'WHERE username = ? AND epubid = ?', (username, epub_id)
+    ).fetchone()
+
+    if row:
+        return jsonify({'chapterNumber': row['chapter_number'],
+                        'wordIndex': row['word_index']})
+    return jsonify({'chapterNumber': 1, 'wordIndex': 0})
+
+
+@app.route('/speed-reading/progress/<int:epub_id>', methods=['PUT'])
+def update_speed_reading_progress(epub_id):
+    """Update (upsert) the user's reading position in an epub.
+
+    **PUT** ``/speed-reading/progress/<epub_id>``
+
+    Expects JSON body with ``chapterNumber`` (int) and ``wordIndex`` (int).
+
+    :param epub_id: ID of the epub.
+    :status 200: Progress updated.
+    :status 400: Missing or invalid fields.
+    :status 403: Not authenticated or not the epub owner.
+    :status 404: Epub not found.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    db = get_db()
+    epub_row = db.execute(
+        'SELECT owner FROM epubs WHERE epubid = ?', (epub_id,)
+    ).fetchone()
+    if not epub_row:
+        abort(404)
+    if epub_row['owner'] != username:
+        abort(403)
+
+    body = request.get_json(silent=True) or {}
+    chapter_number = body.get('chapterNumber')
+    word_index = body.get('wordIndex')
+
+    if chapter_number is None or word_index is None:
+        return jsonify({'error': 'missing_fields',
+                        'message': 'chapterNumber and wordIndex are required'}), 400
+    if not isinstance(chapter_number, int) or not isinstance(word_index, int):
+        return jsonify({'error': 'invalid_fields',
+                        'message': 'chapterNumber and wordIndex must be integers'}), 400
+
+    db.execute(
+        'INSERT INTO speed_reading_progress (username, epubid, chapter_number, word_index, updated_at) '
+        'VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) '
+        'ON CONFLICT(username, epubid) DO UPDATE SET '
+        'chapter_number = excluded.chapter_number, word_index = excluded.word_index, '
+        'updated_at = excluded.updated_at',
+        (username, epub_id, chapter_number, word_index)
+    )
+    db.commit()
+
+    return jsonify({'chapterNumber': chapter_number, 'wordIndex': word_index})
+
+
 @app.errorhandler(HTTPException)
 def handle_http_exception(e: HTTPException):
     """Return a JSON error body for all HTTP exceptions.
@@ -1673,6 +1836,13 @@ try:
     app.add_url_rule('/api/posts/<post_id>', endpoint='post_detail_api', view_func=post_detail, methods=['GET', 'DELETE'])
     app.add_url_rule('/api/posts/<post_id>/like', endpoint='post_like_api', view_func=post_like, methods=['POST', 'DELETE'])
     app.add_url_rule('/api/books/search', endpoint='search_books_api', view_func=search_books, methods=['GET'])
+    app.add_url_rule('/api/epub', endpoint='epub_upload_api', view_func=epub_upload, methods=['POST'])
+    app.add_url_rule('/api/epub/<epub_id>', endpoint='epub_detail_api', view_func=epub_detail, methods=['GET'])
+    app.add_url_rule('/api/epub/<epub_id>/chapters', endpoint='epub_chapters_api', view_func=epub_chapters, methods=['GET'])
+    app.add_url_rule('/api/epubs', endpoint='epub_list_api', view_func=epub_list, methods=['GET'])
+    app.add_url_rule('/api/epub/<int:epub_id>/chapter/<int:chapter_num>/text', endpoint='epub_chapter_text_api', view_func=epub_chapter_text, methods=['GET'])
+    app.add_url_rule('/api/speed-reading/progress/<int:epub_id>', endpoint='get_speed_reading_progress_api', view_func=get_speed_reading_progress, methods=['GET'])
+    app.add_url_rule('/api/speed-reading/progress/<int:epub_id>', endpoint='update_speed_reading_progress_api', view_func=update_speed_reading_progress, methods=['PUT'])
 except Exception:
     # if handlers are not defined yet during import-time, ignore
     pass
@@ -1680,6 +1850,7 @@ except Exception:
 if __name__ == '__main__':
     if not os.path.exists(DB_PATH):
         init_db()
+    _migrate_db()
     # Allow overriding the port with the environment (useful for running on non-default ports)
     port = int(os.environ.get('PORT', '5000'))
     app.run(debug=True, host='0.0.0.0', port=port)

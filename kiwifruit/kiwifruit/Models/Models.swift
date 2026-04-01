@@ -78,3 +78,16 @@ struct EpubUploadResponse: Identifiable, Codable {
     let originalFilename: String
     let createdAt: String
 }
+
+/// A chapter entry from the epub chapters endpoint.
+struct EpubChapter: Identifiable, Codable {
+    let id: String
+    let chapterNumber: Int
+    let title: String
+}
+
+/// Speed reading progress for a given epub.
+struct SpeedReadingProgress: Codable {
+    let chapterNumber: Int
+    let wordIndex: Int
+}
