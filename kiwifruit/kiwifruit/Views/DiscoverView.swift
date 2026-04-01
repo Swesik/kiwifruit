@@ -239,7 +239,10 @@ struct DiscoverView: View {
                     spacing: 20
                 ) {
                     ForEach(recommendationsStore.items) { book in
-                        recommendationCell(book)
+                        NavigationLink(destination: RecommendationDetailView(book: book)) {
+                            recommendationCell(book)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
