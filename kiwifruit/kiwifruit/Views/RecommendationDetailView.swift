@@ -10,6 +10,8 @@ private enum RecommendationDetailDesign {
 
 struct RecommendationDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var description = "Loading..."
+    @State private var isLoading = true
     let book: BookRecommendation
 
     var body: some View {
@@ -86,10 +88,20 @@ struct RecommendationDetailView: View {
                                 .font(.subheadline).fontWeight(.bold)
                                 .foregroundColor(RecommendationDetailDesign.uiText)
 
-                            Text("This is a captivating novel that will take you on an unforgettable journey. The author masterfully weaves together compelling characters and intricate plots to create a story that resonates with readers of all ages.")
-                                .font(.body)
-                                .foregroundColor(RecommendationDetailDesign.uiText.opacity(0.8))
-                                .lineSpacing(2)
+                            if isLoading {
+                                HStack {
+                                    ProgressView()
+                                        .tint(RecommendationDetailDesign.uiText.opacity(0.35))
+                                    Text("Loading...")
+                                        .font(.body)
+                                        .foregroundColor(RecommendationDetailDesign.uiText.opacity(0.6))
+                                }
+                            } else {
+                                Text(description)
+                                    .font(.body)
+                                    .foregroundColor(RecommendationDetailDesign.uiText.opacity(0.8))
+                                    .lineSpacing(2)
+                            }
                         }
 
                         // Why? section
@@ -126,6 +138,11 @@ struct RecommendationDetailView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            Task {
+                await fetchDescription()
+            }
+        }
     }
 
     @ViewBuilder
@@ -159,6 +176,31 @@ struct RecommendationDetailView: View {
         } else {
             Color.clear
         }
+    }
+
+    private func fetchDescription() async {
+        isLoading = true
+
+        do {
+            let desc = try await AppAPI.shared.fetchBookDescription(title: book.title, author: book.author)
+            
+            // If we got "No description available" (cached or from API), retry once
+            if desc == "No description available" {
+                print("Got empty description, retrying...")
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
+                let retryDesc = try await AppAPI.shared.fetchBookDescription(title: book.title, author: book.author)
+                description = retryDesc
+                print("Retry result: \(retryDesc.prefix(100))")
+            } else {
+                description = desc
+                print("Successfully loaded description: \(desc.prefix(100))")
+            }
+        } catch {
+            description = "Unable to load description"
+            print("Failed to fetch book description: \(error)")
+        }
+        
+        isLoading = false
     }
 }
 

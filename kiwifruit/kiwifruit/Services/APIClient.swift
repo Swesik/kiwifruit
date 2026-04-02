@@ -83,6 +83,8 @@ protocol APIClientProtocol: Sendable {
     func savePreferences(_ preferences: UserPreferences) async throws
     /// Uploads an epub file to the server for background parsing.
     func uploadEpub(fileData: Data, filename: String) async throws -> EpubUploadResponse
+    /// Fetches a book description from OpenLibrary using title and author.
+    func fetchBookDescription(title: String, author: String) async throws -> String
 }
 
 /// Simple in-memory/mock client used in previews and when no backend is configured.
@@ -208,6 +210,10 @@ final class MockAPIClient: APIClientProtocol {
     }
     func uploadEpub(fileData: Data, filename: String) async throws -> EpubUploadResponse {
         return EpubUploadResponse(id: "1", title: "Mock Book", author: "Mock Author", status: "LOADING", originalFilename: filename, createdAt: "2026-01-01T00:00:00Z")
+    }
+    func fetchBookDescription(title: String, author: String) async throws -> String {
+        try await Task.sleep(nanoseconds: 100 * 1_000_000)
+        return "This is a captivating novel that will take you on an unforgettable journey. The author masterfully weaves together compelling characters and intricate plots to create a story that resonates with readers of all ages."
     }
 }
 
@@ -726,6 +732,44 @@ final class RESTAPIClient: APIClientProtocol {
 
         let decoder = JSONDecoder()
         return try decoder.decode(EpubUploadResponse.self, from: data)
+    }
+
+    func fetchBookDescription(title: String, author: String) async throws -> String {
+        guard var comps = URLComponents(
+            url: baseURL.appendingPathComponent("/books/description"),
+            resolvingAgainstBaseURL: false
+        ) else { throw URLError(.badURL) }
+
+        comps.queryItems = [
+            URLQueryItem(name: "title", value: title),
+            URLQueryItem(name: "author", value: author)
+        ]
+
+        guard let url = comps.url else { throw URLError(.badURL) }
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            let bodyText = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+            print("fetchBookDescription failed HTTP \(http.statusCode): \(bodyText)")
+            throw URLError(.badServerResponse)
+        }
+
+        do {
+            // Decode as a dictionary with flexible value types
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            if let description = json?["description"] as? String {
+                return description
+            }
+            return "No description available"
+        } catch {
+            print("Failed to decode book description response: \(error)")
+            print("Response data: \(String(data: data, encoding: .utf8) ?? "<non-utf8>")")
+            throw error
+        }
     }
 }
 

@@ -618,6 +618,115 @@ def search_books():
     return jsonify(results)
 
 
+@app.route('/books/description', methods=['GET'])
+def get_book_description():
+    """Fetch book description from cache or OpenLibrary (two-step process).
+
+    **GET** `/books/description?title=<title>&author=<author>`
+
+    Returns description, title, and author from cache or OpenLibrary search.
+    Two-step process:
+    1. Search by title + author to get Work ID
+    2. Fetch Work JSON to get description
+    """
+    title = (request.args.get('title') or '').strip()
+    author = (request.args.get('author') or '').strip()
+
+    if not title or not author:
+        return jsonify({'error': 'title and author required'}), 400
+
+    db = get_db()
+    if db is None:
+        return jsonify({'description': 'No description available'}), 200
+
+    # Check cache first
+    try:
+        cursor = db.execute(
+            "SELECT description FROM book_description_cache WHERE title = ? AND author = ?",
+            (title, author)
+        )
+        cached = cursor.fetchone()
+        if cached:
+            logger.info("Book description cache hit: %s by %s", title, author)
+            return jsonify({
+                'description': cached[0],
+                'title': title,
+                'author': author,
+                'cached': True
+            })
+    except Exception as e:
+        logger.warning("Cache lookup failed: %s", e)
+
+    # Step 1: Search OpenLibrary for the Work key by title + author
+    search_params = urllib.parse.urlencode({
+        "title": title,
+        "author": author,
+        "fields": "key,title"
+    })
+    search_url = f"https://openlibrary.org/search.json?{search_params}"
+    logger.info("Step 1 - Searching OpenLibrary: %s", search_url)
+    
+    try:
+        search_data = _fetch_json(search_url, (10, 20, 30), "get_book_description_step1", f"{title} by {author}")
+    except Exception as e:
+        logger.error("Step 1 failed: %s", e)
+        return jsonify({'description': 'No description available'}), 200
+
+    description = 'No description available'
+    
+    if not isinstance(search_data, dict) or not search_data.get('docs'):
+        logger.warning("No search results from OpenLibrary for: %s by %s", title, author)
+        return jsonify({'description': description}), 200
+
+    # Get the first result's Work key
+    first_result = search_data['docs'][0]
+    work_key = first_result.get('key')
+    
+    if not work_key:
+        logger.warning("No work key found in search result")
+        return jsonify({'description': description}), 200
+
+    # Step 2: Fetch the Work JSON to get description
+    work_url = f"https://openlibrary.org{work_key}.json"
+    logger.info("Step 2 - Fetching Work JSON: %s", work_url)
+    
+    try:
+        work_data = _fetch_json(work_url, (10, 20, 30), "get_book_description_step2", work_key)
+    except Exception as e:
+        logger.error("Step 2 failed: %s", e)
+        return jsonify({'description': description}), 200
+
+    if isinstance(work_data, dict):
+        # Handle both string and dict description formats from OpenLibrary
+        desc_value = work_data.get('description')
+        if isinstance(desc_value, dict):
+            description = desc_value.get('value', description)
+        elif isinstance(desc_value, str):
+            description = desc_value
+    
+    if description and description != 'No description available':
+        logger.info("Found description from OpenLibrary: %s...", description[:100])
+        
+        # Cache the result
+        try:
+            db.execute(
+                "INSERT OR IGNORE INTO book_description_cache (title, author, description) VALUES (?, ?, ?)",
+                (title, author, description)
+            )
+            db.commit()
+            logger.info("Cached description for: %s by %s", title, author)
+        except Exception as e:
+            logger.warning("Failed to cache book description: %s", e)
+
+    return jsonify({
+        'description': description,
+        'title': title,
+        'author': author,
+        'cached': False
+    })
+
+
+
 @app.route('/recommendations', methods=['GET'])
 def get_recommendations():
     """Return personalized book recommendations for the authenticated user.

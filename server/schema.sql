@@ -142,3 +142,12 @@ CREATE TABLE epub_chapters (
     created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (epubid) REFERENCES epubs (epubid) ON DELETE CASCADE
 );
+-- Book description cache (to avoid rate-limiting external APIs)
+CREATE TABLE book_description_cache (
+    cache_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL CHECK (LENGTH(title) <= 256),
+    author TEXT NOT NULL CHECK (LENGTH(author) <= 256),
+    description TEXT NOT NULL,
+    fetched_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(title, author)
+);
