@@ -71,28 +71,6 @@ def init_db():
             db.executescript(f.read())
 
 
-def _migrate_db():
-    """Apply incremental schema migrations to an existing database.
-
-    Creates any tables that were added after the initial schema.sql but may
-    not exist in databases created before those additions.
-    """
-    with app.app_context():
-        db = get_db()
-        db.execute('''
-            CREATE TABLE IF NOT EXISTS speed_reading_progress (
-                username TEXT NOT NULL CHECK (LENGTH(username) <= 20),
-                epubid INTEGER NOT NULL,
-                chapter_number INTEGER NOT NULL DEFAULT 1,
-                word_index INTEGER NOT NULL DEFAULT 0,
-                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (username, epubid),
-                FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE,
-                FOREIGN KEY (epubid) REFERENCES epubs (epubid) ON DELETE CASCADE
-            )
-        ''')
-        db.commit()
-
 
 def _to_iso(ts):
     # ts is a SQLite DATETIME like 'YYYY-MM-DD HH:MM:SS' or already ISO; return ISO8601 with timezone
@@ -1850,7 +1828,6 @@ except Exception:
 if __name__ == '__main__':
     if not os.path.exists(DB_PATH):
         init_db()
-    _migrate_db()
     # Allow overriding the port with the environment (useful for running on non-default ports)
     port = int(os.environ.get('PORT', '5000'))
     app.run(debug=True, host='0.0.0.0', port=port)

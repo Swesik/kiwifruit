@@ -34,7 +34,7 @@ final class SpeedReadingViewModel {
     private var lastSavedChapter: Int = 0
     private var lastSavedWordIndex: Int = 0
 
-    init(api: APIClientProtocol = api) {
+    init(api: APIClientProtocol = AppAPI.shared) {
         self.api = api
     }
 
@@ -205,7 +205,7 @@ final class SpeedReadingViewModel {
         }
     }
 
-    /// Synchronously sends the progress update (fire-and-forget Task that captures values).
+    /// Asynchronously sends the progress update (fire-and-forget Task that captures values).
     /// Always sends regardless of whether values match lastSaved, ensuring the server is up to date.
     private func saveProgressSync() {
         guard let book = selectedBook else { return }
@@ -215,7 +215,7 @@ final class SpeedReadingViewModel {
         lastSavedChapter = chapter
         lastSavedWordIndex = wordIdx
         let epubId = book.id
-        Task.detached {
+        Task {
             try? await api.updateSpeedReadingProgress(
                 epubId: epubId, chapter: chapter, wordIndex: wordIdx
             )
