@@ -34,6 +34,7 @@ struct BookSearchResult: Identifiable, Codable, Hashable {
     let title: String
     let authors: [String]?
     let isbn13: String?
+    let genres: [String]?
 }
 
 /// Server-driven personalized recommendation row (GET /recommendations).

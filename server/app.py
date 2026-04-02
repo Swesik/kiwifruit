@@ -4,6 +4,9 @@ import hashlib
 import sqlite3
 import logging
 import threading
+import json
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 from flask import Flask, request, jsonify, g, abort, send_from_directory, make_response
 from werkzeug.exceptions import HTTPException
@@ -11,7 +14,11 @@ import ebooklib
 from ebooklib import epub as epub_lib
 from bs4 import BeautifulSoup
 
-from .recommendations import rank_recommendations
+try:
+    from .recommendations import rank_recommendations
+except ImportError:
+    # Support running as a script: `python app.py`
+    from recommendations import rank_recommendations
 
 BASE_DIR = os.path.dirname(__file__)
 DB_PATH = os.path.join(BASE_DIR, 'kiwifruit.db')
@@ -367,41 +374,175 @@ def create_session():
 
 @app.route('/books/search', methods=['GET'])
 def search_books():
-    """Search for books by title/author/ISBN (stub).
+    """Search for books by title/author/ISBN via Open Library.
 
     **GET** `/books/search?q=<query>`
 
-    Returns a list of book results. This is currently a stub implementation
-    to support the iOS manual search workflow; it can later be replaced with
-    external API lookup (Open Library / Google Books) or a local books table.
+    Uses Open Library's public search API and returns rows matching the iOS
+    ``BookSearchResult`` model shape.
     """
     q = (request.args.get('q') or '').strip()
     if not q:
         return jsonify([])
 
-    # Minimal stub results (deterministic-ish, safe for demos)
-    # Shape matches the iOS BookSearchResult model.
-    results = [
-        {
-            'id': uuid.uuid4().hex,
-            'title': f'{q} (Sample Result 1)',
-            'authors': ['Demo Author'],
-            'isbn13': None
-        },
-        {
-            'id': uuid.uuid4().hex,
-            'title': f'{q} (Sample Result 2)',
-            'authors': ['Kiwi Fruit', 'Savannah Brown'],
-            'isbn13': '9780000000002'
-        },
-        {
-            'id': uuid.uuid4().hex,
-            'title': f'{q} (Sample Result 3)',
-            'authors': None,
-            'isbn13': None
-        }
-    ]
-    return jsonify(results)
+    # Keep API responsive for UI search and avoid fetching huge result sets.
+    limit = 12
+    params = urllib.parse.urlencode({
+        "q": q,
+        "limit": limit,
+        # Request only fields needed by the iOS model to reduce payload size.
+        "fields": "key,title,author_name,isbn,subject",
+    })
+    openlibrary_url = f"https://openlibrary.org/search.json?{params}"
+    gutendex_url = "https://gutendex.com/books?" + urllib.parse.urlencode({"search": q})
+
+    def _pick_isbn13(isbns):
+        if not isinstance(isbns, list):
+            return None
+        for value in isbns:
+            if value is None:
+                continue
+            candidate = ''.join(ch for ch in str(value) if ch.isdigit())
+            if len(candidate) == 13:
+                return candidate
+        return None
+
+    def _normalize_genres(raw_values):
+        """Map provider subject labels to app canonical genres."""
+        if not isinstance(raw_values, list):
+            return None
+
+        mapping = [
+            ("sci-fi", ["science fiction", "sci fi", "sci-fi", "sf"]),
+            ("fantasy", ["fantasy", "magic", "dragon"]),
+            ("mystery", ["mystery", "detective", "crime", "thriller"]),
+            ("classic", ["classic", "victorian", "19th century"]),
+            ("dystopian", ["dystopia", "dystopian", "post-apocalyptic"]),
+            ("memoir", ["memoir", "autobiography"]),
+            ("nonfiction", ["nonfiction", "non-fiction", "history", "biography", "science"]),
+            ("fiction", ["fiction", "literary"]),
+            ("romance", ["romance", "love story"]),
+        ]
+
+        found = []
+        for raw in raw_values:
+            text = str(raw or "").strip().lower()
+            if not text:
+                continue
+            for canonical, keywords in mapping:
+                if any(keyword in text for keyword in keywords):
+                    if canonical not in found:
+                        found.append(canonical)
+                    break
+        return found or None
+
+    def _fetch_json(url, timeouts):
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "kiwifruit/1.0 (+https://github.com/Swesik/kiwifruit)"}
+        )
+        for attempt, timeout_seconds in enumerate(timeouts, start=1):
+            try:
+                with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
+                    return json.loads(resp.read().decode('utf-8'))
+            except Exception as e:
+                logger.warning(
+                    "books/search upstream failed: provider_url=%r query=%r attempt=%d timeout=%ss error=%s",
+                    url,
+                    q,
+                    attempt,
+                    timeout_seconds,
+                    e,
+                )
+        return None
+
+    # Provider 1: Open Library
+    payload = _fetch_json(openlibrary_url, (4,))
+    if isinstance(payload, dict):
+        docs = payload.get('docs', [])
+        results = []
+        for doc in docs:
+            if not isinstance(doc, dict):
+                continue
+            title = (doc.get('title') or '').strip()
+            if not title:
+                continue
+            work_key = doc.get('key')
+            if isinstance(work_key, str) and work_key.strip():
+                result_id = work_key.strip()
+            else:
+                result_id = uuid.uuid4().hex
+            authors = doc.get('author_name')
+            if not isinstance(authors, list) or len(authors) == 0:
+                authors = None
+            results.append({
+                'id': result_id,
+                'title': title,
+                'authors': authors,
+                'isbn13': _pick_isbn13(doc.get('isbn')),
+                'genres': _normalize_genres(doc.get('subject')),
+            })
+            if len(results) >= limit:
+                break
+        if results:
+            return jsonify(results)
+
+    # Provider 2 fallback: Gutendex (public-domain catalog).
+    # Keeps the endpoint usable when Open Library is temporarily unavailable.
+    fallback_payload = _fetch_json(gutendex_url, (12,))
+    if isinstance(fallback_payload, dict):
+        items = fallback_payload.get('results', [])
+        fallback_results = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            title = (item.get('title') or '').strip()
+            if not title:
+                continue
+            authors_raw = item.get('authors') or []
+            authors = []
+            for author in authors_raw:
+                if isinstance(author, dict):
+                    name = (author.get('name') or '').strip()
+                    if name:
+                        authors.append(name)
+            fallback_results.append({
+                'id': f"gutendex:{item.get('id', uuid.uuid4().hex)}",
+                'title': title,
+                'authors': authors if authors else None,
+                'isbn13': None,
+                'genres': _normalize_genres(item.get('subjects')),
+            })
+            if len(fallback_results) >= limit:
+                break
+        if fallback_results:
+            return jsonify(fallback_results)
+
+    # Provider 3 fallback: local catalog search (keeps endpoint useful when
+    # external providers are degraded or blocked).
+    try:
+        db = get_db()
+        pattern = f"%{q.lower()}%"
+        local_rows = db.execute(
+            "SELECT book_id, title, author, genre FROM catalog_books "
+            "WHERE lower(title) LIKE ? OR lower(author) LIKE ? "
+            "ORDER BY book_id LIMIT ?",
+            (pattern, pattern, limit)
+        ).fetchall()
+        local_results = [{
+            "id": f"catalog:{row['book_id']}",
+            "title": row["title"],
+            "authors": [row["author"]] if row["author"] else None,
+            "isbn13": None,
+            "genres": [row["genre"]] if row["genre"] else None,
+        } for row in local_rows]
+        if local_results:
+            return jsonify(local_results)
+    except Exception as e:
+        logger.warning("books/search local-catalog fallback failed: query=%r error=%s", q, e)
+
+    # If all providers fail, keep API contract stable for iOS decoding.
+    return jsonify([])
 
 
 @app.route('/recommendations', methods=['GET'])
