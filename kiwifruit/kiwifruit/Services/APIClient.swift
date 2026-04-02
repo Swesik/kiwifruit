@@ -139,7 +139,8 @@ final class MockAPIClient: APIClientProtocol {
                 id: UUID().uuidString,
                 title: "Mock result for \"\(trimmed)\"",
                 authors: ["Kiwi Fruit"],
-                isbn13: nil
+                isbn13: nil,
+                genres: nil
             )
         ]
     }
