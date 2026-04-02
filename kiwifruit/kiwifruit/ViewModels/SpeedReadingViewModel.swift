@@ -3,6 +3,8 @@ import Observation
 
 @Observable
 final class SpeedReadingViewModel {
+    private let api: APIClientProtocol
+
     var isUploading = false
     var uploadMessage: String?
 
@@ -32,6 +34,10 @@ final class SpeedReadingViewModel {
     private var lastSavedChapter: Int = 0
     private var lastSavedWordIndex: Int = 0
 
+    init(api: APIClientProtocol = api) {
+        self.api = api
+    }
+
     var currentWord: String {
         guard currentWordIndex < words.count else { return "" }
         return words[currentWordIndex]
@@ -46,7 +52,7 @@ final class SpeedReadingViewModel {
         isLoadingBooks = true
         Task {
             do {
-                let allBooks = try await AppAPI.shared.fetchEpubs()
+                let allBooks = try await api.fetchEpubs()
                 books = allBooks.filter { $0.status == "PARSED" }
             } catch {
                 books = []
@@ -62,8 +68,8 @@ final class SpeedReadingViewModel {
         chapters = []
         Task {
             // Fetch chapters list and progress in parallel
-            async let chaptersResult = AppAPI.shared.fetchChapters(epubId: book.id)
-            async let progressResult = AppAPI.shared.getSpeedReadingProgress(epubId: book.id)
+            async let chaptersResult = api.fetchChapters(epubId: book.id)
+            async let progressResult = api.getSpeedReadingProgress(epubId: book.id)
 
             do {
                 chapters = try await chaptersResult
@@ -112,7 +118,7 @@ final class SpeedReadingViewModel {
         guard let book = selectedBook else { return }
         isLoadingChapter = true
         do {
-            let text = try await AppAPI.shared.fetchChapterText(epubId: book.id, chapterNumber: currentChapter)
+            let text = try await api.fetchChapterText(epubId: book.id, chapterNumber: currentChapter)
             words = text.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
             if currentWordIndex >= words.count {
                 currentWordIndex = 0
@@ -210,7 +216,7 @@ final class SpeedReadingViewModel {
         lastSavedWordIndex = wordIdx
         let epubId = book.id
         Task.detached {
-            try? await AppAPI.shared.updateSpeedReadingProgress(
+            try? await api.updateSpeedReadingProgress(
                 epubId: epubId, chapter: chapter, wordIndex: wordIdx
             )
         }
@@ -233,7 +239,7 @@ final class SpeedReadingViewModel {
         uploadMessage = nil
         Task {
             do {
-                let response = try await AppAPI.shared.uploadEpub(fileData: fileData, filename: filename)
+                let response = try await api.uploadEpub(fileData: fileData, filename: filename)
                 isUploading = false
                 uploadMessage = "Uploaded \"\(response.title)\" by \(response.author). Processing..."
                 // Poll until parsed
@@ -249,7 +255,7 @@ final class SpeedReadingViewModel {
         for _ in 0..<60 {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             do {
-                let detail = try await AppAPI.shared.fetchEpubDetail(epubId: epubId)
+                let detail = try await api.fetchEpubDetail(epubId: epubId)
                 if detail.status == "PARSED" {
                     uploadMessage = "Uploaded \"\(detail.title)\" by \(detail.author)"
                     loadBooks()

@@ -4,7 +4,13 @@ import UniformTypeIdentifiers
 struct SpeedReadingView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showFilePicker = false
-    @State private var viewModel = SpeedReadingViewModel()
+    private let api: APIClientProtocol
+    @State private var viewModel: SpeedReadingViewModel
+
+    init(api: APIClientProtocol = AppAPI.shared) {
+        self.api = api
+        self._viewModel = State(initialValue: SpeedReadingViewModel(api: api))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
