@@ -128,6 +128,17 @@ struct DiscoverView: View {
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
                 .sketchShadow()
 
+            } else if let errorMessage = bookScanViewModel.errorMessage ?? bookSearchViewModel.errorMessage {
+                Text(errorMessage)
+                    .font(.subheadline).fontWeight(.bold)
+                    .foregroundColor(DiscoverDesign.uiText.opacity(0.6))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 32)
+                    .background(Color(hex: "F9FAFB"))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
+                    .sketchShadow()
+
             } else if !bookSearchViewModel.results.isEmpty {
                 VStack(spacing: 12) {
                     ForEach(Array(bookSearchViewModel.results.prefix(resultsLimit))) { book in
@@ -136,7 +147,7 @@ struct DiscoverView: View {
 
                     if bookSearchViewModel.results.count > resultsLimit {
                         Button("LOAD MORE") {
-                            resultsLimit = min(bookSearchViewModel.results.count, min(6, resultsLimit + 3))
+                            resultsLimit = min(bookSearchViewModel.results.count, resultsLimit + 3)
                         }
                         .font(.subheadline).fontWeight(.black)
                         .foregroundColor(DiscoverDesign.uiText)

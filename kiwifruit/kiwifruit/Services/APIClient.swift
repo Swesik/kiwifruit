@@ -648,36 +648,58 @@ final class RESTAPIClient: APIClientProtocol {
 
         let decoder = JSONDecoder()
         let ol = try decoder.decode(OLResponse.self, from: data)
-        var mapped: [BookSearchResult] = []
-        mapped.reserveCapacity(min(20, ol.docs.count))
+        let docs = ol.docs.prefix(20)
 
-        for (idx, doc) in ol.docs.prefix(20).enumerated() {
+        // First pass: map Open Library data and collect indices that need a Google cover lookup.
+        struct Partial {
+            let index: Int
+            let id: String
+            let title: String
+            let authors: [String]?
+            let isbn13: String?
+            var coverUrl: String?
+        }
+
+        var partials: [Partial] = []
+        partials.reserveCapacity(docs.count)
+
+        for (idx, doc) in docs.enumerated() {
             let id = doc.key ?? "ol_\(idx)_\(UUID().uuidString)"
             let title = doc.title ?? "Unknown title"
             let authors = doc.author_name
-            // Prefer 13-digit isbn when available
             var isbn13: String? = nil
             if let isbns = doc.isbn {
                 if let exact13 = isbns.first(where: { $0.count == 13 }) { isbn13 = exact13 }
                 else { isbn13 = isbns.first }
             }
-            // Cover image: Open Library uses cover_i
             var coverUrl: String? = nil
             if let coverId = doc.cover_i {
                 coverUrl = "https://covers.openlibrary.org/b/id/\(coverId)-M.jpg"
             }
-
-            // If Open Library provided no cover, try Google Books (ISBN must be present)
-            if coverUrl == nil, let isbn = isbn13 {
-                if let googleCover = try? await fetchGoogleBooksCover(isbn13: isbn) {
-                    coverUrl = googleCover
-                }
-            }
-
-            mapped.append(BookSearchResult(id: id, title: title, authors: authors, isbn13: isbn13, coverUrl: coverUrl))
+            partials.append(Partial(index: idx, id: id, title: title, authors: authors, isbn13: isbn13, coverUrl: coverUrl))
         }
 
-        return mapped
+        // Second pass: fetch missing covers from Google Books concurrently.
+        let needsCover = partials.filter { $0.coverUrl == nil && $0.isbn13 != nil }
+        if !needsCover.isEmpty {
+            let covers = await withTaskGroup(of: (Int, String?).self) { group in
+                for p in needsCover {
+                    let isbn = p.isbn13!
+                    let idx = p.index
+                    group.addTask { (idx, try? await self.fetchGoogleBooksCover(isbn13: isbn)) }
+                }
+                var results: [Int: String] = [:]
+                for await (idx, url) in group {
+                    if let url { results[idx] = url }
+                }
+                return results
+            }
+            for (idx, url) in covers {
+                partials[idx].coverUrl = url
+            }
+        }
+
+        return partials.map { BookSearchResult(id: $0.id, title: $0.title, authors: $0.authors, isbn13: $0.isbn13, coverUrl: $0.coverUrl) }
     }
 
     /// Try Google Books volumes API to obtain a thumbnail for an ISBN.

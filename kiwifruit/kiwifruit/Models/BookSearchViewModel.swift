@@ -20,14 +20,12 @@ final class BookSearchViewModel {
         // Rely on that implicit isolation instead of explicit actor hops.
         isSearching = true
         errorMessage = nil
+        defer { isSearching = false }
 
         do {
-            let fetched = try await api.searchBooks(query: query)
-            results = fetched
+            results = try await api.searchBooks(query: query)
         } catch {
             errorMessage = "Failed to search books."
         }
-
-        isSearching = false
     }
 }

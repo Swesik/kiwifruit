@@ -383,14 +383,14 @@ def search_books():
         return jsonify([])
 
     # Try to use Open Library to return real metadata when possible.
-    try:
-        # Heuristic: if q looks like an ISBN (10 or 13 digits after stripping hyphens),
-        # use the ISBN API which returns richer data for a single ISBN.
-        def normalize_isbn(s):
-            return ''.join(ch for ch in s if ch.isdigit())
+    def normalize_isbn(s):
+        return ''.join(ch for ch in s if ch.isdigit())
 
-        isbn_candidate = normalize_isbn(q)
-        if len(isbn_candidate) in (10, 13):
+    # Heuristic: if q looks like an ISBN (10 or 13 digits after stripping hyphens),
+    # use the ISBN API which returns richer data for a single ISBN.
+    isbn_candidate = normalize_isbn(q)
+    if len(isbn_candidate) in (10, 13):
+        try:
             ol_url = f'https://openlibrary.org/api/books?bibkeys=ISBN:{urllib.parse.quote(isbn_candidate)}&format=json&jscmd=data'
             with urllib.request.urlopen(ol_url, timeout=8) as resp:
                 raw = resp.read()
@@ -401,7 +401,6 @@ def search_books():
                 title = entry.get('title')
                 authors = [a.get('name') for a in entry.get('authors', []) if a.get('name')]
                 isbns = []
-                # Sometimes identifiers contain isbn_10/isbn_13
                 identifiers = entry.get('identifiers', {})
                 for k in ('isbn_13', 'isbn_10'):
                     for v in identifiers.get(k, []):
@@ -423,9 +422,11 @@ def search_books():
                     'cover_url': cover_url
                 }]
                 return jsonify(results)
+        except Exception as e:
+            logger.warning('books.search: ISBN lookup failed: %s', e)
 
-        # Otherwise run a free-text search against Open Library.
-        # Open Library accepts free text and returns docs with title/author/isbn arrays.
+    # Free-text search against Open Library.
+    try:
         search_url = f'https://openlibrary.org/search.json?q={urllib.parse.quote(q)}&limit=20'
         with urllib.request.urlopen(search_url, timeout=8) as resp:
             raw = resp.read()
@@ -448,9 +449,8 @@ def search_books():
             out.append({'id': d.get('key') or uuid.uuid4().hex, 'title': title, 'authors': authors, 'isbn13': isbn13, 'cover_url': cover_url})
         if out:
             return jsonify(out)
-
     except Exception as e:
-        logger.warning('books.search: Open Library lookup failed: %s', e)
+        logger.warning('books.search: Open Library search failed: %s', e)
 
     # Fallback deterministic demo results when external lookup fails or returns nothing
     results = [
