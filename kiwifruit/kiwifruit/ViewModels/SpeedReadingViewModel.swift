@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 
-@MainActor
 @Observable
 final class SpeedReadingViewModel {
     var isUploading = false
