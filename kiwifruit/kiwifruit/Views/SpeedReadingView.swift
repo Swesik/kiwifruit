@@ -271,33 +271,23 @@ struct SpeedReadingView: View {
         let pivotChar = pivot < chars.count ? String(chars[pivot]) : ""
         let after = pivot + 1 < chars.count ? String(chars[(pivot + 1)...]) : ""
 
-        return ZStack {
-            // Invisible full word to reserve consistent space
-            Text(word)
+        return HStack(spacing: 0) {
+            Text(before)
                 .font(.system(size: 48, weight: .bold, design: .monospaced))
-                .hidden()
+                .foregroundColor(Color(hex: "2D3748"))
+                .fixedSize()
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .trailing)
 
-            HStack(spacing: 0) {
-                // Right-align everything before the pivot
-                Text(before)
-                    .font(.system(size: 48, weight: .bold, design: .monospaced))
-                    .foregroundColor(Color(hex: "2D3748"))
-                    .fixedSize()
-                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .trailing)
+            Text(pivotChar)
+                .font(.system(size: 48, weight: .bold, design: .monospaced))
+                .foregroundColor(.red)
+                .fixedSize()
 
-                // The pivot character in red
-                Text(pivotChar)
-                    .font(.system(size: 48, weight: .bold, design: .monospaced))
-                    .foregroundColor(.red)
-                    .fixedSize()
-
-                // Left-align everything after the pivot
-                Text(after)
-                    .font(.system(size: 48, weight: .bold, design: .monospaced))
-                    .foregroundColor(Color(hex: "2D3748"))
-                    .fixedSize()
-                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-            }
+            Text(after)
+                .font(.system(size: 48, weight: .bold, design: .monospaced))
+                .foregroundColor(Color(hex: "2D3748"))
+                .fixedSize()
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity)
     }
