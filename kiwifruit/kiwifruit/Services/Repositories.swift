@@ -1,6 +1,6 @@
 import Foundation
 
-// Shared session model returned by the server
+// Lightweight session DTO for simple repository consumers.
 struct ReadingSessionModel: Codable {
     public let session_id: String?
     public let host: String?
@@ -16,21 +16,8 @@ protocol SessionRepository {
     func fetchReadingSessions(host: String, status: String?) async throws -> [ReadingSessionModel]
 }
 
-protocol WeatherRepository {
-    func fetchWeather(lat: Double, lon: Double) async throws -> ApiNinjasWeatherInfo
-}
-
 protocol GeoRepository {
     func reverseGeocode(lat: Double, lon: Double) async -> GeoInfo
-}
-
-protocol DynamicChallengeRepository {
-    func generateRandomChallenges(count: Int) async -> [Challenge]
-    func generateDynamicChallenge(lat: Double, lon: Double, streak: Int) async -> Challenge
-}
-
-protocol LLMRepository {
-    func enhanceChallenge(_ c: Challenge, context: String) async -> OpenAIService.LLMResult?
 }
 
 protocol PersistenceRepository {
@@ -48,17 +35,49 @@ protocol PersistenceRepository {
 
 class ServerSessionRepository: SessionRepository {
     private let baseURL: String
-    init(baseURL: String = "http://127.0.0.1:5000") {
+    private let authTokenProvider: () -> String?
+
+    init(
+        baseURL: String = "http://127.0.0.1:5000",
+        authTokenProvider: @escaping () -> String? = { nil }
+    ) {
         self.baseURL = baseURL
+        self.authTokenProvider = authTokenProvider
     }
+
     func fetchReadingSessions(host: String, status: String?) async throws -> [ReadingSessionModel] {
-        var urlString = "\(baseURL)/reading_sessions?host=\(host)"
-        if let s = status { urlString += "&status=\(s)" }
-        guard let url = URL(string: urlString) else { return [] }
-        let (data, _) = try await URLSession.shared.data(from: url)
+        guard let url = URL(string: "\(baseURL)/reading-sessions/friends") else { return [] }
+        var request = URLRequest(url: url)
+        if let token = authTokenProvider(), !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+
         let decoder = JSONDecoder()
-        let sessions = try decoder.decode([ReadingSessionModel].self, from: data)
-        return sessions
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .iso8601
+        let friendSessions = try decoder.decode([ActiveFriendSession].self, from: data)
+
+        return friendSessions
+            .map { active in
+                ReadingSessionModel(
+                    session_id: active.session.id,
+                    host: active.session.host.username,
+                    book_title: active.session.bookTitle,
+                    started_at: ISO8601DateFormatter().string(from: active.session.startedAt),
+                    status: active.session.status,
+                    elapsed_seconds: active.hostElapsedSeconds
+                )
+            }
+            .filter { model in
+                let hostMatches = host.isEmpty || model.host == host
+                let statusMatches = (status == nil || status?.isEmpty == true) || model.status == status
+                return hostMatches && statusMatches
+            }
     }
 }
 
@@ -77,11 +96,4 @@ class UserDefaultsPersistence: PersistenceRepository {
 
 // MARK: - Conform existing services to protocols
 
-extension ApiNinjasWeatherService: WeatherRepository {}
 extension GeoService: GeoRepository {}
-extension DynamicChallengeService: DynamicChallengeRepository {}
-extension OpenAIService: LLMRepository {}
-
-// The above extensions rely on the concrete classes' method names matching the protocol
-// (they do in this codebase). ServerSessionRepository and UserDefaultsPersistence
-// provide default implementations that can be injected into ViewModels.
