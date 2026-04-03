@@ -16,6 +16,8 @@ final class BookSearchViewModel {
     }
 
     func submit() async {
+        // Swift 6.2: @Observable types are main-actor isolated by default.
+        // Rely on that implicit isolation instead of explicit actor hops.
         isSearching = true
         errorMessage = nil
         defer { isSearching = false }

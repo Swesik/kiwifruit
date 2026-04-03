@@ -12,6 +12,9 @@ from ebooklib import epub as epub_lib
 from bs4 import BeautifulSoup
 
 from .recommendations import rank_recommendations
+import urllib.request
+import urllib.parse
+import json
 
 BASE_DIR = os.path.dirname(__file__)
 DB_PATH = os.path.join(BASE_DIR, 'kiwifruit.db')
@@ -379,8 +382,77 @@ def search_books():
     if not q:
         return jsonify([])
 
-    # Minimal stub results (deterministic-ish, safe for demos)
-    # Shape matches the iOS BookSearchResult model.
+    # Try to use Open Library to return real metadata when possible.
+    def normalize_isbn(s):
+        return ''.join(ch for ch in s if ch.isdigit())
+
+    # Heuristic: if q looks like an ISBN (10 or 13 digits after stripping hyphens),
+    # use the ISBN API which returns richer data for a single ISBN.
+    isbn_candidate = normalize_isbn(q)
+    if len(isbn_candidate) in (10, 13):
+        try:
+            ol_url = f'https://openlibrary.org/api/books?bibkeys=ISBN:{urllib.parse.quote(isbn_candidate)}&format=json&jscmd=data'
+            with urllib.request.urlopen(ol_url, timeout=8) as resp:
+                raw = resp.read()
+            parsed = json.loads(raw)
+            key = f'ISBN:{isbn_candidate}'
+            if key in parsed:
+                entry = parsed[key]
+                title = entry.get('title')
+                authors = [a.get('name') for a in entry.get('authors', []) if a.get('name')]
+                isbns = []
+                identifiers = entry.get('identifiers', {})
+                for k in ('isbn_13', 'isbn_10'):
+                    for v in identifiers.get(k, []):
+                        isbns.append(v)
+                isbn13 = None
+                for v in isbns:
+                    if len(v) == 13:
+                        isbn13 = v
+                        break
+                cover_url = None
+                if isinstance(entry.get('cover'), dict):
+                    cover = entry.get('cover')
+                    cover_url = cover.get('medium') or cover.get('large') or cover.get('small')
+                results = [{
+                    'id': uuid.uuid4().hex,
+                    'title': title or q,
+                    'authors': authors or None,
+                    'isbn13': isbn13,
+                    'cover_url': cover_url
+                }]
+                return jsonify(results)
+        except Exception as e:
+            logger.warning('books.search: ISBN lookup failed: %s', e)
+
+    # Free-text search against Open Library.
+    try:
+        search_url = f'https://openlibrary.org/search.json?q={urllib.parse.quote(q)}&limit=20'
+        with urllib.request.urlopen(search_url, timeout=8) as resp:
+            raw = resp.read()
+        parsed = json.loads(raw)
+        docs = parsed.get('docs', [])
+        out = []
+        for d in docs[:20]:
+            title = d.get('title') or d.get('title_suggest') or q
+            authors = d.get('author_name') or None
+            isbn13 = None
+            isbns = d.get('isbn') or []
+            for s in isbns:
+                sdigits = ''.join(ch for ch in s if ch.isdigit())
+                if len(sdigits) == 13:
+                    isbn13 = sdigits
+                    break
+            cover_url = None
+            if d.get('cover_i'):
+                cover_url = f"https://covers.openlibrary.org/b/id/{d.get('cover_i')}-M.jpg"
+            out.append({'id': d.get('key') or uuid.uuid4().hex, 'title': title, 'authors': authors, 'isbn13': isbn13, 'cover_url': cover_url})
+        if out:
+            return jsonify(out)
+    except Exception as e:
+        logger.warning('books.search: Open Library search failed: %s', e)
+
+    # Fallback deterministic demo results when external lookup fails or returns nothing
     results = [
         {
             'id': uuid.uuid4().hex,
