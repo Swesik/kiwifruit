@@ -142,3 +142,15 @@ CREATE TABLE epub_chapters (
     created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (epubid) REFERENCES epubs (epubid) ON DELETE CASCADE
 );
+
+-- Speed reading progress (tracks where a user is in a given epub)
+CREATE TABLE speed_reading_progress (
+    username TEXT NOT NULL CHECK (LENGTH(username) <= 20),
+    epubid INTEGER NOT NULL,
+    chapter_number INTEGER NOT NULL DEFAULT 1,
+    word_index INTEGER NOT NULL DEFAULT 0,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (username, epubid),
+    FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE,
+    FOREIGN KEY (epubid) REFERENCES epubs (epubid) ON DELETE CASCADE
+);

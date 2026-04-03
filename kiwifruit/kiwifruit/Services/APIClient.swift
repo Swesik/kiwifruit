@@ -83,6 +83,18 @@ protocol APIClientProtocol: Sendable {
     func savePreferences(_ preferences: UserPreferences) async throws
     /// Uploads an epub file to the server for background parsing.
     func uploadEpub(fileData: Data, filename: String) async throws -> EpubUploadResponse
+    /// Returns all epubs belonging to the current user.
+    func fetchEpubs() async throws -> [EpubUploadResponse]
+    /// Returns the status/detail of a single epub.
+    func fetchEpubDetail(epubId: String) async throws -> EpubUploadResponse
+    /// Returns the list of chapters for an epub.
+    func fetchChapters(epubId: String) async throws -> [EpubChapter]
+    /// Returns the plaintext content of a single chapter.
+    func fetchChapterText(epubId: String, chapterNumber: Int) async throws -> String
+    /// Returns the user's saved reading position in an epub.
+    func getSpeedReadingProgress(epubId: String) async throws -> SpeedReadingProgress
+    /// Updates the user's reading position in an epub.
+    func updateSpeedReadingProgress(epubId: String, chapter: Int, wordIndex: Int) async throws
 }
 
 /// Simple in-memory/mock client used in previews and when no backend is configured.
@@ -209,6 +221,27 @@ final class MockAPIClient: APIClientProtocol {
     func uploadEpub(fileData: Data, filename: String) async throws -> EpubUploadResponse {
         return EpubUploadResponse(id: "1", title: "Mock Book", author: "Mock Author", status: "LOADING", originalFilename: filename, createdAt: "2026-01-01T00:00:00Z")
     }
+    func fetchEpubs() async throws -> [EpubUploadResponse] {
+        return [
+            EpubUploadResponse(id: "1", title: "Mock Book", author: "Mock Author", status: "PARSED", originalFilename: "mock.epub", createdAt: "2026-01-01T00:00:00Z")
+        ]
+    }
+    func fetchEpubDetail(epubId: String) async throws -> EpubUploadResponse {
+        return EpubUploadResponse(id: epubId, title: "Mock Book", author: "Mock Author", status: "PARSED", originalFilename: "mock.epub", createdAt: "2026-01-01T00:00:00Z")
+    }
+    func fetchChapters(epubId: String) async throws -> [EpubChapter] {
+        return [
+            EpubChapter(id: "1", chapterNumber: 1, title: "Chapter 1"),
+            EpubChapter(id: "2", chapterNumber: 2, title: "Chapter 2"),
+        ]
+    }
+    func fetchChapterText(epubId: String, chapterNumber: Int) async throws -> String {
+        return "The quick brown fox jumps over the lazy dog. Speed reading is a technique for rapidly processing text by focusing your eyes on key words."
+    }
+    func getSpeedReadingProgress(epubId: String) async throws -> SpeedReadingProgress {
+        return SpeedReadingProgress(chapterNumber: 1, wordIndex: 0)
+    }
+    func updateSpeedReadingProgress(epubId: String, chapter: Int, wordIndex: Int) async throws {}
 }
 
 /// A simple REST API client implementation using URLSession and async/await.
@@ -840,6 +873,82 @@ final class RESTAPIClient: APIClientProtocol {
 
         let decoder = JSONDecoder()
         return try decoder.decode(EpubUploadResponse.self, from: data)
+    }
+
+    func fetchEpubs() async throws -> [EpubUploadResponse] {
+        let url = baseURL.appendingPathComponent("/epubs")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode([EpubUploadResponse].self, from: data)
+    }
+
+    func fetchEpubDetail(epubId: String) async throws -> EpubUploadResponse {
+        let url = baseURL.appendingPathComponent("/epub/\(epubId)")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode(EpubUploadResponse.self, from: data)
+    }
+
+    func fetchChapters(epubId: String) async throws -> [EpubChapter] {
+        let url = baseURL.appendingPathComponent("/epub/\(epubId)/chapters")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode([EpubChapter].self, from: data)
+    }
+
+    func fetchChapterText(epubId: String, chapterNumber: Int) async throws -> String {
+        let url = baseURL.appendingPathComponent("/epub/\(epubId)/chapter/\(chapterNumber)/text")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return json?["text"] as? String ?? ""
+    }
+
+    func getSpeedReadingProgress(epubId: String) async throws -> SpeedReadingProgress {
+        let url = baseURL.appendingPathComponent("/speed-reading/progress/\(epubId)")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode(SpeedReadingProgress.self, from: data)
+    }
+
+    func updateSpeedReadingProgress(epubId: String, chapter: Int, wordIndex: Int) async throws {
+        let url = baseURL.appendingPathComponent("/speed-reading/progress/\(epubId)")
+        var req = URLRequest(url: url); req.httpMethod = "PUT"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let body: [String: Int] = ["chapterNumber": chapter, "wordIndex": wordIndex]
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("updateSpeedReadingProgress failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
     }
 }
 
