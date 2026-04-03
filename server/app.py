@@ -774,10 +774,31 @@ def get_recommendations():
     # Initial rank from existing catalog.
     ranked = rank_recommendations(catalog, history, limit, preferred_genres)
 
+    preferred_norm = {
+        str(g).strip().lower()
+        for g in (preferred_genres or [])
+        if isinstance(g, str) and g.strip()
+    }
+    top_rows = ranked[:limit]
+    preferred_hits = 0
+    if preferred_norm and top_rows:
+        for row in top_rows:
+            genre = str(row['genre'] or '').strip().lower()
+            if genre in preferred_norm:
+                preferred_hits += 1
+    preferred_coverage = (preferred_hits / len(top_rows)) if top_rows else 0.0
+    preferred_coverage_target = 0.60
+
     hydrated_rows = 0
-    # If unread candidates are too few, hydrate catalog from external providers.
-    if len(ranked) < limit:
-        needed = max((limit - len(ranked)) * 3, 12)
+    # Hydrate when we do not have enough rows OR preferred-genre coverage is too low.
+    needs_count_hydration = len(ranked) < limit
+    needs_pref_hydration = bool(preferred_norm) and preferred_coverage < preferred_coverage_target
+    if needs_count_hydration or needs_pref_hydration:
+        shortfall = max(limit - len(ranked), 0)
+        desired_pref_rows = (limit * 60 + 99) // 100  # ceil(limit * 0.60)
+        missing_pref_rows = max(desired_pref_rows - preferred_hits, 0) if needs_pref_hydration else 0
+        needed = max(shortfall * 3, missing_pref_rows * 4, 12)
+
         hydrated_rows = _hydrate_catalog_from_external(db, preferred_genres, needed)
         if hydrated_rows > 0:
             db.commit()
@@ -785,6 +806,16 @@ def get_recommendations():
                 'SELECT book_id, title, author, genre, cover_url FROM catalog_books ORDER BY book_id'
             ).fetchall()
             ranked = rank_recommendations(catalog, history, limit, preferred_genres)
+
+            # Recompute preferred coverage for logging after hydration + rerank.
+            top_rows = ranked[:limit]
+            preferred_hits = 0
+            if preferred_norm and top_rows:
+                for row in top_rows:
+                    genre = str(row['genre'] or '').strip().lower()
+                    if genre in preferred_norm:
+                        preferred_hits += 1
+            preferred_coverage = (preferred_hits / len(top_rows)) if top_rows else 0.0
 
     payload = [
         {
@@ -797,9 +828,11 @@ def get_recommendations():
         for row in ranked
     ]
     logger.info(
-        'recommendations: catalog=%d history_rows=%d hydrated=%d returned=%d',
+        'recommendations: catalog=%d history_rows=%d preferred_hits=%d preferred_coverage=%.2f hydrated=%d returned=%d',
         len(catalog),
         len(history),
+        preferred_hits,
+        preferred_coverage,
         hydrated_rows,
         len(payload),
     )
