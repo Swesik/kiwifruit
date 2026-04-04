@@ -49,7 +49,6 @@
 		5E766B9A2F2C5EF500A95C67 /* (null) in Sources */ = {isa = PBXBuildFile; };
 		5E766B9A2F2C5EF500A95C68 /* (null) in Sources */ = {isa = PBXBuildFile; };
 		5E766B9A2F2C5EF500A95C69 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		HEALTHKIT_FRAMEWORK_REF /* HealthKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = HEALTHKIT_FRAMEWORK_LIB /* HealthKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -72,8 +71,6 @@
 		4E766B952F2C5EF500A95C2F /* kiwifruit/Views/ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/ProfileView.swift; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C30 /* kiwifruit/Assets.xcassets */ = {isa = PBXFileReference; explicitFileType = folder.assetcatalog; path = kiwifruit/Assets.xcassets; sourceTree = "<group>"; };
 		4E766B952F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = kiwifruit/Views/SettingsView.swift; sourceTree = "<group>"; };
-		HEALTHKIT_FRAMEWORK_LIB /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = System/Library/Frameworks/HealthKit.framework; sourceTree = SDKROOT; };
-		KIWIFRUIT_ENTITLEMENTS = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = kiwifruit/kiwifruit.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -105,7 +102,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				HEALTHKIT_FRAMEWORK_REF /* HealthKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -135,7 +131,6 @@
 				4E766B952F2C5EF500A95C60 /* kiwifruit/Views/SettingsView.swift */,
 				4E766B952F2C5EF500A95C30 /* kiwifruit/Assets.xcassets */,
 				3E766B9F2F2C5EF500A95C1B /* Products */,
-				C1932DD72F8070E000568738 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -145,14 +140,6 @@
 				3E766B9E2F2C5EF500A95C1B /* kiwifruit.app */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		C1932DD72F8070E000568738 /* Recovered References */ = {
-			isa = PBXGroup;
-			children = (
-				HEALTHKIT_FRAMEWORK_LIB /* HealthKit.framework */,
-			);
-			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -410,7 +397,6 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kiwifruit uses the camera to scan book barcodes, capture book title and author text, and recognize your expression for Mood Map.";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Kiwifruit reads your cognitive state from Apple Health to display your mood history from iPhone 16's Neural Engine.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -431,7 +417,6 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				CODE_SIGN_ENTITLEMENTS = kiwifruit/kiwifruit.entitlements;
 			};
 			name = Debug;
 		};
@@ -446,7 +431,6 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kiwifruit uses the camera to scan book barcodes, capture book title and author text, and recognize your expression for Mood Map.";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Kiwifruit reads your cognitive state from Apple Health to display your mood history from iPhone 16's Neural Engine.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -467,7 +451,6 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				CODE_SIGN_ENTITLEMENTS = kiwifruit/kiwifruit.entitlements;
 			};
 			name = Release;
 		};

@@ -9,25 +9,63 @@ private enum MoodHistoryDesign {
     static let tan = Color(hex: "D1BFAe")
 }
 
+/// Groups saved MoodMapSessions by calendar day for display.
+struct DayMoodGroup: Identifiable {
+    let id = UUID()
+    let date: Date
+    let sessions: [MoodMapSession]
+
+    var dateString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMMM d, yyyy"
+        return formatter.string(from: date)
+    }
+
+    var shortDateString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, yyyy"
+        return formatter.string(from: date)
+    }
+
+    var sessionCount: Int {
+        sessions.count
+    }
+
+    var totalMinutes: Int {
+        let seconds = sessions.reduce(0) { total, session in
+            total + Int(session.endedAt.timeIntervalSince(session.startedAt))
+        }
+        return seconds / 60
+    }
+
+    /// Mood with the most occurrences that day.
+    var primaryMood: QuickMood? {
+        let moods = sessions.compactMap { $0.postSessionMood }
+        guard !moods.isEmpty else { return nil }
+        let counts = Dictionary(grouping: moods, by: { $0 }).mapValues { $0.count }
+        return counts.max(by: { $0.value < $1.value })?.key
+    }
+}
+
 struct MoodHistoryView: View {
     @Environment(\.moodSessionStore) private var moodStore: MoodSessionStore
-    @State private var cognitiveSummaries: [DayCognitiveSummary] = []
-    @State private var isLoading = true
-    @State private var errorMessage: String?
-    @State private var isRequestingAuth = false
 
-    private let healthService = MoodHistoryService.shared
+    private var dayGroups: [DayMoodGroup] {
+        let cal = Calendar.current
+        let grouped = Dictionary(grouping: moodStore.savedSessions) { session -> Date in
+            cal.startOfDay(for: session.endedAt)
+        }
+        return grouped
+            .map { DayMoodGroup(date: $0.key, sessions: $0.value) }
+            .sorted { $0.date > $1.date }
+    }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
                 headerSection
 
-                if isLoading {
-                    loadingSection
-                } else if let error = errorMessage {
-                    errorSection(error)
-                } else if cognitiveSummaries.isEmpty && moodStore.savedSessions.isEmpty {
+                if moodStore.savedSessions.isEmpty {
                     emptySection
                 } else {
                     historyContentSection
@@ -38,9 +76,6 @@ struct MoodHistoryView: View {
         }
         .background(Color.white)
         .toolbar(.hidden, for: .navigationBar)
-        .task {
-            await loadData()
-        }
         .onAppear {
             moodStore.refreshSessionsIfNeeded()
         }
@@ -55,11 +90,11 @@ struct MoodHistoryView: View {
                 .foregroundColor(MoodHistoryDesign.uiText)
                 .padding(.top, 48)
 
-            if !cognitiveSummaries.isEmpty {
+            if !dayGroups.isEmpty {
                 HStack(spacing: 8) {
                     Image(systemName: "brain.head.profile")
                         .font(.system(size: 14, weight: .bold))
-                    Text("\(cognitiveSummaries.count) day\(cognitiveSummaries.count == 1 ? "" : "s") of cognitive data")
+                    Text("\(dayGroups.count) day\(dayGroups.count == 1 ? "" : "s") of mood records")
                         .font(.caption).fontWeight(.bold)
                 }
                 .foregroundColor(MoodHistoryDesign.uiText)
@@ -75,51 +110,6 @@ struct MoodHistoryView: View {
         .padding(.bottom, 24)
     }
 
-    // MARK: - Loading
-
-    private var loadingSection: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .progressViewStyle(.circular)
-                .tint(MoodHistoryDesign.kiwi)
-            Text("Loading mood history...")
-                .font(.subheadline).fontWeight(.bold)
-                .foregroundColor(MoodHistoryDesign.uiText.opacity(0.6))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 64)
-    }
-
-    // MARK: - Error
-
-    private func errorSection(_ message: String) -> some View {
-        VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 40, weight: .bold))
-                .foregroundColor(MoodHistoryDesign.tan)
-            Text(message)
-                .font(.subheadline).fontWeight(.bold)
-                .foregroundColor(MoodHistoryDesign.uiText.opacity(0.6))
-                .multilineTextAlignment(.center)
-
-            if healthService.isHealthKitAvailable && errorMessage == "HealthKit is not available on this device." {
-                Button("Grant Access") {
-                    Task { await requestAuth() }
-                }
-                .font(.subheadline).fontWeight(.black)
-                .foregroundColor(MoodHistoryDesign.uiText)
-                .padding(.horizontal, 24).padding(.vertical, 12)
-                .background(MoodHistoryDesign.kiwi)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(MoodHistoryDesign.border, lineWidth: 2))
-                .sketchShadow()
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
-        .padding(.horizontal, 32)
-    }
-
     // MARK: - Empty
 
     private var emptySection: some View {
@@ -130,7 +120,7 @@ struct MoodHistoryView: View {
             Text("No mood data yet")
                 .font(.title3).fontWeight(.black)
                 .foregroundColor(MoodHistoryDesign.uiText)
-            Text("Your cognitive state will appear here after reading sessions using iPhone 16's Neural Engine.")
+            Text("Your mood sessions recorded during reading will appear here.")
                 .font(.subheadline).fontWeight(.medium)
                 .foregroundColor(MoodHistoryDesign.uiText.opacity(0.6))
                 .multilineTextAlignment(.center)
@@ -144,83 +134,50 @@ struct MoodHistoryView: View {
 
     private var historyContentSection: some View {
         VStack(alignment: .leading, spacing: 24) {
-            // Cognitive state sections from HealthKit
-            if !cognitiveSummaries.isEmpty {
-                Text("Cognitive State")
-                    .font(.title2).fontWeight(.black)
-                    .foregroundColor(MoodHistoryDesign.uiText)
-                    .padding(.horizontal, 24)
-
-                VStack(spacing: 12) {
-                    ForEach(cognitiveSummaries.reversed()) { summary in
-                        cognitiveDayCard(summary)
-                    }
-                }
-                .padding(.horizontal, 24)
-            }
-
-            // Local mood session sections
-            if !moodStore.savedSessions.isEmpty {
-                Text("Mood Sessions")
-                    .font(.title2).fontWeight(.black)
-                    .foregroundColor(MoodHistoryDesign.uiText)
-                    .padding(.horizontal, 24)
-
-                VStack(spacing: 12) {
-                    ForEach(moodStore.savedSessions.sorted(by: { $0.endedAt > $1.endedAt })) { session in
-                        moodSessionCard(session)
-                    }
-                }
-                .padding(.horizontal, 24)
+            ForEach(dayGroups) { group in
+                dayGroupCard(group)
             }
         }
+        .padding(.horizontal, 24)
     }
 
-    private func cognitiveDayCard(_ summary: DayCognitiveSummary) -> some View {
+    private func dayGroupCard(_ group: DayMoodGroup) -> some View {
         VStack(alignment: .leading, spacing: 12) {
+            // Day header
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(summary.dateString)
+                    Text(group.dateString)
                         .font(.subheadline).fontWeight(.bold)
                         .foregroundColor(MoodHistoryDesign.uiText)
-                    if summary.focusedMinutes > 0 {
-                        Text("\(summary.focusedMinutes)m focused")
+                    if group.totalMinutes > 0 {
+                        Text("\(group.totalMinutes)m total")
                             .font(.caption).fontWeight(.semibold)
                             .foregroundColor(MoodHistoryDesign.uiText.opacity(0.6))
                     }
                 }
                 Spacer()
-                if let mood = summary.primaryMood {
+                if let mood = group.primaryMood {
                     moodBadge(mood)
                 }
-            }
-
-            HStack(spacing: 6) {
-                ForEach(Array(summary.mappedMoods.enumerated()), id: \.offset) { _, mood in
-                    Text(mood.displayName)
-                        .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(MoodHistoryDesign.uiText.opacity(0.7))
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(moodColor(mood).opacity(0.5))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                }
-                Spacer()
-                Text("\(summary.sessionCount) sample\(summary.sessionCount == 1 ? "" : "s")")
+                Text("\(group.sessionCount) session\(group.sessionCount == 1 ? "" : "s")")
                     .font(.caption2).fontWeight(.bold)
                     .foregroundColor(MoodHistoryDesign.uiText.opacity(0.4))
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(MoodHistoryDesign.kiwiLight.opacity(0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+
+            // Individual session cards
+            ForEach(group.sessions.sorted(by: { $0.endedAt > $1.endedAt })) { session in
+                moodSessionCard(session)
             }
         }
-        .padding(16)
-        .background(MoodHistoryDesign.tealCard)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(MoodHistoryDesign.border, lineWidth: 2))
-        .sketchShadow()
     }
 
     private func moodSessionCard(_ session: MoodMapSession) -> some View {
         let timeFormatter: DateFormatter = {
             let f = DateFormatter()
-            f.dateFormat = "MMM d, h:mm a"
+            f.dateFormat = "h:mm a"
             return f
         }()
 
@@ -228,35 +185,31 @@ struct MoodHistoryView: View {
         let minutes = duration / 60
         let seconds = duration % 60
 
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(timeFormatter.string(from: session.startedAt))
-                        .font(.subheadline).fontWeight(.bold)
-                        .foregroundColor(MoodHistoryDesign.uiText)
-                    Text("\(minutes)m \(seconds)s")
-                        .font(.caption).fontWeight(.semibold)
-                        .foregroundColor(MoodHistoryDesign.uiText.opacity(0.6))
-                }
-                Spacer()
-                if let mood = session.postSessionMood {
-                    moodBadge(mood)
-                } else {
-                    Text("No mood")
-                        .font(.caption).fontWeight(.bold)
-                        .foregroundColor(MoodHistoryDesign.uiText.opacity(0.4))
-                        .padding(.horizontal, 12).padding(.vertical, 6)
-                        .background(MoodHistoryDesign.kiwiLight)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(MoodHistoryDesign.border.opacity(0.3), lineWidth: 1.5))
-                }
+        return HStack(spacing: 12) {
+            Text(timeFormatter.string(from: session.startedAt))
+                .font(.caption).fontWeight(.bold)
+                .foregroundColor(MoodHistoryDesign.uiText)
+                .frame(width: 70, alignment: .leading)
+
+            Text("\(minutes)m \(seconds)s")
+                .font(.caption).fontWeight(.semibold)
+                .foregroundColor(MoodHistoryDesign.uiText.opacity(0.6))
+                .frame(width: 60, alignment: .leading)
+
+            Spacer()
+
+            if let mood = session.postSessionMood {
+                moodBadge(mood)
+            } else {
+                Text("—")
+                    .font(.caption).fontWeight(.bold)
+                    .foregroundColor(MoodHistoryDesign.uiText.opacity(0.3))
             }
         }
-        .padding(16)
-        .background(MoodHistoryDesign.tealCard)
+        .padding(12)
+        .background(MoodHistoryDesign.kiwiLight.opacity(0.4))
         .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(MoodHistoryDesign.border, lineWidth: 2))
-        .sketchShadow()
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(MoodHistoryDesign.border.opacity(0.3), lineWidth: 1.5))
     }
 
     private func moodBadge(_ mood: QuickMood) -> some View {
@@ -275,44 +228,6 @@ struct MoodHistoryView: View {
             .background(color)
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(MoodHistoryDesign.border, lineWidth: 2))
-    }
-
-    private func moodColor(_ mood: QuickMood) -> Color {
-        switch mood {
-        case .focused: return Color(hex: "88C0D0")
-        case .inspired: return MoodHistoryDesign.kiwi
-        case .tired: return MoodHistoryDesign.tan
-        }
-    }
-
-    // MARK: - Data Loading
-
-    private func loadData() async {
-        isLoading = true
-        errorMessage = nil
-
-        do {
-            if healthService.isHealthKitAvailable {
-                try await healthService.requestAuthorization()
-                cognitiveSummaries = try await healthService.fetchAllCognitiveStates()
-            } else {
-                cognitiveSummaries = []
-            }
-        } catch let error as MoodHistoryError {
-            errorMessage = error.errorDescription
-            cognitiveSummaries = []
-        } catch {
-            errorMessage = error.localizedDescription
-            cognitiveSummaries = []
-        }
-
-        isLoading = false
-    }
-
-    private func requestAuth() async {
-        isRequestingAuth = true
-        await loadData()
-        isRequestingAuth = false
     }
 }
 

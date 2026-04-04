@@ -147,7 +147,7 @@ struct ProfileView: View {
                         Text("Mood Session History")
                             .font(.subheadline).fontWeight(.black)
                             .foregroundColor(ProfileDesign.uiText)
-                        Text("iPhone 16 cognitive state & reading moods")
+                        Text("Your reading mood history")
                             .font(.caption).fontWeight(.bold)
                             .foregroundColor(ProfileDesign.uiText.opacity(0.7))
                     }
