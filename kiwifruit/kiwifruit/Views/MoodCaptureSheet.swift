@@ -5,8 +5,10 @@ private enum MoodCaptureDesign {
     static let uiText = Color(hex: "2D3748")
     static let kiwi = Color(hex: "A3C985")
     static let kiwiLight = Color(hex: "E6F0DC")
-    static let tealCard = Color(hex: "CFE6EC")
-    static let tan = Color(hex: "D1BFAe")
+    // Distinct mood colors: blue (focused), yellow (inspired), lavender (tired).
+    static let moodFocused = Color(hex: "DBEAFE")   // light blue
+    static let moodInspired = Color(hex: "FEF9C3")  // warm yellow
+    static let moodTired    = Color(hex: "EDE9FE")  // soft lavender
 }
 
 struct MoodCaptureSheet: View {
@@ -75,13 +77,15 @@ struct MoodCaptureSheet: View {
                     withAnimation(.easeInOut(duration: 0.15)) { selectedMood = mood }
                 } label: {
                     HStack {
+                        Text(moodEmoji(mood))
+                            .font(.system(size: 44))
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
                                 Text(mood.displayName)
                                     .font(.title2).fontWeight(.black)
                                     .foregroundColor(MoodCaptureDesign.uiText)
                                 if let pct = suggestedConfidencePercent {
-                                    Text("· \(pct)% confident")
+                                    Text("· \(pct)%")
                                         .font(.caption).fontWeight(.bold)
                                         .foregroundColor(MoodCaptureDesign.kiwi)
                                 }
@@ -187,9 +191,9 @@ struct MoodCaptureSheet: View {
 
     private func moodCardColor(_ mood: QuickMood) -> Color {
         switch mood {
-        case .focused: return MoodCaptureDesign.tealCard
-        case .inspired: return MoodCaptureDesign.kiwiLight
-        case .tired: return Color(hex: "F5E6D3")
+        case .focused: return MoodCaptureDesign.moodFocused
+        case .inspired: return MoodCaptureDesign.moodInspired
+        case .tired: return MoodCaptureDesign.moodTired
         }
     }
 
@@ -198,6 +202,14 @@ struct MoodCaptureSheet: View {
         case .focused: return "Calm and concentrated"
         case .inspired: return "Happy and energized"
         case .tired: return "Low energy"
+        }
+    }
+
+    private func moodEmoji(_ mood: QuickMood) -> String {
+        switch mood {
+        case .focused: return "😌"
+        case .inspired: return "😊"
+        case .tired: return "😴"
         }
     }
 

@@ -30,6 +30,7 @@ struct FocusView: View {
     @State private var showingMoodCapture = false
     @State private var showingMoodMapStats = false
     @State private var showingMoodCameraActive = false
+    @State private var showCameraPermissionDenied = false
     /// True when user ended a mood capture before the end-page sheet; mood sheet should update that session, not insert a new one.
     @State private var moodCaptureUpdateExistingSession = false
     /// Camera capture service — started when mood session begins, stopped when ended.
@@ -74,18 +75,20 @@ struct FocusView: View {
         .sheet(isPresented: $showingMoodCameraActive) {
             moodCameraActiveSheet
         }
-        .alert("Camera Unavailable", isPresented: Binding(
-            get: { moodCaptureService?.cameraError != nil },
-            set: { if !$0 { moodCaptureService?.clearError() } }
-        )) {
+        .alert("Camera Access Required", isPresented: $showCameraPermissionDenied) {
             Button("Open Settings") {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
             }
-            Button("OK", role: .cancel) {}
+            Button("OK", role: .cancel) {
+                moodCaptureService?.clearError()
+                moodCaptureService?.stopSession()
+                moodCaptureService = nil
+                moodStore.endMoodMap()
+            }
         } message: {
-            Text(moodCaptureService?.cameraError ?? "Camera access is not available.")
+            Text("Camera access is needed to detect your mood. Please enable it in Settings.")
         }
         .fullScreenCover(isPresented: $showingMoodCapture) {
             MoodCaptureSheet(
@@ -865,7 +868,12 @@ struct FocusView: View {
                 moodStore.startMoodMap()
                 moodCaptureService = MoodMapCaptureService()
                 moodCaptureService?.startSession()
-                showingMoodCameraActive = true
+                // Deny alert before showing the camera sheet.
+                if moodCaptureService?.cameraError != nil {
+                    showCameraPermissionDenied = true
+                } else {
+                    showingMoodCameraActive = true
+                }
             }
             .font(.headline)
             .fontWeight(.bold)
