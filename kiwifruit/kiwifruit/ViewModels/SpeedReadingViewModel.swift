@@ -4,6 +4,7 @@ import Observation
 @Observable
 final class SpeedReadingViewModel {
     private let api: APIClientProtocol
+    private let preferencesStore: UserPreferencesStore
 
     var isUploading = false
     var uploadMessage: String?
@@ -25,22 +26,54 @@ final class SpeedReadingViewModel {
     var isLoadingChapter = false
     var isFinished = false
 
-    // Configurable settings (future: expose in UI)
-    var wordsPerFlash: Int = 1
-    var wordsPerSecond: Double = 4.0
+    // Font sizing — longest segment (in characters) within the current window of 100 segments
+    var maxSegmentLength: Int = 0
+    private var segmentWindowStart: Int = 0
+
+    // Speed reading settings — synced with UserPreferencesStore
+    var wordsPerMinute: Int = 240 {
+        didSet {
+            let clamped = max(1, wordsPerMinute)
+            if wordsPerMinute != clamped { wordsPerMinute = clamped; return }
+            preferencesStore.speedReadingWpm = wordsPerMinute
+        }
+    }
+    var wordsPerSegment: Int = 1 {
+        didSet {
+            let clamped = max(1, min(7, wordsPerSegment))
+            if wordsPerSegment != clamped { wordsPerSegment = clamped; return }
+            preferencesStore.wordsPerSegment = wordsPerSegment
+            computeMaxSegmentLength()
+        }
+    }
 
     private var timer: Timer?
     private var progressSaveTimer: Timer?
     private var lastSavedChapter: Int = 0
     private var lastSavedWordIndex: Int = 0
 
-    init(api: APIClientProtocol = AppAPI.shared) {
+    init(api: APIClientProtocol = AppAPI.shared, preferencesStore: UserPreferencesStore = UserPreferencesStore()) {
         self.api = api
+        self.preferencesStore = preferencesStore
+    }
+
+    /// Load speed reading settings from the preferences store.
+    func loadSettings() {
+        wordsPerMinute = max(1, preferencesStore.speedReadingWpm)
+        wordsPerSegment = max(1, min(7, preferencesStore.wordsPerSegment))
+    }
+
+    /// Persist current speed reading settings to the server.
+    func saveSettings() {
+        Task {
+            await preferencesStore.save()
+        }
     }
 
     var currentWord: String {
         guard currentWordIndex < words.count else { return "" }
-        return words[currentWordIndex]
+        let end = min(currentWordIndex + wordsPerSegment, words.count)
+        return words[currentWordIndex..<end].joined(separator: " ")
     }
 
     var currentChapterTitle: String? {
@@ -123,10 +156,30 @@ final class SpeedReadingViewModel {
             if currentWordIndex >= words.count {
                 currentWordIndex = 0
             }
+            computeMaxSegmentLength()
         } catch {
             words = []
+            maxSegmentLength = 0
         }
         isLoadingChapter = false
+    }
+
+    /// Scan the next 100 segments from `currentWordIndex` and record the longest character count.
+    private func computeMaxSegmentLength() {
+        guard !words.isEmpty else { maxSegmentLength = 0; return }
+        let step = wordsPerSegment
+        // Align window start to the current word index
+        segmentWindowStart = currentWordIndex
+        var maxLen = 0
+        var i = currentWordIndex
+        let windowEnd = min(currentWordIndex + step * 100, words.count)
+        while i < windowEnd {
+            let end = min(i + step, words.count)
+            let segment = words[i..<end].joined(separator: " ")
+            maxLen = max(maxLen, segment.count)
+            i += step
+        }
+        maxSegmentLength = max(1, maxLen)
     }
 
     func togglePlayback() {
@@ -140,7 +193,9 @@ final class SpeedReadingViewModel {
     func play() {
         guard !words.isEmpty else { return }
         isPlaying = true
-        let interval = 1.0 / wordsPerSecond
+        // interval = seconds per segment = (wordsPerSegment / wordsPerMinute) * 60
+        let wpm = Double(max(1, wordsPerMinute))
+        let interval = (Double(wordsPerSegment) / wpm) * 60.0
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.advanceWord()
@@ -173,9 +228,13 @@ final class SpeedReadingViewModel {
     }
 
     private func advanceWord() {
-        let step = wordsPerFlash
+        let step = wordsPerSegment
         if currentWordIndex + step < words.count {
             currentWordIndex += step
+            // Recompute font sizing when we've moved 100 segments past the window start
+            if currentWordIndex >= segmentWindowStart + step * 100 {
+                computeMaxSegmentLength()
+            }
         } else {
             advanceChapter()
         }
