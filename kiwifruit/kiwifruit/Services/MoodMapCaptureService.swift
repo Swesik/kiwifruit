@@ -1,131 +1,14 @@
 import AVFoundation
 import Foundation
+import os
 import Vision
 import Observation
 
 // MARK: - Pure face → mood (safe to call from any thread)
 
 private enum FaceMoodAnalyzer {
-    /// Runs on the Vision/video queue; must not be MainActor-isolated (see module default isolation).
-    // Replaced by analyzeV2 below.
-    nonisolated static func analyze(_ face: VNFaceObservation) -> (mood: QuickMood, confidence: Double) {
-        guard let landmarks = face.landmarks else {
-            let aspect = face.boundingBox.width / face.boundingBox.height
-            let mood: QuickMood = aspect > 0.75 ? .inspired : .focused
-            return (mood, 0.35)
-        }
 
-        let leftEyeOpen = eyeOpennessRatio(landmarks.leftEye)
-        let rightEyeOpen = eyeOpennessRatio(landmarks.rightEye)
-        let avgEyeOpenness = (leftEyeOpen + rightEyeOpen) / 2.0
-        let mouthCurve = mouthCurvature(landmarks)
-        let browRaise = eyebrowRaise(landmarks)
-        let tilt = abs(face.yaw?.doubleValue ?? 0)
-
-        let energyScore: Double
-        if avgEyeOpenness > 0.65 {
-            energyScore = 0.85
-        } else if avgEyeOpenness > 0.40 {
-            energyScore = 0.50
-        } else {
-            energyScore = 0.15
-        }
-
-        let happinessScore: Double
-        if mouthCurve > 0.30 {
-            happinessScore = 0.90
-        } else if mouthCurve > 0.10 {
-            happinessScore = 0.55
-        } else if mouthCurve < -0.30 {
-            happinessScore = 0.10
-        } else {
-            happinessScore = 0.40
-        }
-
-        let alertnessScore: Double
-        if browRaise > 0.20 && tilt < 0.15 {
-            alertnessScore = 0.85
-        } else if browRaise > 0.05 {
-            alertnessScore = 0.55
-        } else {
-            alertnessScore = 0.25
-        }
-
-        let energy = energyScore * 0.50 + alertnessScore * 0.30 + (1.0 - tilt) * 0.20
-        let positivity = happinessScore * 0.60 + alertnessScore * 0.40
-
-        let mood: QuickMood
-        let confidence: Double
-
-        if avgEyeOpenness < 0.30 {
-            mood = .tired
-            confidence = Double(0.30 + (1.0 - avgEyeOpenness) * 0.60)
-        } else if energy > 0.68 && positivity > 0.60 {
-            mood = .inspired
-            confidence = min(0.95, (energy + positivity) / 2.0)
-        } else if energy > 0.45 && positivity < 0.55 {
-            mood = .focused
-            confidence = min(0.90, energy * 1.2)
-        } else if energy < 0.40 {
-            mood = .tired
-            confidence = min(0.85, (1.0 - energy) * 1.1)
-        } else {
-            mood = .focused
-            confidence = 0.45 + avgEyeOpenness * 0.30
-        }
-
-        return (mood, min(1.0, max(0.0, confidence)))
-    }
-
-    nonisolated private static func eyeOpennessRatio(_ eye: VNFaceLandmarkRegion2D?) -> Double {
-        guard let points = eye?.normalizedPoints, points.count >= 4 else { return 0.5 }
-        let minX = points.map { $0.x }.min() ?? 0
-        let maxX = points.map { $0.x }.max() ?? 1
-        let minY = points.map { $0.y }.min() ?? 0
-        let maxY = points.map { $0.y }.max() ?? 1
-        let width = maxX - minX
-        let height = maxY - minY
-        guard width > 0.001 else { return 0.5 }
-        let ear = height / width
-        return min(1.0, ear / 0.45)
-    }
-
-    nonisolated private static func mouthCurvature(_ landmarks: VNFaceLandmarks2D) -> Double {
-        guard let outerLips = landmarks.outerLips,
-              let innerLips = landmarks.innerLips,
-              let outerPoints = Optional(outerLips.normalizedPoints),
-              let innerPoints = Optional(innerLips.normalizedPoints),
-              !outerPoints.isEmpty, !innerPoints.isEmpty else {
-            return 0.0
-        }
-        let topCenter = innerPoints.min(by: { $0.y < $1.y }).map { $0.y } ?? 0.5
-        let bottomCenter = innerPoints.max(by: { $0.y < $1.y }).map { $0.y } ?? 0.5
-        let mouthOpen = bottomCenter - topCenter
-        let leftCorner = outerPoints.first { $0.x < 0.3 }?.y ?? 0.5
-        let rightCorner = outerPoints.last { $0.x > 0.7 }?.y ?? 0.5
-        let avgCornerY = (leftCorner + rightCorner) / 2.0
-        let curve = (avgCornerY - (topCenter + bottomCenter) / 2.0) * 4.0
-        return max(-1.0, min(1.0, curve + mouthOpen * 1.5))
-    }
-
-    nonisolated private static func eyebrowRaise(_ landmarks: VNFaceLandmarks2D) -> Double {
-        guard let leftEye = landmarks.leftEye?.normalizedPoints,
-              let rightEye = landmarks.rightEye?.normalizedPoints,
-              let leftBrow = landmarks.leftEyebrow?.normalizedPoints,
-              let rightBrow = landmarks.rightEyebrow?.normalizedPoints,
-              !leftEye.isEmpty, !rightEye.isEmpty,
-                !leftBrow.isEmpty, !rightBrow.isEmpty else {
-            return 0.5
-        }
-        let eyeTop = (leftEye + rightEye).map { $0.y }.min() ?? 0.5
-        let browBottom = (leftBrow + rightBrow).map { $0.y }.min() ?? 0.5
-        let gap = browBottom - eyeTop
-        return min(1.0, gap / 0.15)
-    }
-
-    // MARK: - Improved analyzer (v2)
-
-    nonisolated static func analyzeV2(_ face: VNFaceObservation) -> (mood: QuickMood, confidence: Double) {
+    static func analyzeV2(_ face: VNFaceObservation) -> (mood: QuickMood, confidence: Double) {
         let landmarks = face.landmarks
 
         // Signal 1: eye openness via outer contour EAR (more reliable than bounding box).
@@ -153,7 +36,7 @@ private enum FaceMoodAnalyzer {
 
         // Decision logic.
         if avgEAR < 0.25 {
-            return (.tired, 0.40 + (0.25 - avgEAR) * 1.8)
+            return (.tired, min(0.90, 0.40 + (0.25 - avgEAR) * 1.8))
         }
         if energy > 0.55 && positivity > 0.45 {
             return (.inspired, min(0.90, (energy + positivity) / 2.0))
@@ -168,7 +51,7 @@ private enum FaceMoodAnalyzer {
     }
 
     // EAR from 6-point outer eye contour. Fully open ≈ 0.35–0.45.
-    nonisolated private static func eyeContourEAR(_ eye: VNFaceLandmarkRegion2D?) -> Double {
+    private static func eyeContourEAR(_ eye: VNFaceLandmarkRegion2D?) -> Double {
         guard let pts = eye?.normalizedPoints, pts.count >= 6 else { return 0.50 }
         let top    = pts[1]
         let bottom = pts[5]
@@ -181,7 +64,7 @@ private enum FaceMoodAnalyzer {
     }
 
     // Smile: −1 (frown/neutral) → +1 (smile).
-    nonisolated private static func smileScore(_ landmarks: VNFaceLandmarks2D?) -> Double {
+    private static func smileScore(_ landmarks: VNFaceLandmarks2D?) -> Double {
         guard let outer = landmarks?.outerLips?.normalizedPoints,
               let inner = landmarks?.innerLips?.normalizedPoints,
               !outer.isEmpty, !inner.isEmpty else { return 0.0 }
@@ -191,14 +74,13 @@ private enum FaceMoodAnalyzer {
         let corners = outer.filter { $0.x < 0.25 || $0.x > 0.75 }
         guard corners.count >= 2 else { return 0.0 }
         let cornerAvgY = corners.map { $0.y }.reduce(0, +) / Double(corners.count)
-        // Vision Y: smaller = higher (closer to forehead).
         let curve = (centerTop - cornerAvgY) * 3.0
         let opennessBonus: Double = mouthOpenness > 0.10 ? 0.15 : 0.0
         return max(-1.0, min(1.0, curve + opennessBonus))
     }
 
     // Eyebrow gap → alertness: 0.0 (furrowed) → 1.0 (raised).
-    nonisolated private static func eyebrowSignal(_ landmarks: VNFaceLandmarks2D?) -> Double {
+    private static func eyebrowSignal(_ landmarks: VNFaceLandmarks2D?) -> Double {
         guard let leftEye  = landmarks?.leftEye?.normalizedPoints,
               let rightEye = landmarks?.rightEye?.normalizedPoints,
               let leftBrow = landmarks?.leftEyebrow?.normalizedPoints,
@@ -212,8 +94,7 @@ private enum FaceMoodAnalyzer {
 }
 
 /// Opens the front camera, runs Vision face landmark detection on a background queue,
-/// and publishes results on the main actor (Swift 6 / MainActor default isolation safe).
-@MainActor
+/// and publishes results to observable properties for SwiftUI consumption.
 @Observable
 final class MoodMapCaptureService: NSObject {
     private(set) var captureSession: AVCaptureSession?
@@ -225,9 +106,11 @@ final class MoodMapCaptureService: NSObject {
     private(set) var faceDetected: Bool = false
 
     private var videoOutput: AVCaptureVideoDataOutput?
-    /// Throttled on the video output queue (not MainActor); not part of UI observation.
+    /// Throttled on the video output queue; guarded by `timestampLock`.
     @ObservationIgnored
-    nonisolated(unsafe) private var lastProcessedTimestamp: TimeInterval = 0
+    private var _lastProcessedTimestamp: TimeInterval = 0
+    @ObservationIgnored
+    private let timestampLock = OSAllocatedUnfairLock()
 
     private var recentMoods: [(mood: QuickMood, confidence: Double)] = []
     private let recentWindow = 8
@@ -245,6 +128,7 @@ final class MoodMapCaptureService: NSObject {
             setupSession()
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                // Justified @MainActor: updating @Observable UI state from AVFoundation callback thread.
                 Task { @MainActor in
                     guard let self else { return }
                     if granted {
@@ -295,6 +179,7 @@ final class MoodMapCaptureService: NSObject {
     }
 
     func stopSession() {
+        videoOutput?.setSampleBufferDelegate(nil, queue: nil)
         captureSession?.stopRunning()
         captureSession = nil
         videoOutput = nil
@@ -302,7 +187,7 @@ final class MoodMapCaptureService: NSObject {
         faceDetected = false
         stableFrames = 0
         recentMoods.removeAll()
-        lastProcessedTimestamp = 0
+        timestampLock.withLock { _lastProcessedTimestamp = 0 }
     }
 
     /// Snapshot for handing off to the post-session mood picker.
@@ -331,12 +216,9 @@ final class MoodMapCaptureService: NSObject {
             }
         guard let (dominantMood, totalWeight) = moodCounts.max(by: { $0.value < $1.value }) else { return }
 
-        // Require at least 3 consecutive frames of the same dominant mood.
-        let consecutiveCount = recentMoods.reduce(0) { count, entry in
-            entry.mood == dominantMood ? count + 1 : 0
-        }
-        // Also accept if dominant mood is 60%+ of the window (non-consecutive but clearly dominant).
-        let isDominantEnough = Double(consecutiveCount) >= Double(recentMoods.count) * 0.60
+        // Require dominant mood to appear in 60%+ of recent frames.
+        let dominantCount = recentMoods.filter { $0.mood == dominantMood }.count
+        let isDominantEnough = Double(dominantCount) >= Double(recentMoods.count) * 0.60
 
         if !isDominantEnough {
             detectedMood = nil
@@ -347,42 +229,41 @@ final class MoodMapCaptureService: NSObject {
         let avgConfidence = totalWeight / Double(recentMoods.count)
         detectedMood = dominantMood
         detectionConfidence = avgConfidence
-        stableFrames = consecutiveCount
+        stableFrames = dominantCount
     }
 }
 
-// MARK: - Video delegate (runs off MainActor)
+// MARK: - Video delegate
 
 extension MoodMapCaptureService: AVCaptureVideoDataOutputSampleBufferDelegate {
-    nonisolated func captureOutput(
+    func captureOutput(
         _ output: AVCaptureOutput,
         didOutput sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
         let now = CACurrentMediaTime()
-        if now - lastProcessedTimestamp < 0.15 { return }
-        lastProcessedTimestamp = now
+        let shouldSkip = timestampLock.withLock { now - _lastProcessedTimestamp < 0.15 }
+        if shouldSkip { return }
+        timestampLock.withLock { _lastProcessedTimestamp = now }
 
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
-        let request = VNDetectFaceLandmarksRequest { request, error in
+        // Justified @MainActor: Vision callback runs on video queue;
+        // must hop to main thread to mutate @Observable properties for SwiftUI.
+        let request = VNDetectFaceLandmarksRequest { [weak self] request, error in
             if error != nil {
-                Task { @MainActor [weak self] in
-                    self?.ingestNoFace()
-                }
+                Task { @MainActor in self?.ingestNoFace() }
                 return
             }
 
             guard let observations = request.results as? [VNFaceObservation],
                   let face = observations.first else {
-                Task { @MainActor [weak self] in
-                    self?.ingestNoFace()
-                }
+                Task { @MainActor in self?.ingestNoFace() }
                 return
             }
 
             let result = FaceMoodAnalyzer.analyzeV2(face)
-            Task { @MainActor [weak self] in
+            Task { @MainActor in
                 self?.ingestFace(mood: result.mood, confidence: result.confidence)
             }
         }

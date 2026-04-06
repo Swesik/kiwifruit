@@ -11,20 +11,18 @@ private enum MoodHistoryDesign {
 
 /// Groups saved MoodMapSessions by calendar day for display.
 struct DayMoodGroup: Identifiable {
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "EEEE, MMMM d, yyyy"
+        return f
+    }()
+
     let id = UUID()
     let date: Date
     let sessions: [MoodMapSession]
 
     var dateString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE, MMMM d, yyyy"
-        return formatter.string(from: date)
-    }
-
-    var shortDateString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d, yyyy"
-        return formatter.string(from: date)
+        Self.dayFormatter.string(from: date)
     }
 
     var sessionCount: Int {
@@ -174,12 +172,14 @@ struct MoodHistoryView: View {
         }
     }
 
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        return f
+    }()
+
     private func moodSessionCard(_ session: MoodMapSession) -> some View {
-        let timeFormatter: DateFormatter = {
-            let f = DateFormatter()
-            f.dateFormat = "h:mm a"
-            return f
-        }()
+        let timeFormatter = Self.timeFormatter
 
         let duration = Int(session.endedAt.timeIntervalSince(session.startedAt))
         let minutes = duration / 60
