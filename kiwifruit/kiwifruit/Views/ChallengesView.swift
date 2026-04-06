@@ -18,6 +18,9 @@ struct ChallengesView: View {
             VStack(alignment: .leading, spacing: 0) {
                 headerSection
                 VStack(alignment: .leading, spacing: 32) {
+                    if viewModel.adaptiveChallenge != nil {
+                        adaptiveChallengeSection
+                    }
                     yourChallengesSection
                     if !viewModel.completedChallenges.isEmpty {
                         completedChallengesSection
@@ -198,6 +201,58 @@ struct ChallengesView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(ChallengesDesign.border, lineWidth: 2))
         .sketchShadow()
+    }
+
+    // MARK: - Adaptive Challenge
+
+    private var adaptiveChallengeSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Recommended for you")
+                .font(.title2).fontWeight(.black)
+                .foregroundColor(ChallengesDesign.uiText)
+
+            if let challenge = viewModel.adaptiveChallenge {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(challenge.title)
+                        .font(.subheadline).fontWeight(.bold)
+                        .foregroundColor(ChallengesDesign.uiText)
+                    Text(challenge.description)
+                        .font(.caption).fontWeight(.semibold)
+                        .foregroundColor(ChallengesDesign.uiText.opacity(0.7))
+                        .lineLimit(3)
+
+                    if let reason = viewModel.adaptiveReason {
+                        Text(reason)
+                            .font(.caption2).fontWeight(.semibold)
+                            .foregroundColor(ChallengesDesign.kiwi)
+                            .italic()
+                    }
+
+                    if viewModel.canAcceptChallenge {
+                        Button {
+                            viewModel.accept(challenge)
+                        } label: {
+                            Text("Accept")
+                                .font(.caption).fontWeight(.black)
+                                .foregroundColor(ChallengesDesign.uiText)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(ChallengesDesign.kiwi)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(ChallengesDesign.border, lineWidth: 2))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, 4)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .background(ChallengesDesign.kiwiLight)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(ChallengesDesign.border, lineWidth: 2))
+                .sketchShadow()
+            }
+        }
     }
 
     // MARK: - Discover More

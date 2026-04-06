@@ -94,6 +94,7 @@ struct FocusView: View {
             MoodCaptureSheet(
                 bookTitle: sessionStore.bookTitle,
                 duration: formattedCompletedTime,
+                durationSeconds: sessionStore.completedSeconds,
                 suggestedMood: moodPickerSuggestedMood,
                 suggestedConfidencePercent: moodPickerSuggestedConfidencePercent,
                 onSkip: {

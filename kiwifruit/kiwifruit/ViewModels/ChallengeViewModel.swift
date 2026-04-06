@@ -8,6 +8,8 @@ final class ChallengeViewModel {
     var discoverChallenges: [Challenge] = []
     var completedChallenges: [Challenge] = []
     var weatherChallenge: Challenge? = nil
+    var adaptiveChallenge: Challenge? = nil
+    var adaptiveReason: String? = nil
     var streak: Int = 0
     var activeDays: Set<Int> = []
     var recentlyCompleted: [Challenge] = []
@@ -94,6 +96,27 @@ final class ChallengeViewModel {
             print("[ChallengeViewModel] updateProgress fetch failed: \(error)")
         }
         weatherChallenge = await weatherTask
+
+        // Fetch adaptive challenge (requires >= 7 sessions).
+        do {
+            let resp = try await api.fetchAdaptiveChallenge()
+            if resp.available, let data = resp.challenge {
+                adaptiveChallenge = Challenge(
+                    title: data.title,
+                    description: data.description,
+                    goalUnit: data.goalUnit,
+                    goalCount: data.goalCount,
+                    rewardXP: data.rewardXP
+                )
+                adaptiveReason = data.reason
+            } else {
+                adaptiveChallenge = nil
+                adaptiveReason = nil
+            }
+        } catch {
+            print("[ChallengeViewModel] fetchAdaptiveChallenge failed: \(error)")
+        }
+
         refreshDiscover()
     }
 
