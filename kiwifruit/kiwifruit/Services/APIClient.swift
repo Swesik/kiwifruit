@@ -621,6 +621,7 @@ final class RESTAPIClient: APIClientProtocol {
     func searchBooks(query: String) async throws -> [BookSearchResult] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return [] }
+        let normalized = trimmed.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
 
         // First try the app backend search endpoint; if it fails or returns nothing,
         // fall back to querying Open Library (no API key required) for metadata.
@@ -629,7 +630,7 @@ final class RESTAPIClient: APIClientProtocol {
                 url: baseURL.appendingPathComponent("/books/search"),
                 resolvingAgainstBaseURL: false
             ) else { throw URLError(.badURL) }
-            comps.queryItems = [URLQueryItem(name: "q", value: trimmed)]
+            comps.queryItems = [URLQueryItem(name: "q", value: normalized)]
 
             guard let searchURL = comps.url else { throw URLError(.badURL) }
             var req = URLRequest(url: searchURL)
@@ -654,7 +655,7 @@ final class RESTAPIClient: APIClientProtocol {
             print("searchBooks: backend search failed, falling back to Open Library: \(error)")
         }
 
-        return try await searchOpenLibrary(query: trimmed)
+        return try await searchOpenLibrary(query: normalized)
     }
 
     /// Query Open Library's public search API for basic metadata

@@ -453,28 +453,7 @@ def search_books():
     except Exception as e:
         logger.warning('books.search: Open Library search failed: %s', e)
 
-    # Fallback deterministic demo results when external lookup fails or returns nothing
-    results = [
-        {
-            'id': uuid.uuid4().hex,
-            'title': f'{q} (Sample Result 1)',
-            'authors': ['Demo Author'],
-            'isbn13': None
-        },
-        {
-            'id': uuid.uuid4().hex,
-            'title': f'{q} (Sample Result 2)',
-            'authors': ['Kiwi Fruit', 'Savannah Brown'],
-            'isbn13': '9780000000002'
-        },
-        {
-            'id': uuid.uuid4().hex,
-            'title': f'{q} (Sample Result 3)',
-            'authors': None,
-            'isbn13': None
-        }
-    ]
-    return jsonify(results)
+    return jsonify([])
 
 
 @app.route('/recommendations', methods=['GET'])
