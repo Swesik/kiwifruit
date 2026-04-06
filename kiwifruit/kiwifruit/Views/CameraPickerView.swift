@@ -1,13 +1,8 @@
-//
-//  CameraPickerView.swift
-//  kiwifruit
-//
-//  Created by Savannah Brown on 3/15/26.
-//
 import SwiftUI
 import UIKit
 
 struct CameraPickerView: UIViewControllerRepresentable {
+    let allowsEditing: Bool
     let onImagePicked: (UIImage) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -18,11 +13,15 @@ struct CameraPickerView: UIViewControllerRepresentable {
         let picker = UIImagePickerController()
         picker.sourceType = .camera
         picker.delegate = context.coordinator
-        picker.allowsEditing = false
+        picker.allowsEditing = allowsEditing
         return picker
     }
 
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {
+        if uiViewController.allowsEditing != allowsEditing {
+            uiViewController.allowsEditing = allowsEditing
+        }
+    }
 
     final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
         private let onImagePicked: (UIImage) -> Void
@@ -35,9 +34,18 @@ struct CameraPickerView: UIViewControllerRepresentable {
             _ picker: UIImagePickerController,
             didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
         ) {
-            if let image = info[.originalImage] as? UIImage {
+            let pickedImage: UIImage?
+
+            if let editedImage = info[.editedImage] as? UIImage {
+                pickedImage = editedImage
+            } else {
+                pickedImage = info[.originalImage] as? UIImage
+            }
+
+            if let image = pickedImage {
                 onImagePicked(image)
             }
+
             picker.dismiss(animated: true)
         }
 

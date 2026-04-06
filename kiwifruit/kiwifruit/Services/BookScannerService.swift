@@ -1,9 +1,3 @@
-//
-//  BookScannerService.swift
-//  kiwifruit
-//
-//  Created by Savannah Brown on 3/15/26.
-//
 import Foundation
 import Vision
 import UIKit
@@ -23,6 +17,22 @@ final class VisionBookScannerService: BookScannerServiceProtocol {
         }
 
         let recognizedText = try await recognizeText(in: cgImage)
+        let cleanedText = cleanOCRText(recognizedText)
+
+        if cleanedText.isEmpty {
+            throw URLError(.cannotParseResponse)
+        }
+
+        return .ocrText(cleanedText)
+    }
+
+    func extractPayloadFromTitleCrop(from image: UIImage) async throws -> BookScanPayload {
+        guard let cgImage = image.cgImage else {
+            throw URLError(.cannotDecodeContentData)
+        }
+
+        let croppedImage = cropToLikelyTitleRegion(in: cgImage)
+        let recognizedText = try await recognizeText(in: croppedImage)
         let cleanedText = cleanOCRText(recognizedText)
 
         if cleanedText.isEmpty {
@@ -87,6 +97,25 @@ final class VisionBookScannerService: BookScannerServiceProtocol {
                 continuation.resume(throwing: error)
             }
         }
+    }
+
+    private func cropToLikelyTitleRegion(in cgImage: CGImage) -> CGImage {
+        let width = cgImage.width
+        let height = cgImage.height
+
+        let cropWidth = Int(Double(width) * 0.9)
+        let cropHeight = Int(Double(height) * 0.28)
+        let originX = max((width - cropWidth) / 2, 0)
+        let originY = max(Int(Double(height) * 0.12), 0)
+
+        let rect = CGRect(
+            x: originX,
+            y: originY,
+            width: min(cropWidth, width - originX),
+            height: min(cropHeight, height - originY)
+        )
+
+        return cgImage.cropping(to: rect) ?? cgImage
     }
 
     private func cleanOCRText(_ text: String) -> String {

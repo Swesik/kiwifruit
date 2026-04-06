@@ -2,40 +2,62 @@ import Foundation
 import Observation
 import UIKit
 
+enum BookScanRetryState {
+    case none
+    case suggestCrop
+    case suggestBarcode
+}
+
 @Observable
 final class BookScanViewModel {
     var isShowingCamera: Bool = false
     var isProcessing: Bool = false
     var statusMessage: String?
     var errorMessage: String?
-    var showBarcodeRetry: Bool = false
+
+    var retryState: BookScanRetryState = .none
+    var shouldCropTitleOnNextCapture: Bool = false
 
     private let scannerService: BookScannerServiceProtocol
     private let api: APIClientProtocol
     private let queryBuilder: OCRBookQueryBuilding
+    private let croppedTitleQueryBuilder: CroppedTitleQueryBuilding
 
     init(
         scannerService: BookScannerServiceProtocol,
         api: APIClientProtocol,
-        queryBuilder: OCRBookQueryBuilding = OCRBookQueryBuilder()
+        queryBuilder: OCRBookQueryBuilding = OCRBookQueryBuilder(),
+        croppedTitleQueryBuilder: CroppedTitleQueryBuilding = CroppedTitleQueryBuilder()
     ) {
         self.scannerService = scannerService
         self.api = api
         self.queryBuilder = queryBuilder
+        self.croppedTitleQueryBuilder = croppedTitleQueryBuilder
     }
 
     func startCamera() {
-        errorMessage = nil
-        statusMessage = nil
-        showBarcodeRetry = false
+        resetMessages()
+        retryState = .none
+        shouldCropTitleOnNextCapture = false
+        isShowingCamera = true
+    }
+
+    func retryWithCropTitle() {
+        resetMessages()
+        shouldCropTitleOnNextCapture = true
         isShowingCamera = true
     }
 
     func retryWithBarcode() {
-        errorMessage = nil
-        statusMessage = nil
-        showBarcodeRetry = false
+        resetMessages()
+        retryState = .none
+        shouldCropTitleOnNextCapture = false
         isShowingCamera = true
+    }
+
+    func clearRetryStateForManualSearch() {
+        retryState = .none
+        shouldCropTitleOnNextCapture = false
     }
 
     func processCapturedImage(_ image: UIImage) async -> String? {
@@ -45,20 +67,24 @@ final class BookScanViewModel {
         defer { isProcessing = false }
 
         do {
+            let wasCropRetry = shouldCropTitleOnNextCapture
             let payload = try await scannerService.extractPayload(from: image)
 
             switch payload {
             case .barcode(let barcode):
-                showBarcodeRetry = false
+                retryState = .none
+                shouldCropTitleOnNextCapture = false
                 return try await handleBarcode(barcode)
 
             case .ocrText(let text):
-                showBarcodeRetry = true
-                return try await handleOCRText(text)
+                retryState = wasCropRetry ? .suggestBarcode : .suggestCrop
+                shouldCropTitleOnNextCapture = false
+                return try await handleOCRText(text, isCroppedTitleScan: wasCropRetry)
             }
         } catch {
             errorMessage = "Unable to scan book information."
-            showBarcodeRetry = false
+            shouldCropTitleOnNextCapture = false
+            retryState = .none
             return nil
         }
     }
@@ -75,7 +101,7 @@ final class BookScanViewModel {
         return cleanedBarcode
     }
 
-    private func handleOCRText(_ text: String) async throws -> String? {
+    private func handleOCRText(_ text: String, isCroppedTitleScan: Bool) async throws -> String? {
         let cleanedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanedText.isEmpty else {
             errorMessage = "No readable text was found."
@@ -84,7 +110,13 @@ final class BookScanViewModel {
 
         try await api.sendBookScan(barcode: nil, ocrText: cleanedText)
 
-        let query = queryBuilder.makeSearchQuery(from: cleanedText)
+        let query: String
+        if isCroppedTitleScan {
+            query = croppedTitleQueryBuilder.makeTitleQuery(from: cleanedText)
+        } else {
+            query = queryBuilder.makeSearchQuery(from: cleanedText)
+        }
+
         guard !query.isEmpty else {
             errorMessage = "Could not identify a book title from the scanned text."
             return nil
@@ -92,5 +124,10 @@ final class BookScanViewModel {
 
         statusMessage = "Captured OCR text"
         return query
+    }
+
+    private func resetMessages() {
+        errorMessage = nil
+        statusMessage = nil
     }
 }

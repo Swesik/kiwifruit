@@ -4,6 +4,7 @@
 //
 //  Created by Savannah Brown on 4/5/26.
 //
+
 import Foundation
 
 protocol OCRBookQueryBuilding {
@@ -44,6 +45,9 @@ struct OCRBookQueryBuilder: OCRBookQueryBuilding {
         let noiseTerms = [
             "bestseller",
             "new york times",
+            "the #I",
+            "the #1",
+            "BOOK CLUB",
             "edition",
             "revised",
             "updated",
@@ -56,20 +60,43 @@ struct OCRBookQueryBuilder: OCRBookQueryBuilding {
             "illustrated by",
             "a novel",
             "an novel",
+            "read with jenna",
+            "#readwithjenna",
+            "book club",
+            "book club favorites",
+            "readers's guide",
+            "good morning america",
+            "a gma book club pick",
             "now a major motion picture"
         ]
 
-        return lines.filter { line in
-            let lower = line.lowercased()
-            return !noiseTerms.contains(where: { lower.contains($0) })
-        }
+        return lines
+            .map { line in
+                var cleanedLine = line
+
+                for term in noiseTerms {
+                    cleanedLine = cleanedLine.replacingOccurrences(
+                        of: NSRegularExpression.escapedPattern(for: term),
+                        with: "",
+                        options: [.regularExpression, .caseInsensitive]
+                    )
+                }
+
+                cleanedLine = collapsedWhitespace(cleanedLine)
+                return cleanedLine
+            }
+            .filter { !$0.isEmpty }
     }
 
     private func detectTitle(from lines: [String]) -> String? {
         guard let first = lines.first else { return nil }
 
-        if lines.count >= 2, shouldMergeIntoTitle(first: first, second: lines[1]) {
-            return "\(first) \(lines[1])"
+        if lines.count >= 2 {
+            let second = lines[1]
+
+            if shouldMergeIntoTitle(first: first, second: second) || isLikelyTitleContinuation(second) {
+                return "\(first) \(second)"
+            }
         }
 
         return first
@@ -95,10 +122,6 @@ struct OCRBookQueryBuilder: OCRBookQueryBuilding {
         let cleanTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let cleanAuthor = author?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-        if !cleanTitle.isEmpty && !cleanAuthor.isEmpty {
-            return "\(cleanTitle) \(cleanAuthor)"
-        }
-
         if !cleanTitle.isEmpty {
             return cleanTitle
         }
@@ -117,6 +140,35 @@ struct OCRBookQueryBuilder: OCRBookQueryBuilding {
         guard firstCount > 0, secondCount > 0 else { return false }
         guard firstCount <= 6, secondCount <= 6 else { return false }
         guard !isPlausibleAuthorLine(second) else { return false }
+
+        return true
+    }
+
+    private func isLikelyTitleContinuation(_ line: String) -> Bool {
+        let words = line
+            .split(separator: " ")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+
+        guard !words.isEmpty && words.count <= 3 else { return false }
+
+        let hasDigits = line.contains { $0.isNumber }
+        if hasDigits { return false }
+
+        let lower = line.lowercased()
+        let blockedTerms = [
+            "by",
+            "translated",
+            "foreword",
+            "illustrated",
+            "publisher",
+            "copyright",
+            "isbn"
+        ]
+
+        if blockedTerms.contains(where: { lower.contains($0) }) {
+            return false
+        }
 
         return true
     }
