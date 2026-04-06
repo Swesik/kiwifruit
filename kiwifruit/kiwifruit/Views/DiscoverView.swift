@@ -54,6 +54,7 @@ struct DiscoverView: View {
                 Task {
                     if let capturedText = await bookScanViewModel.processCapturedImage(image) {
                         bookSearchViewModel.query = capturedText
+                        bookScanViewModel.statusMessage = nil
                         await bookSearchViewModel.submit()
                     }
                 }
@@ -76,9 +77,19 @@ struct DiscoverView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .submitLabel(.search)
-                    .onSubmit { Task { await bookSearchViewModel.submit() } }
+                    .onSubmit {
+                        bookScanViewModel.showBarcodeRetry = false
+                        Task {
+                            await bookSearchViewModel.submit()
+                        }
+                    }
 
-                Button("SEARCH") { Task { await bookSearchViewModel.submit() } }
+                Button("SEARCH") {
+                    bookScanViewModel.showBarcodeRetry = false
+                    Task {
+                        await bookSearchViewModel.submit()
+                    }
+                }
                     .font(.subheadline).fontWeight(.black)
                     .foregroundColor(DiscoverDesign.uiText)
                     .padding(.horizontal, 20).padding(.vertical, 12)
@@ -159,6 +170,29 @@ struct DiscoverView: View {
                         .sketchShadow()
                         .padding(.top, 8)
                     }
+
+                    if bookScanViewModel.showBarcodeRetry {
+                        Button {
+                            bookScanViewModel.retryWithBarcode()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "barcode.viewfinder")
+                                Text("Not the right book? Try the barcode")
+                            }
+                            .font(.subheadline).fontWeight(.bold)
+                            .foregroundColor(DiscoverDesign.uiText)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(DiscoverDesign.kiwiLight)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(DiscoverDesign.border, lineWidth: 2)
+                            )
+                            .sketchShadow()
+                        }
+                        .padding(.top, 4)
+                    }
                 }
 
             } else if let statusMessage = bookScanViewModel.statusMessage, !statusMessage.isEmpty {
@@ -172,8 +206,8 @@ struct DiscoverView: View {
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
                     .sketchShadow()
 
-            } else {
-                Text("No results")
+            } else if bookSearchViewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text("Search for a book")
                     .font(.subheadline).fontWeight(.bold)
                     .foregroundColor(DiscoverDesign.uiText.opacity(0.6))
                     .frame(maxWidth: .infinity)
@@ -182,6 +216,41 @@ struct DiscoverView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
                     .sketchShadow()
+
+            } else {
+                VStack(spacing: 12) {
+                    Text("No results found")
+                        .font(.subheadline).fontWeight(.bold)
+                        .foregroundColor(DiscoverDesign.uiText.opacity(0.6))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 32)
+                        .background(Color(hex: "F9FAFB"))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(DiscoverDesign.border, lineWidth: 2))
+                        .sketchShadow()
+
+                    if bookScanViewModel.showBarcodeRetry {
+                        Button {
+                            bookScanViewModel.retryWithBarcode()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "barcode.viewfinder")
+                                Text("Not the right book? Try the barcode")
+                            }
+                            .font(.subheadline).fontWeight(.bold)
+                            .foregroundColor(DiscoverDesign.uiText)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(DiscoverDesign.kiwiLight)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(DiscoverDesign.border, lineWidth: 2)
+                            )
+                            .sketchShadow()
+                        }
+                    }
+                }
             }
         }
     }
