@@ -1066,6 +1066,7 @@ def complete_reading_session(session_id):
 
     :json string status: Must be ``"completed"``.
     :json int pages_read: Pages read this session (optional).
+    :json string mood: Post-session mood (optional). One of ``focused``, ``inspired``, ``tired``.
     :returns: JSON ``{"status": "ok"}``.
     :status 200: Session completed.
     :status 403: Not authenticated or not the session host.
@@ -1106,8 +1107,8 @@ def complete_reading_session(session_id):
             ).fetchone()
             if session_row:
                 db.execute(
-                    'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read, ended_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
-                    (uuid.uuid4().hex, username, session_row['book_title'], session_row['elapsed_seconds'] or 0, data.get('pages_read'))
+                    'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read, mood, ended_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+                    (uuid.uuid4().hex, username, session_row['book_title'], session_row['elapsed_seconds'] or 0, data.get('pages_read'), data.get('mood'))
                 )
                 logger.info('session completed: user=%s book=%s duration=%d pages=%s', username, session_row['book_title'], session_row['elapsed_seconds'] or 0, data.get('pages_read'))
         db.commit()

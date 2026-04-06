@@ -79,6 +79,7 @@ CREATE TABLE session_history (
     book_title TEXT NOT NULL,
     duration_seconds INTEGER NOT NULL,
     pages_read INTEGER,
+    mood TEXT CHECK (mood IN ('focused', 'inspired', 'tired')),
     ended_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
 );

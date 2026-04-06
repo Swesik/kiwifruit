@@ -48,6 +48,7 @@ struct ProfileView: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 0) {
                 profileHeaderSection
+                moodSessionHistorySection
                 recentUpdatesSection
                 myLibrarySection
             }
@@ -126,6 +127,47 @@ struct ProfileView: View {
         .overlay(Circle().stroke(ProfileDesign.border, lineWidth: 2))
         .background(Circle().fill(Color.white))
         .sketchShadowCircle()
+    }
+
+    // MARK: - Mood Session History
+
+    private var moodSessionHistorySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            NavigationLink(destination: MoodHistoryView()) {
+                HStack(spacing: 16) {
+                    Image(systemName: "brain.head.profile")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(ProfileDesign.uiText)
+                        .frame(width: 48, height: 48)
+                        .background(ProfileDesign.kiwiLight)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(ProfileDesign.border, lineWidth: 2))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Mood Session History")
+                            .font(.subheadline).fontWeight(.black)
+                            .foregroundColor(ProfileDesign.uiText)
+                        Text("Your reading mood history")
+                            .font(.caption).fontWeight(.bold)
+                            .foregroundColor(ProfileDesign.uiText.opacity(0.7))
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(ProfileDesign.uiText.opacity(0.5))
+                }
+                .padding(16)
+                .background(ProfileDesign.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(ProfileDesign.border, lineWidth: 2))
+                .sketchShadow()
+            }
+            .padding(.horizontal, 20)
+        }
+        .padding(.top, 8)
+        .background(Color.white)
     }
 
     // MARK: - Recent Updates
