@@ -57,8 +57,9 @@ public final class MoodSessionStore {
         moodMapState = .capturing
     }
 
-    /// End Mood Map capture and save session (mood is selected by user in MoodCaptureSheet)
-    public func endMoodMap() {
+    /// End Mood Map capture and save session (mood is selected by user in MoodCaptureSheet).
+    /// Pass distribution and timeline from MoodMapCaptureService.snapshotFull() before calling stopSession().
+    public func endMoodMap(distribution: [String: Int]? = nil, timeline: [MoodTimelineEvent]? = nil) {
         guard let startedAt = moodMapStartedAt else {
             moodMapState = .idle
             moodMapStartedAt = nil
@@ -68,7 +69,9 @@ public final class MoodSessionStore {
         let session = MoodMapSession(
             startedAt: startedAt,
             endedAt: Date(),
-            postSessionMood: nil
+            postSessionMood: nil,
+            moodDistribution: distribution,
+            moodTimeline: timeline
         )
         savedSessions.insert(session, at: 0)
         persistSessions()

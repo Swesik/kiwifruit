@@ -18,11 +18,19 @@ struct MoodMapStatsView: View {
             VStack(alignment: .leading, spacing: 0) {
                 headerSection
                 VStack(alignment: .leading, spacing: 32) {
-                    statsOverview
+                    if let session = lastCameraSession {
+                        lastSessionSummarySection(session)
+                    }
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Recent sessions")
+                            .font(.title2).fontWeight(.black)
+                            .foregroundColor(MoodStatsDesign.uiText)
+                        statsOverview
+                    }
                     if moodStore.savedSessions.isEmpty {
                         emptyState
                     } else {
-                        recentSessionsSection
+                        sessionsList
                     }
                 }
                 .padding(.horizontal, 24)
@@ -32,6 +40,11 @@ struct MoodMapStatsView: View {
         .background(Color.white)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { moodStore.refreshSessionsIfNeeded() }
+    }
+
+    /// Most recent session that has camera-captured mood distribution data.
+    private var lastCameraSession: MoodMapSession? {
+        moodStore.savedSessions.first { ($0.moodDistribution?.values.reduce(0, +) ?? 0) > 0 }
     }
 
     // MARK: - Header
@@ -59,6 +72,157 @@ struct MoodMapStatsView: View {
         .padding(.horizontal, 24)
         .padding(.top, 48)
         .padding(.bottom, 24)
+    }
+
+    // MARK: - Last Session Summary
+
+    private func lastSessionSummarySection(_ session: MoodMapSession) -> some View {
+        let sessionDuration = session.endedAt.timeIntervalSince(session.startedAt)
+        let distribution = session.moodDistribution ?? [:]
+        let totalFrames = distribution.values.reduce(0, +)
+
+        return VStack(alignment: .leading, spacing: 16) {
+            // Section title
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Last Session")
+                    .font(.title2).fontWeight(.black)
+                    .foregroundColor(MoodStatsDesign.uiText)
+                Text(sessionDateLabel(session.endedAt))
+                    .font(.caption).fontWeight(.semibold)
+                    .foregroundColor(MoodStatsDesign.uiText)
+            }
+
+            VStack(alignment: .leading, spacing: 16) {
+                // Distribution bars
+                if totalFrames > 0 {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Mood Breakdown")
+                            .font(.caption).fontWeight(.bold)
+                            .foregroundColor(MoodStatsDesign.uiText)
+                            .textCase(.uppercase)
+                            .kerning(0.5)
+
+                        ForEach(QuickMood.allCases) { mood in
+                            let count = distribution[mood.rawValue] ?? 0
+                            if count > 0 {
+                                let pct = Double(count) / Double(totalFrames)
+                                HStack(spacing: 10) {
+                                    Text(moodEmoji(mood))
+                                        .font(.system(size: 14))
+                                    Text(mood.displayName)
+                                        .font(.caption).fontWeight(.semibold)
+                                        .foregroundColor(MoodStatsDesign.uiText)
+                                        .frame(width: 58, alignment: .leading)
+                                    GeometryReader { geo in
+                                        ZStack(alignment: .leading) {
+                                            RoundedRectangle(cornerRadius: 4)
+                                                .fill(MoodStatsDesign.uiText.opacity(0.07))
+                                            RoundedRectangle(cornerRadius: 4)
+                                                .fill(moodCardColor(mood))
+                                                .frame(width: geo.size.width * pct)
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 4)
+                                                        .stroke(MoodStatsDesign.border, lineWidth: 1)
+                                                )
+                                        }
+                                    }
+                                    .frame(height: 18)
+                                    Text("\(Int((pct * 100).rounded()))%")
+                                        .font(.caption).fontWeight(.bold)
+                                        .foregroundColor(MoodStatsDesign.uiText)
+                                        .frame(width: 30, alignment: .trailing)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Timeline strip
+                if let timeline = session.moodTimeline, timeline.count >= 1, sessionDuration > 0 {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Mood Timeline")
+                            .font(.caption).fontWeight(.bold)
+                            .foregroundColor(MoodStatsDesign.uiText)
+                            .textCase(.uppercase)
+                            .kerning(0.5)
+
+                        GeometryReader { geo in
+                            HStack(spacing: 0) {
+                                ForEach(Array(timeline.enumerated()), id: \.offset) { idx, event in
+                                    let nextStart = idx + 1 < timeline.count
+                                        ? timeline[idx + 1].secondsFromStart
+                                        : sessionDuration
+                                    let segDuration = max(nextStart - event.secondsFromStart, 0)
+                                    let fraction = segDuration / sessionDuration
+                                    Rectangle()
+                                        .fill(moodCardColor(event.mood))
+                                        .frame(width: geo.size.width * fraction)
+                                }
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(MoodStatsDesign.border.opacity(0.25), lineWidth: 1.5)
+                            )
+                        }
+                        .frame(height: 28)
+
+                        HStack {
+                            Text(formatSeconds(0))
+                            Spacer()
+                            Text(formatSeconds(sessionDuration))
+                        }
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(MoodStatsDesign.uiText)
+
+                        let uniqueMoods = Array(Set(timeline.map(\.mood))).sorted { $0.rawValue < $1.rawValue }
+                        HStack(spacing: 12) {
+                            ForEach(uniqueMoods) { mood in
+                                HStack(spacing: 4) {
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(moodCardColor(mood))
+                                        .frame(width: 12, height: 12)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 3)
+                                                .stroke(MoodStatsDesign.border, lineWidth: 1)
+                                        )
+                                    Text(mood.displayName)
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(MoodStatsDesign.uiText)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(16)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(MoodStatsDesign.border, lineWidth: 2)
+            )
+            .sketchShadow()
+        }
+    }
+
+    private func moodEmoji(_ mood: QuickMood) -> String {
+        switch mood {
+        case .focused: return "😌"
+        case .inspired: return "😊"
+        case .tired: return "😴"
+        }
+    }
+
+    private func formatSeconds(_ seconds: Double) -> String {
+        let total = Int(seconds)
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    private func sessionDateLabel(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d 'at' h:mm a"
+        return f.string(from: date)
     }
 
     // MARK: - Stats Overview
@@ -105,16 +269,10 @@ struct MoodMapStatsView: View {
 
     // MARK: - Recent Sessions
 
-    private var recentSessionsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Recent sessions")
-                .font(.title2).fontWeight(.black)
-                .foregroundColor(MoodStatsDesign.uiText)
-
-            VStack(spacing: 12) {
-                ForEach(moodStore.savedSessions.prefix(10)) { session in
-                    sessionCard(session)
-                }
+    private var sessionsList: some View {
+        VStack(spacing: 12) {
+            ForEach(moodStore.savedSessions.prefix(10)) { session in
+                sessionCard(session)
             }
         }
     }
