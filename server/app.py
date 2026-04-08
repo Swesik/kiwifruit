@@ -1319,7 +1319,7 @@ def get_session_history():
         abort(403)
     db = get_db()
     rows = db.execute(
-        'SELECT id, book_title, duration_seconds, pages_read, ended_at '
+        'SELECT id, book_title, duration_seconds, pages_read, mood, ended_at '
         'FROM session_history WHERE username = ? ORDER BY ended_at DESC',
         (username,)
     ).fetchall()
@@ -1328,6 +1328,7 @@ def get_session_history():
         'book_title': r['book_title'],
         'duration_seconds': r['duration_seconds'],
         'pages_read': r['pages_read'],
+        'mood': r['mood'],
         'ended_at': _to_iso(r['ended_at'])
     } for r in rows])
 
@@ -1459,6 +1460,472 @@ def save_preferences():
         'daily_goal_minutes': daily_goal,
         'preferred_genres': genres
     })
+
+
+@app.route('/mood-trends', methods=['GET'])
+def mood_trends():
+    """Aggregated mood trends and engagement signals for the authenticated user.
+
+    **GET** ``/mood-trends``
+
+    :query int days: Look-back window in days (default 14, max 90).
+    :returns: JSON with mood distribution, engagement metrics, and recommendations.
+    :status 200: Trends returned.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    days = min(int(request.args.get('days', 14)), 90)
+    db = get_db()
+
+    # Fetch sessions within the window.
+    rows = db.execute(
+        'SELECT duration_seconds, pages_read, mood, ended_at '
+        'FROM session_history WHERE username = ? '
+        'AND ended_at >= datetime("now", ?)',
+        (username, f'-{days} days')
+    ).fetchall()
+
+    if not rows:
+        return jsonify({
+            'days': days,
+            'total_sessions': 0,
+            'mood_distribution': {},
+            'avg_duration_minutes': 0,
+            'avg_pages': 0,
+            'trend': 'insufficient_data',
+            'suggestion': None
+        })
+
+    # Mood distribution.
+    mood_counts = {}
+    for r in rows:
+        m = r['mood']
+        if m:
+            mood_counts[m] = mood_counts.get(m, 0) + 1
+
+    total_sessions = len(rows)
+    total_with_mood = sum(mood_counts.values())
+
+    mood_distribution = {}
+    for mood, count in mood_counts.items():
+        mood_distribution[mood] = {
+            'count': count,
+            'percent': round(count / total_with_mood * 100) if total_with_mood else 0
+        }
+
+    # Engagement metrics.
+    durations = [r['duration_seconds'] or 0 for r in rows]
+    pages = [r['pages_read'] or 0 for r in rows]
+    avg_duration = sum(durations) / total_sessions
+    avg_pages = sum(pages) / total_sessions if any(pages) else 0
+
+    # Split into halves to detect trend direction.
+    half = total_sessions // 2
+    if half >= 2:
+        first_half_dur = sum(durations[:half]) / half
+        second_half_dur = sum(durations[half:]) / (total_sessions - half)
+        duration_trend = (second_half_dur - first_half_dur) / first_half_dur if first_half_dur > 0 else 0
+    else:
+        duration_trend = 0
+
+    # Recent mood streak (last 3 sessions).
+    recent_moods = [r['mood'] for r in rows[-3:] if r['mood']]
+    sustained_tired = len(recent_moods) >= 3 and all(m == 'tired' for m in recent_moods)
+
+    # Determine trend and suggestion.
+    if sustained_tired:
+        trend = 'declining'
+        suggestion = 'You seem tired lately. Consider shorter sessions or taking a break.'
+    elif duration_trend < -0.25 and total_sessions >= 4:
+        trend = 'declining'
+        suggestion = 'Your session duration is dropping. A lighter reading goal might help.'
+    elif duration_trend > 0.25 and total_sessions >= 4:
+        trend = 'improving'
+        suggestion = 'Great momentum! You might be ready for a bigger challenge.'
+    else:
+        trend = 'stable'
+        suggestion = None
+
+    return jsonify({
+        'days': days,
+        'total_sessions': total_sessions,
+        'mood_distribution': mood_distribution,
+        'avg_duration_minutes': round(avg_duration / 60, 1),
+        'avg_pages': round(avg_pages, 1),
+        'duration_trend_pct': round(duration_trend * 100, 1),
+        'trend': trend,
+        'suggestion': suggestion
+    })
+
+
+@app.route('/adaptive-challenges', methods=['GET'])
+def adaptive_challenges():
+    """Return a single adaptive challenge based on the user's mood trends and
+    engagement signals. Requires at least 7 completed sessions to activate.
+
+    **GET** ``/adaptive-challenges``
+
+    :returns: JSON with ``available`` bool and optional ``challenge`` object.
+              ``available`` is false when the user has fewer than 7 sessions.
+    :status 200: Response returned.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    db = get_db()
+
+    # Require at least 7 sessions to generate an adaptive challenge.
+    rows = db.execute(
+        'SELECT duration_seconds, pages_read, mood, ended_at '
+        'FROM session_history WHERE username = ? '
+        'ORDER BY ended_at ASC',
+        (username,)
+    ).fetchall()
+
+    if len(rows) < 7:
+        return jsonify({'available': False})
+
+    # Use last 14 days for trend analysis.
+    recent = [r for r in rows if r['ended_at'] and r['ended_at'] >= (
+        datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S') if False else
+        db.execute("SELECT datetime('now', '-14 days')").fetchone()[0]
+    )]
+    if not recent:
+        recent = rows[-7:]
+
+    recent_moods = [r['mood'] for r in recent[-3:] if r['mood']]
+    sustained_tired = len(recent_moods) >= 3 and all(m == 'tired' for m in recent_moods)
+
+    total = len(recent)
+    durations = [r['duration_seconds'] or 0 for r in recent]
+    avg_duration = sum(durations) / total
+    pages_list = [r['pages_read'] or 0 for r in recent]
+    avg_pages = sum(pages_list) / total if any(pages_list) else 0
+
+    half = total // 2
+    if half >= 2:
+        first_avg = sum(durations[:half]) / half
+        second_avg = sum(durations[half:]) / (total - half)
+        dur_trend = (second_avg - first_avg) / first_avg if first_avg > 0 else 0
+    else:
+        dur_trend = 0
+
+    # Pick the most relevant challenge type and scale based on trend.
+    if sustained_tired:
+        # Lighter time-based goal.
+        goal_minutes = max(5, round(avg_duration / 60 * 0.6))
+        challenge = {
+            'title': f'Gentle reading: {goal_minutes} min this week',
+            'description': "You've been feeling tired — this lighter goal keeps you in the habit without burning out.",
+            'goalUnit': 'minutes/week',
+            'goalCount': goal_minutes * 7,
+            'rewardXP': 20,
+            'reason': "Based on your recent mood: you've been tired. Take it easy."
+        }
+    elif dur_trend < -0.25:
+        # Engagement dropping — shorter target.
+        goal_minutes = max(5, round(avg_duration / 60 * 0.75))
+        challenge = {
+            'title': f'Stay consistent: {goal_minutes} min/day',
+            'description': 'Your reading time has been dipping — a smaller goal can help rebuild momentum.',
+            'goalUnit': 'minutes/week',
+            'goalCount': goal_minutes * 7,
+            'rewardXP': 25,
+            'reason': 'Your session duration is trending down. This goal matches your current pace.'
+        }
+    elif dur_trend > 0.25:
+        # On a roll — push higher.
+        goal_minutes = max(10, round(avg_duration / 60 * 1.3))
+        challenge = {
+            'title': f'Push further: {goal_minutes} min/day',
+            'description': "You're building great momentum — challenge yourself to keep it up!",
+            'goalUnit': 'minutes/week',
+            'goalCount': goal_minutes * 7,
+            'rewardXP': 40,
+            'reason': "You're on a roll — this goal stretches you just a bit more."
+        }
+    else:
+        # Stable — page-based goal from actual data.
+        goal_pages = max(10, round(avg_pages * 7))
+        challenge = {
+            'title': f'Read {goal_pages} pages this week',
+            'description': 'A goal matched to your current reading pace.',
+            'goalUnit': 'pages/week',
+            'goalCount': goal_pages,
+            'rewardXP': 30,
+            'reason': 'Based on your recent reading pace.'
+        }
+
+    challenge['adaptive'] = True
+    return jsonify({'available': True, 'challenge': challenge})
+
+
+@app.route('/reflection-prompt', methods=['POST'])
+def generate_reflection_prompt():
+    """Generate a mood-aware reflection prompt for the user's recent session.
+
+    **POST** ``/reflection-prompt``
+
+    :json string book_title: Title of the book just read.
+    :json int duration_minutes: Session length in minutes.
+    :json string mood: Post-session mood (focused/inspired/tired).
+    :returns: JSON with ``prompt`` string.
+    :status 200: Prompt generated.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    data = request.get_json(silent=True) or {}
+    book_title = data.get('book_title', 'your book')
+    duration = data.get('duration_minutes', 0)
+    mood = data.get('mood')
+
+    # Mood-aware prompt templates.
+    prompts = {
+        'tired': [
+            f"You read {book_title} for {duration} minutes even when tired — what kept you going?",
+            f"Rest is part of the journey. What's one thing from {book_title} you'll carry into tomorrow?",
+            f"Even a short session counts. What moment in {book_title} stood out today?",
+        ],
+        'focused': [
+            f"You were in the zone with {book_title} for {duration} minutes. What clicked?",
+            f"Deep focus for {duration} minutes — what idea from {book_title} are you still thinking about?",
+            f"What connection did you make while reading {book_title} today?",
+        ],
+        'inspired': [
+            f"You're feeling inspired after {duration} minutes with {book_title}! What sparked that?",
+            f"{book_title} clearly resonated — what would you share with a friend about it?",
+            f"Riding that energy! What's one thing from {book_title} you want to act on?",
+        ],
+    }
+
+    import random
+    if mood in prompts:
+        prompt = random.choice(prompts[mood])
+    else:
+        prompt = f"You just spent {duration} minutes with {book_title}. What stood out?"
+
+    return jsonify({'prompt': prompt, 'mood': mood})
+
+
+@app.route('/session-summary', methods=['POST'])
+def generate_session_summary():
+    """Generate a shareable session summary for the user's reading session.
+
+    **POST** ``/session-summary``
+
+    :json string book_title: Title of the book.
+    :json int duration_minutes: Session length in minutes.
+    :json int pages_read: Pages read (optional).
+    :json string mood: Post-session mood (optional).
+    :returns: JSON with ``summary`` string.
+    :status 200: Summary generated.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    data = request.get_json(silent=True) or {}
+    book_title = data.get('book_title', 'a book')
+    duration = data.get('duration_minutes', 0)
+    pages = data.get('pages_read')
+    mood = data.get('mood')
+
+    # Build summary text.
+    parts = [f"Just read {book_title} for {duration} minutes"]
+    if pages:
+        parts.append(f"{pages} pages")
+
+    mood_labels = {'focused': 'Feeling focused', 'inspired': 'Feeling inspired', 'tired': 'Winding down'}
+    if mood and mood in mood_labels:
+        parts.append(mood_labels[mood])
+
+    # Fetch streak info.
+    db = get_db()
+    total_sessions = db.execute(
+        'SELECT COUNT(*) as cnt FROM session_history WHERE username = ?',
+        (username,)
+    ).fetchone()['cnt']
+
+    if total_sessions > 1:
+        parts.append(f"Session #{total_sessions} and counting")
+
+    summary = '\n'.join(parts)
+    return jsonify({'summary': summary, 'total_sessions': total_sessions})
+
+
+@app.route('/reflections', methods=['POST'])
+def create_reflection():
+    """Save a reflection after a reading session.
+
+    **POST** ``/reflections``
+
+    :json string book_title: Title of the book.
+    :json string prompt: The reflection prompt shown to the user.
+    :json string response: The user's written reflection.
+    :json string mood: Post-session mood (optional).
+    :json int duration_minutes: Session duration in minutes (optional).
+    :json string visibility: One of ``private``, ``friends_only``, ``public`` (default ``private``).
+    :returns: JSON with the created reflection.
+    :status 201: Reflection created.
+    :status 400: Missing required fields.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    data = request.get_json(silent=True) or {}
+    book_title = data.get('book_title')
+    prompt = data.get('prompt')
+    response_text = data.get('response')
+    if not book_title or not prompt or not response_text:
+        abort(400, description='book_title, prompt, and response are required')
+    mood = data.get('mood')
+    duration = data.get('duration_minutes')
+    visibility = data.get('visibility', 'private')
+    if visibility not in ('private', 'friends_only', 'public'):
+        abort(400, description='visibility must be private, friends_only, or public')
+
+    ref_id = uuid.uuid4().hex
+    db = get_db()
+    db.execute(
+        'INSERT INTO reflections (id, username, book_title, prompt, response, mood, duration_minutes, visibility) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        (ref_id, username, book_title, prompt, response_text, mood, duration, visibility)
+    )
+    db.commit()
+    return jsonify({
+        'id': ref_id,
+        'username': username,
+        'book_title': book_title,
+        'prompt': prompt,
+        'response': response_text,
+        'mood': mood,
+        'duration_minutes': duration,
+        'visibility': visibility
+    }), 201
+
+
+@app.route('/reflections', methods=['GET'])
+def get_reflections_feed():
+    """Return reflections visible to the authenticated user: own reflections
+    plus friends' reflections with ``friends_only`` or ``public`` visibility.
+
+    **GET** ``/reflections``
+
+    :returns: JSON list of reflection objects, most recent first.
+    :status 200: List returned.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    # Get list of users this person follows.
+    friends = [r['followee'] for r in db.execute(
+        'SELECT followee FROM following WHERE follower = ?', (username,)
+    ).fetchall()]
+
+    # Own reflections (all visibilities) + friends' (friends_only or public).
+    own = db.execute(
+        'SELECT id, username, book_title, prompt, response, mood, duration_minutes, visibility, created_at '
+        'FROM reflections WHERE username = ? ORDER BY created_at DESC',
+        (username,)
+    ).fetchall()
+
+    friend_refs = []
+    if friends:
+        placeholders = ','.join('?' * len(friends))
+        friend_refs = db.execute(
+            f'SELECT id, username, book_title, prompt, response, mood, duration_minutes, visibility, created_at '
+            f'FROM reflections WHERE username IN ({placeholders}) '
+            f"AND visibility IN ('friends_only', 'public') ORDER BY created_at DESC",
+            friends
+        ).fetchall()
+
+    all_refs = sorted(
+        [dict(r) for r in own] + [dict(r) for r in friend_refs],
+        key=lambda x: x['created_at'],
+        reverse=True
+    )
+
+    return jsonify([{
+        'id': r['id'],
+        'username': r['username'],
+        'book_title': r['book_title'],
+        'prompt': r['prompt'],
+        'response': r['response'],
+        'mood': r['mood'],
+        'duration_minutes': r['duration_minutes'],
+        'visibility': r['visibility'],
+        'created_at': _to_iso(r['created_at'])
+    } for r in all_refs])
+
+
+@app.route('/reflections/<reflection_id>', methods=['PUT'])
+def update_reflection(reflection_id):
+    """Update a reflection's visibility or response.
+
+    **PUT** ``/reflections/<reflection_id>``
+
+    :json string visibility: New visibility (optional).
+    :json string response: Updated response text (optional).
+    :returns: JSON ``{"status": "ok"}``.
+    :status 200: Updated.
+    :status 403: Not authenticated or not the owner.
+    :status 404: Reflection not found.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    row = db.execute('SELECT username FROM reflections WHERE id = ?', (reflection_id,)).fetchone()
+    if not row:
+        abort(404)
+    if row['username'] != username:
+        abort(403)
+    data = request.get_json(silent=True) or {}
+    if 'visibility' in data:
+        if data['visibility'] not in ('private', 'friends_only', 'public'):
+            abort(400, description='visibility must be private, friends_only, or public')
+        db.execute('UPDATE reflections SET visibility = ? WHERE id = ?', (data['visibility'], reflection_id))
+    if 'response' in data:
+        db.execute('UPDATE reflections SET response = ? WHERE id = ?', (data['response'], reflection_id))
+    db.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route('/reflections/<reflection_id>', methods=['DELETE'])
+def delete_reflection(reflection_id):
+    """Delete a reflection.
+
+    **DELETE** ``/reflections/<reflection_id>``
+
+    :returns: JSON ``{"status": "ok"}``.
+    :status 200: Deleted.
+    :status 403: Not authenticated or not the owner.
+    :status 404: Reflection not found.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    row = db.execute('SELECT username FROM reflections WHERE id = ?', (reflection_id,)).fetchone()
+    if not row:
+        abort(404)
+    if row['username'] != username:
+        abort(403)
+    db.execute('DELETE FROM reflections WHERE id = ?', (reflection_id,))
+    db.commit()
+    return jsonify({'status': 'ok'})
 
 
 @app.route('/epub', methods=['POST'])

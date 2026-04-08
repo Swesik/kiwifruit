@@ -17,29 +17,40 @@ struct MoodCaptureSheet: View {
 
     let bookTitle: String?
     let duration: String
+    let durationSeconds: Int
     /// Face-detection result from the mood camera; nil if manual entry.
     var suggestedMood: QuickMood? = nil
     var suggestedConfidencePercent: Int? = nil
     let onSkip: () -> Void
     let updateExisting: Bool
+    var api: APIClientProtocol = AppAPI.shared
 
     @State private var selectedMood: QuickMood? = nil
+    @State private var showReflection = false
+    @State private var reflectionPrompt: String = ""
+    @State private var reflectionText: String = ""
+    @State private var isLoadingPrompt = false
+    @State private var isSavingReflection = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            headerSection
-            if suggestedMood != nil {
-                detectedMoodSection
-            } else {
-                moodSelectionSection
+        if showReflection {
+            reflectionView
+        } else {
+            VStack(spacing: 0) {
+                headerSection
+                if suggestedMood != nil {
+                    detectedMoodSection
+                } else {
+                    moodSelectionSection
+                }
+                Spacer()
+                actionButtons
             }
-            Spacer()
-            actionButtons
-        }
-        .padding(24)
-        .background(Color.white)
-        .onAppear {
-            selectedMood = suggestedMood
+            .padding(24)
+            .background(Color.white)
+            .onAppear {
+                selectedMood = suggestedMood
+            }
         }
     }
 
@@ -265,7 +276,112 @@ struct MoodCaptureSheet: View {
             moodStore.saveSession(session)
         }
 
-        dismiss()
+        showReflection = true
+    }
+
+    // MARK: - Reflection
+
+    private var reflectionView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Reflect")
+                .font(.system(size: 30, weight: .black))
+                .foregroundColor(MoodCaptureDesign.uiText)
+                .padding(.top, 24)
+
+            if isLoadingPrompt {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Generating prompt...")
+                        .font(.subheadline).fontWeight(.semibold)
+                        .foregroundColor(MoodCaptureDesign.uiText.opacity(0.6))
+                }
+                .padding(.vertical, 32)
+            } else {
+                Text(reflectionPrompt)
+                    .font(.subheadline).fontWeight(.semibold)
+                    .foregroundColor(MoodCaptureDesign.uiText.opacity(0.7))
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(MoodCaptureDesign.kiwiLight)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(MoodCaptureDesign.border.opacity(0.3), lineWidth: 1.5))
+
+                TextEditor(text: $reflectionText)
+                    .font(.subheadline)
+                    .frame(minHeight: 120)
+                    .padding(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(MoodCaptureDesign.border.opacity(0.3), lineWidth: 1.5)
+                    )
+
+                Button {
+                    isSavingReflection = true
+                    Task {
+                        do {
+                            try await api.createReflection(
+                                bookTitle: bookTitle ?? "Unknown",
+                                prompt: reflectionPrompt,
+                                response: reflectionText,
+                                mood: selectedMood?.rawValue,
+                                durationMinutes: durationSeconds / 60,
+                                visibility: "private"
+                            )
+                        } catch {
+                            print("[MoodCaptureSheet] createReflection failed: \(error)")
+                        }
+                        isSavingReflection = false
+                        dismiss()
+                    }
+                } label: {
+                    Text(isSavingReflection ? "Saving..." : "Save Reflection")
+                        .font(.headline).fontWeight(.bold)
+                        .foregroundColor(reflectionText.isEmpty ? MoodCaptureDesign.uiText.opacity(0.3) : .white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(reflectionText.isEmpty ? MoodCaptureDesign.kiwi.opacity(0.3) : MoodCaptureDesign.kiwi)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(MoodCaptureDesign.border.opacity(reflectionText.isEmpty ? 0.3 : 1), lineWidth: 2)
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(reflectionText.isEmpty || isSavingReflection)
+            }
+
+            Spacer()
+
+            Button {
+                dismiss()
+            } label: {
+                Text("Skip")
+                    .font(.subheadline).fontWeight(.semibold)
+                    .foregroundColor(MoodCaptureDesign.uiText.opacity(0.4))
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 16)
+        }
+        .padding(24)
+        .background(Color.white)
+        .onAppear {
+            isLoadingPrompt = true
+            Task {
+                do {
+                    let resp = try await api.fetchReflectionPrompt(
+                        bookTitle: bookTitle ?? "your book",
+                        durationMinutes: durationSeconds / 60,
+                        mood: selectedMood?.rawValue
+                    )
+                    reflectionPrompt = resp.prompt
+                } catch {
+                    reflectionPrompt = "What stood out to you during this reading session?"
+                }
+                isLoadingPrompt = false
+            }
+        }
     }
 }
 
@@ -273,6 +389,7 @@ struct MoodCaptureSheet: View {
     MoodCaptureSheet(
         bookTitle: "The Great Gatsby",
         duration: "45 minutes",
+        durationSeconds: 2700,
         suggestedMood: .focused,
         suggestedConfidencePercent: 72,
         onSkip: {},

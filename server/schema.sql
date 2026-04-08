@@ -119,6 +119,20 @@ CREATE TABLE user_preferences (
     FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
 );
 
+-- User reflections (post-session thoughts with visibility control)
+CREATE TABLE reflections (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    book_title TEXT NOT NULL CHECK (LENGTH(book_title) <= 256),
+    prompt TEXT NOT NULL,
+    response TEXT NOT NULL CHECK (LENGTH(response) <= 2000),
+    mood TEXT CHECK (mood IN ('focused', 'inspired', 'tired')),
+    duration_minutes INTEGER,
+    visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private', 'friends_only', 'public')),
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
+);
+
 -- Epub uploads table (tracks uploaded epub files and parsing state)
 CREATE TABLE epubs (
     epubid INTEGER PRIMARY KEY AUTOINCREMENT,

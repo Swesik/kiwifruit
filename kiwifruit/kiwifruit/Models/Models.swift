@@ -111,3 +111,24 @@ struct SpeedReadingProgress: Codable {
     let chapterNumber: Int
     let wordIndex: Int
 }
+
+// MARK: - Adaptive Challenges & Reflections
+
+struct AdaptiveChallengeData: Codable {
+    let title: String
+    let description: String
+    let goalUnit: String
+    let goalCount: Int
+    let rewardXP: Int
+    let reason: String
+}
+
+struct AdaptiveChallengeResponse: Codable {
+    let available: Bool
+    let challenge: AdaptiveChallengeData?
+}
+
+struct ReflectionPromptResponse: Codable {
+    let prompt: String
+    let mood: String?
+}
