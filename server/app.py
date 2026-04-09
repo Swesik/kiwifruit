@@ -13,12 +13,16 @@ from werkzeug.exceptions import HTTPException
 import ebooklib
 from ebooklib import epub as epub_lib
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 try:
-    from .recommendations import rank_recommendations
+    from .ai_recommendations import generate_book_recommendations, calculate_behavioral_signals
 except ImportError:
     # Support running as a script: `python app.py`
-    from recommendations import rank_recommendations
+    from ai_recommendations import generate_book_recommendations, calculate_behavioral_signals
 
 BASE_DIR = os.path.dirname(__file__)
 DB_PATH = os.path.join(BASE_DIR, 'kiwifruit.db')
@@ -735,7 +739,8 @@ def get_recommendations():
 
     Query params: ``limit`` (default 8, max 20).
 
-    Uses ``catalog_books`` and ``session_history`` for rule-based ranking.
+    Uses AI to generate personalized book recommendations based on user's 
+    reading history and preferences. Fetches cover URLs from OpenLibrary.
     """
     username = get_username_from_token(request)
     if not username:
@@ -748,14 +753,8 @@ def get_recommendations():
     limit = max(1, min(limit, 20))
 
     db = get_db()
-    try:
-        catalog = db.execute(
-            'SELECT book_id, title, author, genre, cover_url FROM catalog_books ORDER BY book_id'
-        ).fetchall()
-    except sqlite3.OperationalError:
-        logger.warning('recommendations: catalog_books missing (run schema + seed)')
-        return jsonify([])
-
+    
+    # Fetch user's reading history
     history = db.execute(
         'SELECT book_title, duration_seconds, pages_read FROM session_history WHERE username = ?',
         (username,),
@@ -768,75 +767,86 @@ def get_recommendations():
     ).fetchone()
     preferred_genres = []
     if prefs_row and prefs_row['preferred_genres']:
-        import json as _json
-        preferred_genres = _json.loads(prefs_row['preferred_genres'])
+        preferred_genres = json.loads(prefs_row['preferred_genres'])
 
-    # Initial rank from existing catalog.
-    ranked = rank_recommendations(catalog, history, limit, preferred_genres)
-
-    preferred_norm = {
-        str(g).strip().lower()
-        for g in (preferred_genres or [])
-        if isinstance(g, str) and g.strip()
+    # Build user context for AI
+    recent_books = [h['book_title'] for h in history][:10]
+    behavioral_signals = calculate_behavioral_signals(history)
+    
+    user_context = {
+        'reading_history': recent_books,
+        'preferred_genres': preferred_genres or [],
+        'behavioral_signals': behavioral_signals
     }
-    top_rows = ranked[:limit]
-    preferred_hits = 0
-    if preferred_norm and top_rows:
-        for row in top_rows:
-            genre = str(row['genre'] or '').strip().lower()
-            if genre in preferred_norm:
-                preferred_hits += 1
-    preferred_coverage = (preferred_hits / len(top_rows)) if top_rows else 0.0
-    preferred_coverage_target = 0.60
 
-    hydrated_rows = 0
-    # Hydrate when we do not have enough rows OR preferred-genre coverage is too low.
-    needs_count_hydration = len(ranked) < limit
-    needs_pref_hydration = bool(preferred_norm) and preferred_coverage < preferred_coverage_target
-    if needs_count_hydration or needs_pref_hydration:
-        shortfall = max(limit - len(ranked), 0)
-        desired_pref_rows = (limit * 60 + 99) // 100  # ceil(limit * 0.60)
-        missing_pref_rows = max(desired_pref_rows - preferred_hits, 0) if needs_pref_hydration else 0
-        needed = max(shortfall * 3, missing_pref_rows * 4, 12)
+    # Get AI-generated recommendations
+    ai_recommendations = generate_book_recommendations(user_context, limit=limit)
+    
+    if not ai_recommendations:
+        logger.warning('AI recommendations failed for user=%s', username)
+        # Fallback: return empty list (API key not set or AI call failed)
+        return jsonify([])
 
-        hydrated_rows = _hydrate_catalog_from_external(db, preferred_genres, needed)
-        if hydrated_rows > 0:
-            db.commit()
-            catalog = db.execute(
-                'SELECT book_id, title, author, genre, cover_url FROM catalog_books ORDER BY book_id'
-            ).fetchall()
-            ranked = rank_recommendations(catalog, history, limit, preferred_genres)
-
-            # Recompute preferred coverage for logging after hydration + rerank.
-            top_rows = ranked[:limit]
-            preferred_hits = 0
-            if preferred_norm and top_rows:
-                for row in top_rows:
-                    genre = str(row['genre'] or '').strip().lower()
-                    if genre in preferred_norm:
-                        preferred_hits += 1
-            preferred_coverage = (preferred_hits / len(top_rows)) if top_rows else 0.0
-
-    payload = [
-        {
-            'book_id': row['book_id'],
-            'title': row['title'],
-            'author': row['author'],
-            'genre': row['genre'],
-            'cover_url': row['cover_url'],
-        }
-        for row in ranked
-    ]
+    # Enrich each recommendation with cover URL from OpenLibrary
+    payload = []
+    for i, rec in enumerate(ai_recommendations):
+        book_id = i + 1  # Use simple integer ID instead of UUID
+        title = rec.get('title', 'Unknown')
+        author = rec.get('author', 'Unknown Author')
+        genre = rec.get('genre', 'fiction')
+        reason = rec.get('reason', f'Based on your preferences, try this {genre} book.')
+        
+        # Try to fetch cover URL from OpenLibrary
+        cover_url = _fetch_cover_url_for_book(title, author) or DEFAULT_COVER_URL
+        
+        payload.append({
+            'book_id': book_id,
+            'title': title,
+            'author': author,
+            'genre': genre,
+            'cover_url': cover_url,
+            'why_recommended': reason
+        })
+    
     logger.info(
-        'recommendations: catalog=%d history_rows=%d preferred_hits=%d preferred_coverage=%.2f hydrated=%d returned=%d',
-        len(catalog),
-        len(history),
-        preferred_hits,
-        preferred_coverage,
-        hydrated_rows,
+        'recommendations: ai_recommendations_returned=%d history_rows=%d total_hours=%s avg_session=%s reader_type=%s genres=%s user=%s',
         len(payload),
+        behavioral_signals.get('total_books', 0),
+        behavioral_signals.get('total_hours', 0),
+        behavioral_signals.get('avg_reading_session_minutes', 0),
+        behavioral_signals.get('reading_frequency', 'unknown'),
+        preferred_genres,
+        username,
     )
     return jsonify(payload)
+
+
+def _fetch_cover_url_for_book(title, author):
+    """Fetch cover URL from OpenLibrary for a given title and author.
+    
+    :param title: Book title
+    :param author: Book author
+    :returns: Cover URL string or None if not found
+    """
+    try:
+        params = urllib.parse.urlencode({
+            'title': title,
+            'author': author,
+            'limit': 1,
+            'fields': 'cover_i'
+        })
+        url = f"https://openlibrary.org/search.json?{params}"
+        
+        data = _fetch_json(url, (3, 5), "fetch_cover_url", f"{title} by {author}")
+        
+        if isinstance(data, dict) and data.get('docs'):
+            cover_id = data['docs'][0].get('cover_i')
+            if cover_id:
+                return _openlibrary_cover_url(cover_id)
+    except Exception as e:
+        logger.debug(f"Failed to fetch cover for {title}: {e}")
+    
+    return None
 
 
 @app.route('/posts', methods=['GET', 'POST'])
@@ -2049,5 +2059,5 @@ if __name__ == '__main__':
     if not os.path.exists(DB_PATH):
         init_db()
     # Allow overriding the port with the environment (useful for running on non-default ports)
-    port = int(os.environ.get('PORT', '5000'))
+    port = int(os.environ.get('PORT', '5001'))
     app.run(debug=True, host='0.0.0.0', port=port)

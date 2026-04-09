@@ -45,6 +45,8 @@ struct BookRecommendation: Identifiable, Codable, Hashable {
     let author: String
     /// HTTPS URL string for cover art (`cover_url` in JSON).
     let coverUrl: String
+    /// AI-generated explanation for why this book is recommended (50-100 words)
+    let whyRecommended: String?
 
     var id: Int { bookId }
 }

@@ -776,7 +776,7 @@ final class RESTAPIClient: APIClientProtocol {
 enum AppAPI {
     /// Default API server base URL for local development.
     static let defaultBaseURL: URL = {
-        guard let url = URL(string: "http://127.0.0.1:5000") else {
+        guard let url = URL(string: "http://127.0.0.1:5001") else {
             fatalError("Invalid default API base URL")
         }
         return url

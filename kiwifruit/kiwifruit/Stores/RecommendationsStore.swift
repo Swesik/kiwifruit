@@ -22,13 +22,15 @@ final class RecommendationsStore {
                 bookId: 1,
                 title: BookRecommendationMockAssets.titles[0],
                 author: BookRecommendationMockAssets.authors[0],
-                coverUrl: BookRecommendationMockAssets.coverUrl(forMockIndex: 0)
+                coverUrl: BookRecommendationMockAssets.coverUrl(forMockIndex: 0),
+                whyRecommended: BookRecommendationMockAssets.mockExplanations[0]
             ),
             BookRecommendation(
                 bookId: 2,
                 title: BookRecommendationMockAssets.titles[1],
                 author: BookRecommendationMockAssets.authors[1],
-                coverUrl: BookRecommendationMockAssets.coverUrl(forMockIndex: 1)
+                coverUrl: BookRecommendationMockAssets.coverUrl(forMockIndex: 1),
+                whyRecommended: BookRecommendationMockAssets.mockExplanations[1]
             ),
         ]
         return store

@@ -110,7 +110,7 @@ struct RecommendationDetailView: View {
                                 .font(.subheadline).fontWeight(.bold)
                                 .foregroundColor(RecommendationDetailDesign.uiText)
 
-                            Text("Based on your reading history and preferences, we think you'll love this book. Its genre and themes align perfectly with the types of stories you enjoy.")
+                            Text(book.whyRecommended ?? "Based on your reading history and preferences, we think you'll love this book. Its genre and themes align perfectly with the types of stories you enjoy.")
                                 .font(.body)
                                 .foregroundColor(RecommendationDetailDesign.uiText.opacity(0.8))
                                 .lineSpacing(2)
@@ -210,7 +210,8 @@ struct RecommendationDetailView: View {
             bookId: 1,
             title: "The Great Gatsby",
             author: "F. Scott Fitzgerald",
-            coverUrl: BookRecommendationMockAssets.coverUrl(forMockIndex: 0)
+            coverUrl: BookRecommendationMockAssets.coverUrl(forMockIndex: 0),
+            whyRecommended: "Your love of classic literature and character development aligns perfectly with Fitzgerald's masterpiece. The novel's exploration of ambition and the American Dream will resonate with your reading preferences."
         )
     )
 }
