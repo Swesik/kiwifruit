@@ -754,9 +754,9 @@ def get_recommendations():
 
     db = get_db()
     
-    # Fetch user's reading history
+    # Fetch user's reading history (most recent first)
     history = db.execute(
-        'SELECT book_title, duration_seconds, pages_read FROM session_history WHERE username = ?',
+        'SELECT book_title, duration_seconds, pages_read FROM session_history WHERE username = ? ORDER BY ended_at DESC',
         (username,),
     ).fetchall()
 

@@ -100,23 +100,31 @@ def generate_book_recommendations(user_context, limit=8):
         pref_genres = user_context.get("preferred_genres", [])
         signals = user_context.get("behavioral_signals", {})
         
-        # Format reading history for the prompt
+        # Format reading history for the prompt - emphasize most recent books
         if recent_books:
-            history_text = "Recently read: " + ", ".join(recent_books[:10])
+            most_recent = recent_books[0] if recent_books else "unknown"
+            history_text = f"Most recently read: {most_recent}. Also read: " + ", ".join(recent_books[:5])
         else:
             history_text = "No reading history yet."
+            most_recent = "N/A"
+        
+        logger.info(f"AI recommendations: most_recent_book={most_recent} total_books={len(recent_books)}")
         
         genres_text = ", ".join(pref_genres) if pref_genres else "general fiction, mystery, fantasy"
         
-        # Build behavioral context
-        behavior_text = f"""\nReading Behavior:
+        # Build behavioral context - emphasize recent reading patterns
+        behavior_text = f"""\nReading Behavior (Most Recent Sessions Are Most Important):
 - Total books completed: {signals.get('total_books', 0)}
 - Total hours reading: {signals.get('total_hours', 0)}
 - Average reading session: {signals.get('avg_reading_session_minutes', 0)} minutes
 - Total pages read: {signals.get('total_pages', 0)}
-- Reader type: {signals.get('reading_frequency', 'new reader')}"""
+- Reader type: {signals.get('reading_frequency', 'new reader')}
+
+IMPORTANT: The most recently read book ({most_recent if recent_books else 'N/A'}) is a strong signal of current reading interests. Prioritize recommendations that align with it."""
         
         prompt = f"""You are an expert book recommendation engine. Based on a reader's profile and behavioral patterns, suggest exactly {limit} books they would enjoy reading next.
+
+**EMPHASIS: Recent reading is highly predictive of current interests. Weight recent books heavily in your recommendations.**
 
 Reader's Profile:
 - {history_text}
@@ -129,8 +137,8 @@ Return ONLY a JSON array with exactly {limit} book objects. Each object must hav
 - reason (string, 50-100 words explaining why this is a great fit for them based on their reading behavior and history)
 
 The reason MUST:
-1. Reference their reading history or preferences
-2. Explain how this book matches their reading patterns
+1. Reference their RECENT reading or the most recent book they read
+2. Explain how this book continues or complements their current reading pattern
 3. Be warm, personalized, and specific
 
 Format: [

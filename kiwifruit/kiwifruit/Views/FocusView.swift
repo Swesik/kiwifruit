@@ -65,6 +65,13 @@ struct FocusView: View {
         .onAppear {
             // Refresh every time the tab is switched to, so elapsed times stay reasonably fresh.
             sessionStore.loadFriendSessions()
+            
+            // Set up callback to refresh recommendations when session completes
+            sessionStore.onSessionCompleted = { [weak recommendationsStore] in
+                Task {
+                    await recommendationsStore?.load(limit: 8)
+                }
+            }
         }
         .sheet(isPresented: $showingSpeedReading) { SpeedReadingView() }
         .sheet(isPresented: $showingMoodMapStats) { MoodMapStatsView() }

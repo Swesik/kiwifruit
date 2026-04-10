@@ -18,6 +18,9 @@ final class ReadingSessionStore {
     /// Holds the in-flight POST /reading-sessions task so stopSession can await it
     /// if the user stops before the server has responded.
     private var startSessionTask: Task<ReadingSession?, Never>?
+    
+    /// Optional callback triggered when a session completes successfully (for refreshing recommendations, etc.)
+    var onSessionCompleted: (() -> Void)?
 
     var status: FocusSessionStatus = .idle
     var elapsedSeconds: Int = 0
@@ -150,6 +153,11 @@ final class ReadingSessionStore {
                     // Send the joiner's own book title so session_history records what they read.
                     try await api.leaveReadingSession(sessionId: sessionId, elapsedSeconds: capturedElapsed, pagesRead: pagesRead, bookTitle: capturedBookTitle)
                 }
+                
+                // Session saved successfully — trigger refresh of recommendations
+                // (new reading session affects behavioral signals)
+                onSessionCompleted?()
+                
             } catch {
                 print("FocusSessionStore: stopSession remote call failed: \(error)")
                 saveError = "Your session couldn't be saved. Please check your connection and try again."
