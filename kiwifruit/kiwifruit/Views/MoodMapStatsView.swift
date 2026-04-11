@@ -113,18 +113,16 @@ struct MoodMapStatsView: View {
                                         .font(.caption).fontWeight(.semibold)
                                         .foregroundColor(MoodStatsDesign.uiText)
                                         .frame(width: 58, alignment: .leading)
-                                    GeometryReader { geo in
-                                        ZStack(alignment: .leading) {
-                                            RoundedRectangle(cornerRadius: 4)
-                                                .fill(MoodStatsDesign.uiText.opacity(0.07))
-                                            RoundedRectangle(cornerRadius: 4)
-                                                .fill(moodCardColor(mood))
-                                                .frame(width: geo.size.width * pct)
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 4)
-                                                        .stroke(MoodStatsDesign.border, lineWidth: 1)
-                                                )
-                                        }
+                                    Canvas { context, size in
+                                        let trackRect = CGRect(origin: .zero, size: size)
+                                        context.fill(
+                                            Path(roundedRect: trackRect, cornerRadius: 4),
+                                            with: .color(MoodStatsDesign.uiText.opacity(0.07))
+                                        )
+                                        let fillRect = CGRect(x: 0, y: 0, width: size.width * pct, height: size.height)
+                                        let fillPath = Path(roundedRect: fillRect, cornerRadius: 4)
+                                        context.fill(fillPath, with: .color(moodCardColor(mood)))
+                                        context.stroke(fillPath, with: .color(MoodStatsDesign.border), lineWidth: 1)
                                     }
                                     .frame(height: 18)
                                     Text("\(Int((pct * 100).rounded()))%")
@@ -146,25 +144,21 @@ struct MoodMapStatsView: View {
                             .textCase(.uppercase)
                             .kerning(0.5)
 
-                        GeometryReader { geo in
-                            HStack(spacing: 0) {
-                                ForEach(Array(timeline.enumerated()), id: \.offset) { idx, event in
-                                    let nextStart = idx + 1 < timeline.count
-                                        ? timeline[idx + 1].secondsFromStart
-                                        : sessionDuration
-                                    let segDuration = max(nextStart - event.secondsFromStart, 0)
-                                    let fraction = segDuration / sessionDuration
-                                    Rectangle()
-                                        .fill(moodCardColor(event.mood))
-                                        .frame(width: geo.size.width * fraction)
-                                }
+                        Canvas { context, size in
+                            var x: CGFloat = 0
+                            for (idx, event) in timeline.enumerated() {
+                                let nextStart = idx + 1 < timeline.count
+                                    ? timeline[idx + 1].secondsFromStart
+                                    : sessionDuration
+                                let fraction = CGFloat(max(nextStart - event.secondsFromStart, 0) / sessionDuration)
+                                let segRect = CGRect(x: x, y: 0, width: size.width * fraction, height: size.height)
+                                context.fill(Path(segRect), with: .color(moodCardColor(event.mood)))
+                                x += size.width * fraction
                             }
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(MoodStatsDesign.border.opacity(0.25), lineWidth: 1.5)
-                            )
+                            let border = Path(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 6)
+                            context.stroke(border, with: .color(MoodStatsDesign.border.opacity(0.25)), lineWidth: 1.5)
                         }
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                         .frame(height: 28)
 
                         HStack {
