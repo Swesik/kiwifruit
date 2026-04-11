@@ -729,8 +729,11 @@ struct FocusView: View {
             Spacer()
 
             Button {
-                let snap = moodCaptureService?.snapshotSuggestion()
-                moodStore.endMoodMap()
+                let snap = moodCaptureService?.snapshotFull()
+                moodStore.endMoodMap(
+                    distribution: snap?.distribution.isEmpty == false ? snap?.distribution : nil,
+                    timeline: snap?.timeline.isEmpty == false ? snap?.timeline : nil
+                )
                 moodCaptureService?.stopSession()
                 moodCaptureService = nil
                 if let snap, let m = snap.mood {
