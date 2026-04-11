@@ -47,6 +47,7 @@ struct DayMoodGroup: Identifiable {
 
 struct MoodHistoryView: View {
     @Environment(\.moodSessionStore) private var moodStore: MoodSessionStore
+    @Environment(\.dismiss) private var dismiss
 
     private var dayGroups: [DayMoodGroup] {
         let cal = Calendar.current
@@ -83,6 +84,20 @@ struct MoodHistoryView: View {
 
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(MoodHistoryDesign.uiText)
+                        .padding(10)
+                        .background(MoodHistoryDesign.tan)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(MoodHistoryDesign.border, lineWidth: 2))
+                        .sketchShadow(cornerRadius: 20)
+                }
+                Spacer()
+            }
+
             Text("Mood Session History")
                 .font(.system(size: 30, weight: .black))
                 .foregroundColor(MoodHistoryDesign.uiText)
