@@ -21,6 +21,7 @@ enum ProfileDesign {
 struct ProfileView: View {
     let user: User
 
+    @Environment(\.userBooksStore) private var userBooksStore
     @State private var showingSettings = false
 
     private let recentUpdates: [RecentUpdateItem] = [
@@ -34,12 +35,6 @@ struct ProfileView: View {
             quote: "Finally finished this masterpiece. 5/5 stars. Highly recommend to anyone who loves deep world-building.",
             imageURL: URL(string: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=200&h=300")
         )
-    ]
-
-    private let libraryURLs: [URL?] = [
-        URL(string: "https://images.unsplash.com/photo-1589829085413-56de8ae18c73?auto=format&fit=crop&q=80&w=200&h=300"),
-        URL(string: "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?auto=format&fit=crop&q=80&w=200&h=300"),
-        URL(string: "https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&q=80&w=200&h=300")
     ]
 
     var body: some View {
@@ -179,12 +174,8 @@ struct ProfileView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
-                    ForEach(Array(libraryURLs.enumerated()), id: \.offset) { _, url in
-                        bookCoverImage(url: url)
-                            .frame(width: 96, height: 144)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(ProfileDesign.border, lineWidth: 2))
-                            .sketchShadow(cornerRadius: 6)
+                    ForEach(userBooksStore.items) { book in
+                        libraryBookTile(book)
                     }
                     addBookPlaceholder
                 }
@@ -205,6 +196,41 @@ struct ProfileView: View {
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(ProfileDesign.border, lineWidth: 2))
         .sketchShadow(cornerRadius: 6)
+    }
+
+    private func libraryBookTile(_ book: UserBook) -> some View {
+        VStack(spacing: 6) {
+            if let cover = book.coverUrl, let url = URL(string: cover) {
+                AsyncImage(url: url) { phase in
+                    if let image = phase.image { image.resizable().scaledToFill() }
+                    else if phase.error != nil { ProfileDesign.uiBorder.overlay(Image(systemName: "book.closed")) }
+                    else { ProfileDesign.uiBorder.overlay(ProgressView()) }
+                }
+                .frame(width: 72, height: 108)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(ProfileDesign.border, lineWidth: 2))
+                .sketchShadow(cornerRadius: 6)
+            } else {
+                bookCoverImage(url: nil)
+                    .frame(width: 72, height: 108)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(ProfileDesign.border, lineWidth: 2))
+                    .sketchShadow(cornerRadius: 6)
+            }
+            Text(book.title)
+                .font(.caption2).fontWeight(.black)
+                .foregroundColor(ProfileDesign.uiText)
+                .lineLimit(2)
+                .frame(width: 96)
+            if let authors = book.authors, !authors.isEmpty {
+                Text(authors.joined(separator: ", "))
+                    .font(.caption2).fontWeight(.bold)
+                    .foregroundColor(ProfileDesign.uiText.opacity(0.7))
+                    .lineLimit(1)
+                    .frame(width: 96)
+            }
+        }
+        .frame(width: 96)
     }
 
     @ViewBuilder

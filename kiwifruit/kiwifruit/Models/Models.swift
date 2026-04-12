@@ -37,6 +37,25 @@ struct BookSearchResult: Identifiable, Codable, Hashable {
     let genres: [String]?
 }
 
+/// Local library row (UserDefaults). Populated from recommendation detail on this branch; search-row ADD comes from Varun merge (same type).
+struct UserBook: Identifiable, Codable, Hashable {
+    let id: String
+    let title: String
+    let authors: [String]?
+    let isbn13: String?
+    let addedAt: Date
+    let coverUrl: String?
+
+    init(id: String = UUID().uuidString, title: String, authors: [String]?, isbn13: String?, coverUrl: String? = nil) {
+        self.id = id
+        self.title = title
+        self.authors = authors
+        self.isbn13 = isbn13
+        self.addedAt = Date()
+        self.coverUrl = coverUrl
+    }
+}
+
 /// Server-driven personalized recommendation row (GET /recommendations).
 /// Property is ``coverUrl`` so JSON `cover_url` decodes with ``JSONDecoder.keyDecodingStrategy.convertFromSnakeCase`` (maps to `coverUrl`, not `coverURL`).
 struct BookRecommendation: Identifiable, Codable, Hashable {

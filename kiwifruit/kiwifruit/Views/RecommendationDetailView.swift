@@ -10,8 +10,11 @@ private enum RecommendationDetailDesign {
 
 struct RecommendationDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.userBooksStore) private var userBooksStore
     @State private var description = "Loading..."
     @State private var isLoading = true
+    @State private var isSavingToLibrary = false
+    @State private var didConfirmLibraryAdd = false
     let book: BookRecommendation
 
     var body: some View {
@@ -116,21 +119,7 @@ struct RecommendationDetailView: View {
                                 .lineSpacing(2)
                         }
 
-                        // Add status button
-                        Button(action: {}) {
-                            Text("Add Status")
-                                .font(.subheadline).fontWeight(.black)
-                                .foregroundColor(RecommendationDetailDesign.uiText)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(RecommendationDetailDesign.kiwi)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(RecommendationDetailDesign.border, lineWidth: 2)
-                                )
-                        }
-                        .sketchShadow()
+                        addToLibraryControl
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 24)
@@ -142,6 +131,79 @@ struct RecommendationDetailView: View {
             Task {
                 await fetchDescription()
             }
+        }
+    }
+
+    @ViewBuilder
+    private var addToLibraryControl: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button(action: saveToLibrary) {
+                Group {
+                    if isSavingToLibrary {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                                .tint(RecommendationDetailDesign.uiText)
+                            Text("Saving…")
+                                .font(.subheadline).fontWeight(.black)
+                                .foregroundColor(RecommendationDetailDesign.uiText)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                    } else if didConfirmLibraryAdd {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.body.weight(.semibold))
+                                .foregroundColor(RecommendationDetailDesign.uiText)
+                            Text("Added to My Library")
+                                .font(.subheadline).fontWeight(.black)
+                                .foregroundColor(RecommendationDetailDesign.uiText)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                    } else {
+                        Text("ADD")
+                            .font(.subheadline).fontWeight(.black)
+                            .foregroundColor(RecommendationDetailDesign.uiText)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                    }
+                }
+                .background(RecommendationDetailDesign.kiwi)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(RecommendationDetailDesign.border, lineWidth: 2)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(isSavingToLibrary || didConfirmLibraryAdd)
+            .sketchShadow()
+
+            if didConfirmLibraryAdd {
+                Text("You’ll see this under Profile → My Library.")
+                    .font(.caption).fontWeight(.semibold)
+                    .foregroundColor(RecommendationDetailDesign.uiText.opacity(0.65))
+            }
+        }
+    }
+
+    private func saveToLibrary() {
+        guard !isSavingToLibrary else { return }
+        isSavingToLibrary = true
+        didConfirmLibraryAdd = false
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            let userBook = UserBook(
+                title: book.title,
+                authors: [book.author],
+                isbn13: nil,
+                coverUrl: book.coverUrl
+            )
+            userBooksStore.add(userBook)
+            isSavingToLibrary = false
+            didConfirmLibraryAdd = true
+            try? await Task.sleep(nanoseconds: 2_800_000_000)
+            didConfirmLibraryAdd = false
         }
     }
 
