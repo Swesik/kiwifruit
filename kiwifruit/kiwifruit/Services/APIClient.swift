@@ -85,6 +85,18 @@ protocol APIClientProtocol: Sendable {
     func uploadEpub(fileData: Data, filename: String) async throws -> EpubUploadResponse
     /// Fetches a book description from OpenLibrary using title and author.
     func fetchBookDescription(title: String, author: String) async throws -> String
+    /// Returns all epubs belonging to the current user.
+    func fetchEpubs() async throws -> [EpubUploadResponse]
+    /// Returns the status/detail of a single epub.
+    func fetchEpubDetail(epubId: String) async throws -> EpubUploadResponse
+    /// Returns the list of chapters for an epub.
+    func fetchChapters(epubId: String) async throws -> [EpubChapter]
+    /// Returns the plaintext content of a single chapter.
+    func fetchChapterText(epubId: String, chapterNumber: Int) async throws -> String
+    /// Returns the user's saved reading position in an epub.
+    func getSpeedReadingProgress(epubId: String) async throws -> SpeedReadingProgress
+    /// Updates the user's reading position in an epub.
+    func updateSpeedReadingProgress(epubId: String, chapter: Int, wordIndex: Int) async throws
 }
 
 /// Simple in-memory/mock client used in previews and when no backend is configured.
@@ -143,6 +155,7 @@ final class MockAPIClient: APIClientProtocol {
                 authors: ["Kiwi Fruit"],
                 isbn13: nil,
                 genres: nil
+                coverUrl: nil
             )
         ]
     }
@@ -215,6 +228,27 @@ final class MockAPIClient: APIClientProtocol {
         try await Task.sleep(nanoseconds: 100 * 1_000_000)
         return "This is a captivating novel that will take you on an unforgettable journey. The author masterfully weaves together compelling characters and intricate plots to create a story that resonates with readers of all ages."
     }
+    func fetchEpubs() async throws -> [EpubUploadResponse] {
+        return [
+            EpubUploadResponse(id: "1", title: "Mock Book", author: "Mock Author", status: "PARSED", originalFilename: "mock.epub", createdAt: "2026-01-01T00:00:00Z")
+        ]
+    }
+    func fetchEpubDetail(epubId: String) async throws -> EpubUploadResponse {
+        return EpubUploadResponse(id: epubId, title: "Mock Book", author: "Mock Author", status: "PARSED", originalFilename: "mock.epub", createdAt: "2026-01-01T00:00:00Z")
+    }
+    func fetchChapters(epubId: String) async throws -> [EpubChapter] {
+        return [
+            EpubChapter(id: "1", chapterNumber: 1, title: "Chapter 1"),
+            EpubChapter(id: "2", chapterNumber: 2, title: "Chapter 2"),
+        ]
+    }
+    func fetchChapterText(epubId: String, chapterNumber: Int) async throws -> String {
+        return "The quick brown fox jumps over the lazy dog. Speed reading is a technique for rapidly processing text by focusing your eyes on key words."
+    }
+    func getSpeedReadingProgress(epubId: String) async throws -> SpeedReadingProgress {
+        return SpeedReadingProgress(chapterNumber: 1, wordIndex: 0)
+    }
+    func updateSpeedReadingProgress(epubId: String, chapter: Int, wordIndex: Int) async throws {}
 }
 
 /// A simple REST API client implementation using URLSession and async/await.
@@ -594,30 +628,145 @@ final class RESTAPIClient: APIClientProtocol {
     func searchBooks(query: String) async throws -> [BookSearchResult] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return [] }
+        let normalized = trimmed.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
 
-        guard var comps = URLComponents(
-            url: baseURL.appendingPathComponent("/books/search"),
-            resolvingAgainstBaseURL: false
-        ) else { throw URLError(.badURL) }
-        comps.queryItems = [URLQueryItem(name: "q", value: trimmed)]
+        // First try the app backend search endpoint; if it fails or returns nothing,
+        // fall back to querying Open Library (no API key required) for metadata.
+        do {
+            guard var comps = URLComponents(
+                url: baseURL.appendingPathComponent("/books/search"),
+                resolvingAgainstBaseURL: false
+            ) else { throw URLError(.badURL) }
+            comps.queryItems = [URLQueryItem(name: "q", value: normalized)]
 
-        guard let searchURL = comps.url else { throw URLError(.badURL) }
-        var req = URLRequest(url: searchURL)
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+            guard let searchURL = comps.url else { throw URLError(.badURL) }
+            var req = URLRequest(url: searchURL)
+            if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
 
-        debugLogRequest(req)
-        let (data, resp) = try await session.data(for: req)
+            debugLogRequest(req)
+            let (data, resp) = try await session.data(for: req)
 
+            if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                let body = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+                print("searchBooks failed HTTP \(http.statusCode): \(body)")
+                throw URLError(.badServerResponse)
+            }
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            decoder.dateDecodingStrategy = .iso8601
+            let results = try decoder.decode([BookSearchResult].self, from: data)
+            if !results.isEmpty { return results }
+            // If backend returned empty list, fall through to Open Library fallback below.
+        } catch {
+            print("searchBooks: backend search failed, falling back to Open Library: \(error)")
+        }
+
+        return try await searchOpenLibrary(query: normalized)
+    }
+
+    /// Query Open Library's public search API for basic metadata
+    private func searchOpenLibrary(query: String) async throws -> [BookSearchResult] {
+        guard var comps = URLComponents(string: "https://openlibrary.org/search.json") else { throw URLError(.badURL) }
+        comps.queryItems = [ URLQueryItem(name: "q", value: query) ]
+        guard let url = comps.url else { throw URLError(.badURL) }
+
+        let (data, resp) = try await session.data(from: url)
         if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            let body = String(data: data, encoding: .utf8) ?? "<non-utf8>"
-            print("searchBooks failed HTTP \(http.statusCode): \(body)")
             throw URLError(.badServerResponse)
         }
 
+        struct OLDoc: Codable {
+            let key: String?
+            let title: String?
+            let author_name: [String]?
+            let isbn: [String]?
+            let cover_i: Int?
+        }
+        struct OLResponse: Codable {
+            let docs: [OLDoc]
+        }
+
         let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode([BookSearchResult].self, from: data)
+        let ol = try decoder.decode(OLResponse.self, from: data)
+        let docs = ol.docs.prefix(20)
+
+        // First pass: map Open Library data and collect indices that need a Google cover lookup.
+        struct Partial {
+            let index: Int
+            let id: String
+            let title: String
+            let authors: [String]?
+            let isbn13: String?
+            var coverUrl: String?
+        }
+
+        var partials: [Partial] = []
+        partials.reserveCapacity(docs.count)
+
+        for (idx, doc) in docs.enumerated() {
+            let id = doc.key ?? "ol_\(idx)_\(UUID().uuidString)"
+            let title = doc.title ?? "Unknown title"
+            let authors = doc.author_name
+            var isbn13: String? = nil
+            if let isbns = doc.isbn {
+                if let exact13 = isbns.first(where: { $0.count == 13 }) { isbn13 = exact13 }
+                else { isbn13 = isbns.first }
+            }
+            var coverUrl: String? = nil
+            if let coverId = doc.cover_i {
+                coverUrl = "https://covers.openlibrary.org/b/id/\(coverId)-M.jpg"
+            }
+            partials.append(Partial(index: idx, id: id, title: title, authors: authors, isbn13: isbn13, coverUrl: coverUrl))
+        }
+
+        // Second pass: fetch missing covers from Google Books concurrently.
+        let needsCover = partials.filter { $0.coverUrl == nil && $0.isbn13 != nil }
+        if !needsCover.isEmpty {
+            let covers = await withTaskGroup(of: (Int, String?).self) { group in
+                for p in needsCover {
+                    let isbn = p.isbn13!
+                    let idx = p.index
+                    group.addTask { (idx, try? await self.fetchGoogleBooksCover(isbn13: isbn)) }
+                }
+                var results: [Int: String] = [:]
+                for await (idx, url) in group {
+                    if let url { results[idx] = url }
+                }
+                return results
+            }
+            for (idx, url) in covers {
+                partials[idx].coverUrl = url
+            }
+        }
+
+        return partials.map { BookSearchResult(id: $0.id, title: $0.title, authors: $0.authors, isbn13: $0.isbn13, coverUrl: $0.coverUrl) }
+    }
+
+    /// Try Google Books volumes API to obtain a thumbnail for an ISBN.
+    private func fetchGoogleBooksCover(isbn13: String) async throws -> String? {
+        guard !isbn13.isEmpty else { return nil }
+        guard var comps = URLComponents(string: "https://www.googleapis.com/books/v1/volumes") else { return nil }
+        comps.queryItems = [ URLQueryItem(name: "q", value: "isbn:\(isbn13)") ]
+        guard let url = comps.url else { return nil }
+
+        let (data, resp) = try await session.data(from: url)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            return nil
+        }
+
+        struct GBImageLinks: Codable { let smallThumbnail: String?; let thumbnail: String? }
+        struct GBVolumeInfo: Codable { let imageLinks: GBImageLinks? }
+        struct GBItem: Codable { let volumeInfo: GBVolumeInfo? }
+        struct GBResponse: Codable { let items: [GBItem]? }
+
+        let decoder = JSONDecoder()
+        if let gb = try? decoder.decode(GBResponse.self, from: data), let first = gb.items?.first, let links = first.volumeInfo?.imageLinks {
+            // Prefer thumbnail then smallThumbnail
+            if let thumb = links.thumbnail { return thumb.replacingOccurrences(of: "http://", with: "https://") }
+            if let small = links.smallThumbnail { return small.replacingOccurrences(of: "http://", with: "https://") }
+        }
+        return nil
     }
 
     func fetchRecommendations(limit: Int) async throws -> [BookRecommendation] {
@@ -769,6 +918,81 @@ final class RESTAPIClient: APIClientProtocol {
             print("Failed to decode book description response: \(error)")
             print("Response data: \(String(data: data, encoding: .utf8) ?? "<non-utf8>")")
             throw error
+         }
+    }
+    func fetchEpubs() async throws -> [EpubUploadResponse] {
+        let url = baseURL.appendingPathComponent("/epubs")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode([EpubUploadResponse].self, from: data)
+    }
+
+    func fetchEpubDetail(epubId: String) async throws -> EpubUploadResponse {
+        let url = baseURL.appendingPathComponent("/epub/\(epubId)")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode(EpubUploadResponse.self, from: data)
+    }
+
+    func fetchChapters(epubId: String) async throws -> [EpubChapter] {
+        let url = baseURL.appendingPathComponent("/epub/\(epubId)/chapters")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode([EpubChapter].self, from: data)
+    }
+
+    func fetchChapterText(epubId: String, chapterNumber: Int) async throws -> String {
+        let url = baseURL.appendingPathComponent("/epub/\(epubId)/chapter/\(chapterNumber)/text")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return json?["text"] as? String ?? ""
+    }
+
+    func getSpeedReadingProgress(epubId: String) async throws -> SpeedReadingProgress {
+        let url = baseURL.appendingPathComponent("/speed-reading/progress/\(epubId)")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode(SpeedReadingProgress.self, from: data)
+    }
+
+    func updateSpeedReadingProgress(epubId: String, chapter: Int, wordIndex: Int) async throws {
+        let url = baseURL.appendingPathComponent("/speed-reading/progress/\(epubId)")
+        var req = URLRequest(url: url); req.httpMethod = "PUT"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let body: [String: Int] = ["chapterNumber": chapter, "wordIndex": wordIndex]
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("updateSpeedReadingProgress failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
         }
     }
 }

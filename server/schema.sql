@@ -79,6 +79,7 @@ CREATE TABLE session_history (
     book_title TEXT NOT NULL,
     duration_seconds INTEGER NOT NULL,
     pages_read INTEGER,
+    mood TEXT CHECK (mood IN ('focused', 'inspired', 'tired')),
     ended_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
 );
@@ -150,4 +151,16 @@ CREATE TABLE book_description_cache (
     description TEXT NOT NULL,
     fetched_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(title, author)
+);
+
+-- Speed reading progress (tracks where a user is in a given epub)
+CREATE TABLE speed_reading_progress (
+    username TEXT NOT NULL CHECK (LENGTH(username) <= 20),
+    epubid INTEGER NOT NULL,
+    chapter_number INTEGER NOT NULL DEFAULT 1,
+    word_index INTEGER NOT NULL DEFAULT 0,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (username, epubid),
+    FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE,
+    FOREIGN KEY (epubid) REFERENCES epubs (epubid) ON DELETE CASCADE
 );

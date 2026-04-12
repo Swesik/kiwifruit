@@ -17,6 +17,7 @@ final class UserBooksStore {
     }
 
     func add(_ book: UserBook) {
+        // Prevent duplicates by isbn if available, otherwise by title+authors
         if let isbn = book.isbn13, !isbn.isEmpty {
             if items.contains(where: { $0.isbn13 == isbn }) { return }
         } else {

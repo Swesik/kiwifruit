@@ -141,6 +141,8 @@ coverage.xml
 # IDEs
 .vscode/
 .idea/
+.zed/
+buildServer.json
 *.swp
 *.swo
 *~

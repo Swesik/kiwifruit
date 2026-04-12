@@ -5,8 +5,10 @@ private enum MoodCaptureDesign {
     static let uiText = Color(hex: "2D3748")
     static let kiwi = Color(hex: "A3C985")
     static let kiwiLight = Color(hex: "E6F0DC")
-    static let tealCard = Color(hex: "CFE6EC")
-    static let tan = Color(hex: "D1BFAe")
+    // Distinct mood colors: blue (focused), yellow (inspired), lavender (tired).
+    static let moodFocused = Color(hex: "DBEAFE")   // light blue
+    static let moodInspired = Color(hex: "FEF9C3")  // warm yellow
+    static let moodTired    = Color(hex: "EDE9FE")  // soft lavender
 }
 
 struct MoodCaptureSheet: View {
@@ -15,6 +17,9 @@ struct MoodCaptureSheet: View {
 
     let bookTitle: String?
     let duration: String
+    /// Face-detection result from the mood camera; nil if manual entry.
+    var suggestedMood: QuickMood? = nil
+    var suggestedConfidencePercent: Int? = nil
     let onSkip: () -> Void
     let updateExisting: Bool
 
@@ -23,19 +28,26 @@ struct MoodCaptureSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             headerSection
-            moodSelectionSection
+            if suggestedMood != nil {
+                detectedMoodSection
+            } else {
+                moodSelectionSection
+            }
             Spacer()
             actionButtons
         }
         .padding(24)
         .background(Color.white)
+        .onAppear {
+            selectedMood = suggestedMood
+        }
     }
 
     // MARK: - Header
 
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("How did you feel?")
+            Text(suggestedMood != nil ? "We detected:" : "How did you feel?")
                 .font(.system(size: 30, weight: .black))
                 .foregroundColor(MoodCaptureDesign.uiText)
 
@@ -55,7 +67,83 @@ struct MoodCaptureSheet: View {
         .padding(.bottom, 32)
     }
 
-    // MARK: - Mood Selection
+    // MARK: - Detected Mood (camera path)
+
+    private var detectedMoodSection: some View {
+        VStack(spacing: 16) {
+            // Primary card — pre-selected, prominent.
+            if let mood = suggestedMood {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { selectedMood = mood }
+                } label: {
+                    HStack {
+                        Text(moodEmoji(mood))
+                            .font(.system(size: 44))
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Text(mood.displayName)
+                                    .font(.title2).fontWeight(.black)
+                                    .foregroundColor(MoodCaptureDesign.uiText)
+                                if let pct = suggestedConfidencePercent {
+                                    Text("· \(pct)%")
+                                        .font(.caption).fontWeight(.bold)
+                                        .foregroundColor(MoodCaptureDesign.kiwi)
+                                }
+                            }
+                            Text(moodDescription(mood))
+                                .font(.subheadline).fontWeight(.semibold)
+                                .foregroundColor(MoodCaptureDesign.uiText.opacity(0.6))
+                        }
+                        Spacer()
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(MoodCaptureDesign.kiwi)
+                    }
+                    .padding(20)
+                    .background(moodCardColor(mood))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(MoodCaptureDesign.border, lineWidth: 2))
+                    .sketchShadow()
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Tap to change alternatives.
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Not you? Tap to change:")
+                    .font(.caption).fontWeight(.semibold)
+                    .foregroundColor(MoodCaptureDesign.uiText.opacity(0.5))
+
+                ForEach(QuickMood.allCases) { mood in
+                    if mood != suggestedMood {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.15)) { selectedMood = mood }
+                        } label: {
+                            HStack {
+                                Text(mood.displayName)
+                                    .font(.subheadline).fontWeight(.bold)
+                                    .foregroundColor(MoodCaptureDesign.uiText)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption).fontWeight(.bold)
+                                    .foregroundColor(MoodCaptureDesign.uiText.opacity(0.4))
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 10)
+                            .background(selectedMood == mood ? moodCardColor(mood) : Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(MoodCaptureDesign.border.opacity(selectedMood == mood ? 1 : 0.25), lineWidth: 1.5)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Mood Selection (manual path — no camera suggestion)
 
     private var moodSelectionSection: some View {
         VStack(spacing: 12) {
@@ -103,9 +191,9 @@ struct MoodCaptureSheet: View {
 
     private func moodCardColor(_ mood: QuickMood) -> Color {
         switch mood {
-        case .focused: return MoodCaptureDesign.tealCard
-        case .inspired: return MoodCaptureDesign.kiwiLight
-        case .tired: return Color(hex: "F5E6D3")
+        case .focused: return MoodCaptureDesign.moodFocused
+        case .inspired: return MoodCaptureDesign.moodInspired
+        case .tired: return MoodCaptureDesign.moodTired
         }
     }
 
@@ -117,21 +205,29 @@ struct MoodCaptureSheet: View {
         }
     }
 
+    private func moodEmoji(_ mood: QuickMood) -> String {
+        switch mood {
+        case .focused: return "😌"
+        case .inspired: return "😊"
+        case .tired: return "😴"
+        }
+    }
+
     // MARK: - Actions
 
     private var actionButtons: some View {
         VStack(spacing: 12) {
             Button(action: saveMood) {
-                Text("Save")
-                    .font(.subheadline).fontWeight(.bold)
-                    .foregroundColor(selectedMood != nil ? MoodCaptureDesign.uiText : MoodCaptureDesign.uiText.opacity(0.3))
+                Text(selectedMood != nil ? "Confirm" : "Save")
+                    .font(.headline).fontWeight(.bold)
+                    .foregroundColor(selectedMood != nil ? .white : MoodCaptureDesign.uiText.opacity(0.3))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                    .padding(.vertical, 16)
                     .background(
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: 12)
                             .fill(selectedMood != nil ? MoodCaptureDesign.kiwi : MoodCaptureDesign.kiwi.opacity(0.3))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 8)
+                                RoundedRectangle(cornerRadius: 12)
                                     .stroke(MoodCaptureDesign.border.opacity(selectedMood != nil ? 1 : 0.3), lineWidth: 2)
                             )
                     )
@@ -177,6 +273,8 @@ struct MoodCaptureSheet: View {
     MoodCaptureSheet(
         bookTitle: "The Great Gatsby",
         duration: "45 minutes",
+        suggestedMood: .focused,
+        suggestedConfidencePercent: 72,
         onSkip: {},
         updateExisting: false
     )

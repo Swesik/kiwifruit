@@ -35,9 +35,12 @@ struct BookSearchResult: Identifiable, Codable, Hashable {
     let authors: [String]?
     let isbn13: String?
     let genres: [String]?
-}
 
 /// Local library row (UserDefaults). Populated from recommendation detail on this branch; search-row ADD comes from Varun merge (same type).
+    let coverUrl: String?
+}
+
+/// A book saved by the user from discovery/search results.
 struct UserBook: Identifiable, Codable, Hashable {
     let id: String
     let title: String
@@ -99,4 +102,17 @@ struct EpubUploadResponse: Identifiable, Codable {
     let status: String
     let originalFilename: String
     let createdAt: String
+}
+
+/// A chapter entry from the epub chapters endpoint.
+struct EpubChapter: Identifiable, Codable {
+    let id: String
+    let chapterNumber: Int
+    let title: String
+}
+
+/// Speed reading progress for a given epub.
+struct SpeedReadingProgress: Codable {
+    let chapterNumber: Int
+    let wordIndex: Int
 }

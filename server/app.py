@@ -23,6 +23,9 @@ try:
 except ImportError:
     # Support running as a script: `python app.py`
     from ai_recommendations import generate_book_recommendations, calculate_behavioral_signals
+import urllib.request
+import urllib.parse
+import json
 
 BASE_DIR = os.path.dirname(__file__)
 DB_PATH = os.path.join(BASE_DIR, 'kiwifruit.db')
@@ -287,6 +290,7 @@ def init_db():
         schema_path = os.path.join(BASE_DIR, 'schema.sql')
         with open(schema_path, 'r') as f:
             db.executescript(f.read())
+
 
 
 def _to_iso(ts):
@@ -596,30 +600,77 @@ def search_books():
     if not q:
         return jsonify([])
 
-    results = [
-        {
-            'id': uuid.uuid4().hex,
-            'title': f'{q} (Sample Result 1)',
-            'authors': ['Demo Author'],
-            'isbn13': None,
-            'genres': None,
-        },
-        {
-            'id': uuid.uuid4().hex,
-            'title': f'{q} (Sample Result 2)',
-            'authors': ['Kiwi Fruit', 'Savannah Brown'],
-            'isbn13': '9780000000002',
-            'genres': None,
-        },
-        {
-            'id': uuid.uuid4().hex,
-            'title': f'{q} (Sample Result 3)',
-            'authors': None,
-            'isbn13': None,
-            'genres': None,
-        },
-    ]
-    return jsonify(results)
+    # Try to use Open Library to return real metadata when possible.
+    def normalize_isbn(s):
+        return ''.join(ch for ch in s if ch.isdigit())
+
+    # Heuristic: if q looks like an ISBN (10 or 13 digits after stripping hyphens),
+    # use the ISBN API which returns richer data for a single ISBN.
+    isbn_candidate = normalize_isbn(q)
+    if len(isbn_candidate) in (10, 13):
+        try:
+            ol_url = f'https://openlibrary.org/api/books?bibkeys=ISBN:{urllib.parse.quote(isbn_candidate)}&format=json&jscmd=data'
+            with urllib.request.urlopen(ol_url, timeout=8) as resp:
+                raw = resp.read()
+            parsed = json.loads(raw)
+            key = f'ISBN:{isbn_candidate}'
+            if key in parsed:
+                entry = parsed[key]
+                title = entry.get('title')
+                authors = [a.get('name') for a in entry.get('authors', []) if a.get('name')]
+                isbns = []
+                identifiers = entry.get('identifiers', {})
+                for k in ('isbn_13', 'isbn_10'):
+                    for v in identifiers.get(k, []):
+                        isbns.append(v)
+                isbn13 = None
+                for v in isbns:
+                    if len(v) == 13:
+                        isbn13 = v
+                        break
+                cover_url = None
+                if isinstance(entry.get('cover'), dict):
+                    cover = entry.get('cover')
+                    cover_url = cover.get('medium') or cover.get('large') or cover.get('small')
+                results = [{
+                    'id': uuid.uuid4().hex,
+                    'title': title or q,
+                    'authors': authors or None,
+                    'isbn13': isbn13,
+                    'cover_url': cover_url
+                }]
+                return jsonify(results)
+        except Exception as e:
+            logger.warning('books.search: ISBN lookup failed: %s', e)
+
+    # Free-text search against Open Library.
+    try:
+        search_url = f'https://openlibrary.org/search.json?q={urllib.parse.quote(q)}&limit=20'
+        with urllib.request.urlopen(search_url, timeout=8) as resp:
+            raw = resp.read()
+        parsed = json.loads(raw)
+        docs = parsed.get('docs', [])
+        out = []
+        for d in docs[:20]:
+            title = d.get('title') or d.get('title_suggest') or q
+            authors = d.get('author_name') or None
+            isbn13 = None
+            isbns = d.get('isbn') or []
+            for s in isbns:
+                sdigits = ''.join(ch for ch in s if ch.isdigit())
+                if len(sdigits) == 13:
+                    isbn13 = sdigits
+                    break
+            cover_url = None
+            if d.get('cover_i'):
+                cover_url = f"https://covers.openlibrary.org/b/id/{d.get('cover_i')}-M.jpg"
+            out.append({'id': d.get('key') or uuid.uuid4().hex, 'title': title, 'authors': authors, 'isbn13': isbn13, 'cover_url': cover_url})
+        if out:
+            return jsonify(out)
+    except Exception as e:
+        logger.warning('books.search: Open Library search failed: %s', e)
+
+    return jsonify([])
 
 
 @app.route('/books/description', methods=['GET'])
@@ -1392,6 +1443,7 @@ def complete_reading_session(session_id):
 
     :json string status: Must be ``"completed"``.
     :json int pages_read: Pages read this session (optional).
+    :json string mood: Post-session mood (optional). One of ``focused``, ``inspired``, ``tired``.
     :returns: JSON ``{"status": "ok"}``.
     :status 200: Session completed.
     :status 403: Not authenticated or not the session host.
@@ -1432,8 +1484,8 @@ def complete_reading_session(session_id):
             ).fetchone()
             if session_row:
                 db.execute(
-                    'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read, ended_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
-                    (uuid.uuid4().hex, username, session_row['book_title'], session_row['elapsed_seconds'] or 0, data.get('pages_read'))
+                    'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read, mood, ended_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+                    (uuid.uuid4().hex, username, session_row['book_title'], session_row['elapsed_seconds'] or 0, data.get('pages_read'), data.get('mood'))
                 )
                 logger.info('session completed: user=%s book=%s duration=%d pages=%s', username, session_row['book_title'], session_row['elapsed_seconds'] or 0, data.get('pages_read'))
         db.commit()
@@ -1993,6 +2045,146 @@ def epub_list():
     return jsonify(epubs)
 
 
+@app.route('/epub/<int:epub_id>/chapter/<int:chapter_num>/text', methods=['GET'])
+def epub_chapter_text(epub_id, chapter_num):
+    """Return the plaintext content of a single chapter.
+
+    **GET** ``/epub/<epub_id>/chapter/<chapter_num>/text``
+
+    Requires authentication. Only the owner may access. The epub must be
+    in PARSED status.
+
+    :param epub_id: ID of the epub.
+    :param chapter_num: 1-based chapter number.
+    :returns: JSON with ``text`` field containing the chapter plaintext.
+    :status 200: Text returned.
+    :status 403: Not authenticated or not the owner.
+    :status 404: Epub or chapter not found.
+    :status 409: Epub is still LOADING or FAILED.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    db = get_db()
+    epub_row = db.execute(
+        'SELECT epubid, owner, status FROM epubs WHERE epubid = ?', (epub_id,)
+    ).fetchone()
+    if not epub_row:
+        abort(404)
+    if epub_row['owner'] != username:
+        abort(403)
+    if epub_row['status'] == 'LOADING':
+        return jsonify({'error': 'epub_still_loading',
+                        'message': 'Epub is still being parsed'}), 409
+    if epub_row['status'] == 'FAILED':
+        return jsonify({'error': 'epub_parse_failed',
+                        'message': 'Epub parsing failed'}), 409
+
+    chapter_row = db.execute(
+        'SELECT filename FROM epub_chapters WHERE epubid = ? AND chapter_number = ?',
+        (epub_id, chapter_num)
+    ).fetchone()
+    if not chapter_row:
+        abort(404)
+
+    filepath = os.path.join(EPUB_FOLDER, chapter_row['filename'])
+    if not os.path.exists(filepath):
+        abort(404)
+
+    with open(filepath, 'r', encoding='utf-8') as f:
+        text = f.read()
+
+    return jsonify({'text': text})
+
+
+@app.route('/speed-reading/progress/<int:epub_id>', methods=['GET'])
+def get_speed_reading_progress(epub_id):
+    """Return the user's saved reading position in an epub.
+
+    **GET** ``/speed-reading/progress/<epub_id>``
+
+    :param epub_id: ID of the epub.
+    :returns: JSON with ``chapterNumber`` and ``wordIndex``.
+    :status 200: Progress returned (defaults to chapter 1, word 0 if none saved).
+    :status 403: Not authenticated or not the epub owner.
+    :status 404: Epub not found.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    db = get_db()
+    epub_row = db.execute(
+        'SELECT owner FROM epubs WHERE epubid = ?', (epub_id,)
+    ).fetchone()
+    if not epub_row:
+        abort(404)
+    if epub_row['owner'] != username:
+        abort(403)
+
+    row = db.execute(
+        'SELECT chapter_number, word_index FROM speed_reading_progress '
+        'WHERE username = ? AND epubid = ?', (username, epub_id)
+    ).fetchone()
+
+    if row:
+        return jsonify({'chapterNumber': row['chapter_number'],
+                        'wordIndex': row['word_index']})
+    return jsonify({'chapterNumber': 1, 'wordIndex': 0})
+
+
+@app.route('/speed-reading/progress/<int:epub_id>', methods=['PUT'])
+def update_speed_reading_progress(epub_id):
+    """Update (upsert) the user's reading position in an epub.
+
+    **PUT** ``/speed-reading/progress/<epub_id>``
+
+    Expects JSON body with ``chapterNumber`` (int) and ``wordIndex`` (int).
+
+    :param epub_id: ID of the epub.
+    :status 200: Progress updated.
+    :status 400: Missing or invalid fields.
+    :status 403: Not authenticated or not the epub owner.
+    :status 404: Epub not found.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    db = get_db()
+    epub_row = db.execute(
+        'SELECT owner FROM epubs WHERE epubid = ?', (epub_id,)
+    ).fetchone()
+    if not epub_row:
+        abort(404)
+    if epub_row['owner'] != username:
+        abort(403)
+
+    body = request.get_json(silent=True) or {}
+    chapter_number = body.get('chapterNumber')
+    word_index = body.get('wordIndex')
+
+    if chapter_number is None or word_index is None:
+        return jsonify({'error': 'missing_fields',
+                        'message': 'chapterNumber and wordIndex are required'}), 400
+    if not isinstance(chapter_number, int) or not isinstance(word_index, int):
+        return jsonify({'error': 'invalid_fields',
+                        'message': 'chapterNumber and wordIndex must be integers'}), 400
+
+    db.execute(
+        'INSERT INTO speed_reading_progress (username, epubid, chapter_number, word_index, updated_at) '
+        'VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) '
+        'ON CONFLICT(username, epubid) DO UPDATE SET '
+        'chapter_number = excluded.chapter_number, word_index = excluded.word_index, '
+        'updated_at = excluded.updated_at',
+        (username, epub_id, chapter_number, word_index)
+    )
+    db.commit()
+
+    return jsonify({'chapterNumber': chapter_number, 'wordIndex': word_index})
+
+
 @app.errorhandler(HTTPException)
 def handle_http_exception(e: HTTPException):
     """Return a JSON error body for all HTTP exceptions.
@@ -2051,6 +2243,13 @@ try:
     app.add_url_rule('/api/posts/<post_id>', endpoint='post_detail_api', view_func=post_detail, methods=['GET', 'DELETE'])
     app.add_url_rule('/api/posts/<post_id>/like', endpoint='post_like_api', view_func=post_like, methods=['POST', 'DELETE'])
     app.add_url_rule('/api/books/search', endpoint='search_books_api', view_func=search_books, methods=['GET'])
+    app.add_url_rule('/api/epub', endpoint='epub_upload_api', view_func=epub_upload, methods=['POST'])
+    app.add_url_rule('/api/epub/<epub_id>', endpoint='epub_detail_api', view_func=epub_detail, methods=['GET'])
+    app.add_url_rule('/api/epub/<epub_id>/chapters', endpoint='epub_chapters_api', view_func=epub_chapters, methods=['GET'])
+    app.add_url_rule('/api/epubs', endpoint='epub_list_api', view_func=epub_list, methods=['GET'])
+    app.add_url_rule('/api/epub/<int:epub_id>/chapter/<int:chapter_num>/text', endpoint='epub_chapter_text_api', view_func=epub_chapter_text, methods=['GET'])
+    app.add_url_rule('/api/speed-reading/progress/<int:epub_id>', endpoint='get_speed_reading_progress_api', view_func=get_speed_reading_progress, methods=['GET'])
+    app.add_url_rule('/api/speed-reading/progress/<int:epub_id>', endpoint='update_speed_reading_progress_api', view_func=update_speed_reading_progress, methods=['PUT'])
 except Exception:
     # if handlers are not defined yet during import-time, ignore
     pass
