@@ -191,7 +191,7 @@ struct RecommendationDetailView: View {
         guard !isSavingToLibrary else { return }
         isSavingToLibrary = true
         didConfirmLibraryAdd = false
-        Task { @MainActor in
+        Task {
             try? await Task.sleep(nanoseconds: 400_000_000)
             let userBook = UserBook(
                 title: book.title,
