@@ -154,7 +154,7 @@ final class MockAPIClient: APIClientProtocol {
                 title: "Mock result for \"\(trimmed)\"",
                 authors: ["Kiwi Fruit"],
                 isbn13: nil,
-                genres: nil
+                genres: nil,
                 coverUrl: nil
             )
         ]
@@ -740,7 +740,16 @@ final class RESTAPIClient: APIClientProtocol {
             }
         }
 
-        return partials.map { BookSearchResult(id: $0.id, title: $0.title, authors: $0.authors, isbn13: $0.isbn13, coverUrl: $0.coverUrl) }
+        return partials.map {
+            BookSearchResult(
+                id: $0.id,
+                title: $0.title,
+                authors: $0.authors,
+                isbn13: $0.isbn13,
+                genres: nil,
+                coverUrl: $0.coverUrl
+            )
+        }
     }
 
     /// Try Google Books volumes API to obtain a thumbnail for an ISBN.

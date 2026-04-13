@@ -43,8 +43,6 @@ struct ProfileView: View {
         URL(string: "https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&q=80&w=200&h=300")
     ]
 
-    @Environment(\.userBooksStore) private var userBooksStore
-
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 0) {
