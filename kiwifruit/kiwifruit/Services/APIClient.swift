@@ -83,6 +83,8 @@ protocol APIClientProtocol: Sendable {
     func savePreferences(_ preferences: UserPreferences) async throws
     /// Uploads an epub file to the server for background parsing.
     func uploadEpub(fileData: Data, filename: String) async throws -> EpubUploadResponse
+    /// Fetches a book description from OpenLibrary using title and author.
+    func fetchBookDescription(title: String, author: String) async throws -> String
     /// Returns all epubs belonging to the current user.
     func fetchEpubs() async throws -> [EpubUploadResponse]
     /// Returns the status/detail of a single epub.
@@ -152,6 +154,7 @@ final class MockAPIClient: APIClientProtocol {
                 title: "Mock result for \"\(trimmed)\"",
                 authors: ["Kiwi Fruit"],
                 isbn13: nil,
+                genres: nil,
                 coverUrl: nil
             )
         ]
@@ -220,6 +223,10 @@ final class MockAPIClient: APIClientProtocol {
     }
     func uploadEpub(fileData: Data, filename: String) async throws -> EpubUploadResponse {
         return EpubUploadResponse(id: "1", title: "Mock Book", author: "Mock Author", status: "LOADING", originalFilename: filename, createdAt: "2026-01-01T00:00:00Z")
+    }
+    func fetchBookDescription(title: String, author: String) async throws -> String {
+        try await Task.sleep(nanoseconds: 100 * 1_000_000)
+        return "This is a captivating novel that will take you on an unforgettable journey. The author masterfully weaves together compelling characters and intricate plots to create a story that resonates with readers of all ages."
     }
     func fetchEpubs() async throws -> [EpubUploadResponse] {
         return [
@@ -733,7 +740,16 @@ final class RESTAPIClient: APIClientProtocol {
             }
         }
 
-        return partials.map { BookSearchResult(id: $0.id, title: $0.title, authors: $0.authors, isbn13: $0.isbn13, coverUrl: $0.coverUrl) }
+        return partials.map {
+            BookSearchResult(
+                id: $0.id,
+                title: $0.title,
+                authors: $0.authors,
+                isbn13: $0.isbn13,
+                genres: nil,
+                coverUrl: $0.coverUrl
+            )
+        }
     }
 
     /// Try Google Books volumes API to obtain a thumbnail for an ISBN.
@@ -876,6 +892,43 @@ final class RESTAPIClient: APIClientProtocol {
         return try decoder.decode(EpubUploadResponse.self, from: data)
     }
 
+    func fetchBookDescription(title: String, author: String) async throws -> String {
+        guard var comps = URLComponents(
+            url: baseURL.appendingPathComponent("/books/description"),
+            resolvingAgainstBaseURL: false
+        ) else { throw URLError(.badURL) }
+
+        comps.queryItems = [
+            URLQueryItem(name: "title", value: title),
+            URLQueryItem(name: "author", value: author)
+        ]
+
+        guard let url = comps.url else { throw URLError(.badURL) }
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            let bodyText = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+            print("fetchBookDescription failed HTTP \(http.statusCode): \(bodyText)")
+            throw URLError(.badServerResponse)
+        }
+
+        do {
+            // Decode as a dictionary with flexible value types
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            if let description = json?["description"] as? String {
+                return description
+            }
+            return "No description available"
+        } catch {
+            print("Failed to decode book description response: \(error)")
+            print("Response data: \(String(data: data, encoding: .utf8) ?? "<non-utf8>")")
+            throw error
+         }
+    }
     func fetchEpubs() async throws -> [EpubUploadResponse] {
         let url = baseURL.appendingPathComponent("/epubs")
         var req = URLRequest(url: url)
@@ -956,7 +1009,7 @@ final class RESTAPIClient: APIClientProtocol {
 enum AppAPI {
     /// Default API server base URL for local development.
     static let defaultBaseURL: URL = {
-        guard let url = URL(string: "http://127.0.0.1:5000") else {
+        guard let url = URL(string: "http://127.0.0.1:5001") else {
             fatalError("Invalid default API base URL")
         }
         return url
