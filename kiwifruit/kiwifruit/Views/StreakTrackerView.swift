@@ -138,17 +138,10 @@ struct StreakTrackerView: View {
                             let isActive = day.map { displayActiveDays.contains($0) } ?? false
 
                             if let day {
-                                NavigationLink(destination: MoodDayDetailView(
-                                    date: dateForDay(day) ?? Date(),
-                                    sessions: moodSessionsForDay(day),
-                                    isReadingDay: isActive
-                                )) {
-                                    Circle()
-                                        .fill(isActive ? StreakDesign.kiwi : Color.clear)
-                                        .overlay(Circle().stroke(StreakDesign.border, lineWidth: 1.5))
-                                        .frame(width: 32, height: 32)
-                                }
-                                .buttonStyle(.plain)
+                                Circle()
+                                    .fill(isActive ? StreakDesign.kiwi : Color.clear)
+                                    .overlay(Circle().stroke(StreakDesign.border, lineWidth: 1.5))
+                                    .frame(width: 32, height: 32)
                             } else {
                                 Circle()
                                     .fill(Color.clear)

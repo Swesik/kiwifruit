@@ -191,6 +191,14 @@ final class MoodMapCaptureService: NSObject {
         }
         let votes = moodVotes[mood] ?? 0
         let avgConf = votes > 0 ? (moodConfSum[mood] ?? 0.0) / Double(votes) : 0.0
+
+        // Tired ≤ 30% → treat as focused.
+        if mood == .tired, Double(votes) <= Double(totalFrames) * 0.30 {
+            let focusedVotes = moodVotes[.focused] ?? 0
+            let focusedConf = (moodConfSum[.focused] ?? 0.0) / Double(max(1, focusedVotes))
+            return (.focused, focusedConf)
+        }
+
         return (mood, avgConf)
     }
 
@@ -206,8 +214,22 @@ final class MoodMapCaptureService: NSObject {
         moodConfSum[mood, default: 0.0] += confidence
         totalFrames += 1
 
-        guard let (dominantMood, count) = moodVotes.max(by: { $0.value < $1.value }),
-              Double(count) >= Double(totalFrames) * 0.60 else {
+        guard let (dominantMood, count) = moodVotes.max(by: { $0.value < $1.value }) else {
+            return
+        }
+        let dominantPct = Double(count) / Double(totalFrames)
+
+        // Tired ≤ 30% → always show focused (focus has priority).
+        if let tiredVotes = moodVotes[.tired], Double(tiredVotes) <= Double(totalFrames) * 0.30 {
+            detectedMood = .focused
+            let focusedVotes = moodVotes[.focused] ?? 0
+            detectionConfidence = focusedVotes > 0 ? (moodConfSum[.focused] ?? 0.0) / Double(focusedVotes) : 0.0
+            stableFrames = 0
+            return
+        }
+
+        // Need 60% majority before committing to any mood.
+        guard dominantPct >= 0.60 else {
             detectedMood = nil
             stableFrames = 0
             return
