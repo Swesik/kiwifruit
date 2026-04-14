@@ -10,6 +10,7 @@ struct kiwifruitApp: App {
     private let userPreferencesStore = UserPreferencesStore()
     private let readingSessionStore = ReadingSessionStore()
     private let recommendationsStore = RecommendationsStore()
+    private let userBooksStore = UserBooksStore()
     private let challengeViewModel = ChallengeViewModel()
 
     var body: some Scene {
@@ -22,6 +23,7 @@ struct kiwifruitApp: App {
                 .environment(\.userPreferencesStore, userPreferencesStore)
                 .environment(\.readingSessionStore, readingSessionStore)
                 .environment(\.recommendationsStore, recommendationsStore)
+                .environment(\.userBooksStore, userBooksStore)
                 .environment(\.challengeViewModel, challengeViewModel)
         }
     }
