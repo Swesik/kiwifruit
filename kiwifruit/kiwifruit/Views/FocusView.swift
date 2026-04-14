@@ -35,6 +35,9 @@ struct FocusView: View {
     @State private var moodCaptureUpdateExistingSession = false
     /// Camera capture service — started when mood session begins, stopped when ended.
     @State private var moodCaptureService: MoodMapCaptureService?
+    /// Set to true once `moodCaptureService` has been created and `startSession()` has had a chance to run its async permission callback.
+    /// Used to safely gate `showingMoodCameraActive` without a false-negative on async permission flow.
+    @State private var moodCaptureReady = false
     /// Face suggestion passed into the post-session mood sheet (after “End & choose mood”).
     @State private var moodPickerSuggestedMood: QuickMood?
     @State private var moodPickerSuggestedConfidencePercent: Int?
@@ -85,6 +88,7 @@ struct FocusView: View {
                 moodCaptureService?.clearError()
                 moodCaptureService?.stopSession()
                 moodCaptureService = nil
+                moodCaptureReady = false
                 moodStore.endMoodMap()
             }
         } message: {
@@ -617,7 +621,8 @@ struct FocusView: View {
     }
 
     private var moodCameraActiveSheet: some View {
-        let currentMood = moodCaptureService?.detectedMood
+        // Live emotion: displays directly per frame during camera preview without waiting for votes.
+        let currentMood = moodCaptureService?.liveMood
 
         return VStack(spacing: 24) {
             // Top bar
@@ -629,6 +634,7 @@ struct FocusView: View {
                 Button(action: {
                     moodCaptureService?.stopSession()
                     moodCaptureService = nil
+                    moodCaptureReady = false
                     moodStore.cancelMoodMap()
                     showingMoodCameraActive = false
                 }) {
@@ -696,7 +702,7 @@ struct FocusView: View {
             // Detected mood card
             VStack(spacing: 12) {
                 if let mood = currentMood {
-                    let conf = Int((moodCaptureService?.detectionConfidence ?? 0) * 100)
+                    let conf = Int((moodCaptureService?.liveConfidence ?? 0) * 100)
                     HStack {
                         Text("Detected:")
                             .font(.subheadline).fontWeight(.bold)
@@ -733,6 +739,7 @@ struct FocusView: View {
                 moodStore.endMoodMap()
                 moodCaptureService?.stopSession()
                 moodCaptureService = nil
+                moodCaptureReady = false
                 if let snap, let m = snap.mood {
                     moodPickerSuggestedMood = m
                     moodPickerSuggestedConfidencePercent = max(0, min(100, Int(snap.confidence * 100)))
@@ -868,12 +875,7 @@ struct FocusView: View {
                 moodStore.startMoodMap()
                 moodCaptureService = MoodMapCaptureService()
                 moodCaptureService?.startSession()
-                // Deny alert before showing the camera sheet.
-                if moodCaptureService?.cameraError != nil {
-                    showCameraPermissionDenied = true
-                } else {
-                    showingMoodCameraActive = true
-                }
+                moodCaptureReady = true
             }
             .font(.headline)
             .fontWeight(.bold)
@@ -891,6 +893,15 @@ struct FocusView: View {
             )
         }
         .padding(.bottom, 80)
+        .onChange(of: moodCaptureReady) { _, ready in
+            guard ready else { return }
+            if moodCaptureService?.cameraError != nil {
+                showCameraPermissionDenied = true
+            } else {
+                showingMoodCameraActive = true
+            }
+            moodCaptureReady = false
+        }
     }
 
     private var completionView: some View {
