@@ -154,12 +154,6 @@ struct StreakTrackerView: View {
                     .padding(.horizontal, 16)
                 }
 
-                Text("Tap a day to view mood session results")
-                    .font(.caption).fontWeight(.semibold)
-                    .foregroundColor(StreakDesign.kiwi)
-                    .padding(.top, -16)
-
-                Spacer(minLength: 32)
             }
             .padding(.horizontal, 24)
         }
