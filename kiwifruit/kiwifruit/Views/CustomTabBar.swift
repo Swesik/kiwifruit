@@ -2,7 +2,6 @@ import SwiftUI
 
 struct CustomTabBar: View {
     @Binding var selection: Int
-
     private let items: [(label: String, tag: Int)] = [
         ("Profile", 0), ("Discover", 1), ("Home", 2), ("Challenges", 3), ("Focus", 4)
     ]

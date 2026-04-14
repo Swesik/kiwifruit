@@ -8,11 +8,13 @@ private let allGenres = [
 struct SettingsView: View {
     @Environment(\.userPreferencesStore) private var store: UserPreferencesStore
     @Environment(\.recommendationsStore) private var recommendationsStore
+    @Environment(\.sessionStore) private var session: SessionStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var dailyGoal: Int = 30
     @State private var selectedGenres: Set<String> = []
     @State private var isSaving = false
+    @State private var showingSignOutConfirmation = false
 
     var body: some View {
         NavigationStack {
@@ -49,6 +51,26 @@ struct SettingsView: View {
                     Text("Used to personalise book recommendations.")
                         .font(.caption)
                 }
+
+                Section {
+                    Button(role: .destructive) {
+                        showingSignOutConfirmation = true
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Text("Sign Out")
+                                .fontWeight(.bold)
+                            Spacer()
+                        }
+                    }
+                }
+            }
+            .confirmationDialog("Are you sure you want to sign out?", isPresented: $showingSignOutConfirmation, titleVisibility: .visible) {
+                Button("Sign Out", role: .destructive) {
+                    session.clear()
+                    dismiss()
+                }
+                Button("Cancel", role: .cancel) {}
             }
             .navigationTitle("Settings")
             .toolbar {

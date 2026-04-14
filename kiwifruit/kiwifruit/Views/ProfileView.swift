@@ -22,7 +22,9 @@ struct ProfileView: View {
     let user: User
 
     @Environment(\.userBooksStore) private var userBooksStore
+    @Environment(\.sessionStore) private var session: SessionStore
     @State private var showingSettings = false
+    @State private var showingSignIn = false
 
     private let recentUpdates: [RecentUpdateItem] = [
         RecentUpdateItem(
@@ -44,18 +46,44 @@ struct ProfileView: View {
     ]
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 0) {
-                profileHeaderSection
-                moodSessionHistorySection
-                recentUpdatesSection
-                myLibrarySection
+        if session.isGuest {
+            VStack(spacing: 20) {
+                Spacer()
+                Text("Please sign in to see profile")
+                    .font(.title3).fontWeight(.bold)
+                    .foregroundColor(ProfileDesign.uiText.opacity(0.6))
+                Button("Sign In") {
+                    showingSignIn = true
+                }
+                .font(.headline).fontWeight(.black)
+                .foregroundColor(ProfileDesign.uiText)
+                .padding(.horizontal, 32).padding(.vertical, 12)
+                .background(ProfileDesign.kiwi)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(ProfileDesign.border, lineWidth: 2))
+                .sketchShadow()
+                Spacer()
             }
-        }
-        .background(Color.white)
-        .toolbar(.hidden, for: .navigationBar)
-        .sheet(isPresented: $showingSettings) {
-            SettingsView()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.white)
+            .toolbar(.hidden, for: .navigationBar)
+            .fullScreenCover(isPresented: $showingSignIn) {
+                LoginView()
+            }
+        } else {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    profileHeaderSection
+                    moodSessionHistorySection
+                    recentUpdatesSection
+                    myLibrarySection
+                }
+            }
+            .background(Color.white)
+            .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showingSettings) {
+                SettingsView()
+            }
         }
     }
 

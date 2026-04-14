@@ -29,8 +29,10 @@ struct ContentView: View {
             CustomTabBar(selection: $selection)
         }
         .onAppear {
-            if session.isValidSession && session.userId != nil { 
-                Task { await postsStore.loadInitial() } 
+            if session.isGuest {
+                selection = 2
+            } else if session.isValidSession && session.userId != nil {
+                Task { await postsStore.loadInitial() }
                 Task { await userPreferencesStore.load() }
             }
         }
@@ -52,7 +54,7 @@ struct ContentView: View {
                 readingSessionStore.loadFriendSessions()
             }
         }
-        .fullScreenCover(isPresented: Binding(get: { !(session.isValidSession && session.userId != nil) }, set: { _ in })) {
+        .fullScreenCover(isPresented: Binding(get: { !session.isValidSession }, set: { _ in })) {
             LoginView()
         }
     }

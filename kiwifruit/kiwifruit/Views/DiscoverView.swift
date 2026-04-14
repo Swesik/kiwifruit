@@ -35,7 +35,9 @@ struct DiscoverView: View {
                         resultsLimit = min(3, newCount)
                     }
 
-                recommendationsSection
+                if !sessionStore.isGuest {
+                    recommendationsSection
+                }
             }
             .padding(.horizontal, 24)
             .safeAreaPadding(.top, 16)

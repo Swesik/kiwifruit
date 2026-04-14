@@ -926,14 +926,18 @@ struct FocusView: View {
                     .buttonStyle(.plain)
                 }
 
-                challengeProgressSection
+                if !session.isGuest {
+                    challengeProgressSection
+                }
 
                 Spacer()
                     .frame(height: 40)
             }
         }
         .task {
-            await challengeViewModel.updateProgress()
+            if !session.isGuest {
+                await challengeViewModel.updateProgress()
+            }
             await recommendationsStore.load()
         }
         .alert("Session not saved", isPresented: Binding(
