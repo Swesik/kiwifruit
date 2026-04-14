@@ -2,6 +2,10 @@ import Foundation
 import Observation
 import SwiftUI
 
+/// Local library persisted in UserDefaults.
+///
+/// **This branch:** only ``RecommendationDetailView`` adds books here (recommendations flow).
+/// **After merge:** Varun’s Discover search “ADD” can call the same store—do not duplicate search-row UI here; merge brings it.
 @Observable
 final class UserBooksStore {
     private(set) var items: [UserBook] = []

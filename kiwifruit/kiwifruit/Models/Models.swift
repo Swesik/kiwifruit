@@ -34,6 +34,9 @@ struct BookSearchResult: Identifiable, Codable, Hashable {
     let title: String
     let authors: [String]?
     let isbn13: String?
+    let genres: [String]?
+
+/// Local library row (UserDefaults). Populated from recommendation detail on this branch; search-row ADD comes from Varun merge (same type).
     let coverUrl: String?
 }
 
@@ -64,6 +67,8 @@ struct BookRecommendation: Identifiable, Codable, Hashable {
     let author: String
     /// HTTPS URL string for cover art (`cover_url` in JSON).
     let coverUrl: String
+    /// AI-generated explanation for why this book is recommended (50-100 words)
+    let whyRecommended: String?
 
     var id: Int { bookId }
 }

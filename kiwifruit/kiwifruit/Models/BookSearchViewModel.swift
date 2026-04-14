@@ -25,6 +25,7 @@ final class BookSearchViewModel {
         do {
             results = try await api.searchBooks(query: query)
         } catch {
+            results = []
             errorMessage = "Failed to search books."
         }
     }

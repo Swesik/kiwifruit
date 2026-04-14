@@ -6,6 +6,7 @@ struct ContentView: View {
     @Environment(\.readingSessionStore) private var readingSessionStore: ReadingSessionStore
     @Environment(\.userPreferencesStore) private var userPreferencesStore: UserPreferencesStore
     @Environment(\.recommendationsStore) private var recommendationsStore: RecommendationsStore
+    @Environment(\.userBooksStore) private var userBooksStore: UserBooksStore
     @State private var selection: Int = 2
 
     @State private var bookSearchViewModel = BookSearchViewModel(api: AppAPI.shared)
@@ -40,6 +41,7 @@ struct ContentView: View {
                 Task { await recommendationsStore.load() }
             } else {
                 recommendationsStore.reset()
+                userBooksStore.reset()
             }
         }
         .onChange(of: session.isValidSession) { _, valid in
