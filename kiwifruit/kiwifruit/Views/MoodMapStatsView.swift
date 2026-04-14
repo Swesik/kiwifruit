@@ -42,9 +42,9 @@ struct MoodMapStatsView: View {
         .onAppear { moodStore.refreshSessionsIfNeeded() }
     }
 
-    /// Most recent session that has camera-captured mood distribution data.
+    /// Most recent session that has camera-captured timeline data.
     private var lastCameraSession: MoodMapSession? {
-        moodStore.savedSessions.first { ($0.moodDistribution?.values.reduce(0, +) ?? 0) > 0 }
+        moodStore.savedSessions.first { !($0.moodTimeline ?? []).isEmpty }
     }
 
     // MARK: - Header
@@ -78,8 +78,9 @@ struct MoodMapStatsView: View {
 
     private func lastSessionSummarySection(_ session: MoodMapSession) -> some View {
         let sessionDuration = session.endedAt.timeIntervalSince(session.startedAt)
-        let distribution = session.moodDistribution ?? [:]
-        let totalFrames = distribution.values.reduce(0, +)
+        let timeline = session.moodTimeline ?? []
+        let moodDurations = moodStore.moodDurations(for: session)
+        let totalDuration = moodDurations.values.reduce(0, +)
 
         return VStack(alignment: .leading, spacing: 16) {
             // Section title
@@ -93,8 +94,8 @@ struct MoodMapStatsView: View {
             }
 
             VStack(alignment: .leading, spacing: 16) {
-                // Distribution bars
-                if totalFrames > 0 {
+                // Distribution bars — derived from timeline for consistency
+                if totalDuration > 0 {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Mood Breakdown")
                             .font(.caption).fontWeight(.bold)
@@ -103,9 +104,9 @@ struct MoodMapStatsView: View {
                             .kerning(0.5)
 
                         ForEach(QuickMood.allCases) { mood in
-                            let count = distribution[mood.rawValue] ?? 0
-                            if count > 0 {
-                                let pct = Double(count) / Double(totalFrames)
+                            let dur = moodDurations[mood.rawValue] ?? 0
+                            if dur > 0 {
+                                let pct = dur / totalDuration
                                 HStack(spacing: 10) {
                                     Text(moodEmoji(mood))
                                         .font(.system(size: 14))
@@ -136,7 +137,7 @@ struct MoodMapStatsView: View {
                 }
 
                 // Timeline strip
-                if let timeline = session.moodTimeline, timeline.count >= 1, sessionDuration > 0 {
+                if !timeline.isEmpty, sessionDuration > 0 {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Mood Timeline")
                             .font(.caption).fontWeight(.bold)

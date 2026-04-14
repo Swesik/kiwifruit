@@ -115,6 +115,21 @@ public final class MoodSessionStore {
         return savedSessions.filter { cal.isDate($0.endedAt, inSameDayAs: date) }
     }
 
+    // MARK: - Timeline Analysis
+
+    /// Time-weighted mood durations derived from a session's timeline.
+    /// Returns mood rawValue → total seconds that mood was stably detected.
+    public func moodDurations(for session: MoodMapSession) -> [String: Double] {
+        guard let timeline = session.moodTimeline, !timeline.isEmpty else { return [:] }
+        let sessionDuration = session.endedAt.timeIntervalSince(session.startedAt)
+        var durations: [String: Double] = [:]
+        for (idx, event) in timeline.enumerated() {
+            let nextStart = idx + 1 < timeline.count ? timeline[idx + 1].secondsFromStart : sessionDuration
+            durations[event.mood.rawValue, default: 0] += max(nextStart - event.secondsFromStart, 0)
+        }
+        return durations
+    }
+
     // MARK: - Private
 
     private var _hasLoadedSessions = false
