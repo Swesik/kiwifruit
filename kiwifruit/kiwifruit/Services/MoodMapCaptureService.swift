@@ -2,6 +2,7 @@ import AVFoundation
 import Foundation
 import Vision
 import Observation
+import Synchronization
 import Mentalist
 
 // MARK: - Main service class: MoodMapCaptureService
@@ -46,9 +47,14 @@ final class MoodMapCaptureService: NSObject {
     /// Video frame callback queue — background serial queue to avoid frame accumulation.
     private let videoQueue = DispatchQueue(label: "com.kiwifruit.moodmap.capture", qos: .userInteractive)
 
-    /// Timestamp of last processed frame (seconds), used for frame rate limiting.
+    /// Timestamp (CACurrentMediaTime seconds) of the most recently processed
+    /// frame. Wrapped in a Mutex so the read-modify-write in
+    /// ``captureOutput(_:didOutput:from:)`` is atomic, and so the field can
+    /// be reached from the nonisolated delegate callback without the
+    /// ``nonisolated(unsafe)`` escape hatch — the lock makes the concurrency
+    /// contract explicit instead of relying on "the videoQueue is serial".
     @ObservationIgnored
-    nonisolated(unsafe) private var lastProcessedTimestamp: TimeInterval = 0
+    private let lastProcessedTimestamp = Mutex<TimeInterval>(0)
 
     /// Emotion vote counter.
     private var moodVotes: [QuickMood: Int] = [.focused: 0, .inspired: 0, .tired: 0]
@@ -111,7 +117,7 @@ final class MoodMapCaptureService: NSObject {
         moodVotes = [.focused: 0, .inspired: 0, .tired: 0]
         moodConfSum = [.focused: 0.0, .inspired: 0.0, .tired: 0.0]
         totalFrames = 0
-        lastProcessedTimestamp = 0
+        lastProcessedTimestamp.withLock { $0 = 0 }
     }
 
     // MARK: Session setup (private)
@@ -222,9 +228,15 @@ extension MoodMapCaptureService: AVCaptureVideoDataOutputSampleBufferDelegate {
         from connection: AVCaptureConnection
     ) {
         // Frame rate limit: at least 0.15 seconds between processing (~6-7 fps).
+        // Read-modify-write atomically so two overlapping delegate callbacks
+        // can never both pass the gate in the same window.
         let now = CACurrentMediaTime()
-        if now - lastProcessedTimestamp < 0.15 { return }
-        lastProcessedTimestamp = now
+        let shouldSkip = lastProcessedTimestamp.withLock { last -> Bool in
+            if now - last < 0.15 { return true }
+            last = now
+            return false
+        }
+        if shouldSkip { return }
 
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
