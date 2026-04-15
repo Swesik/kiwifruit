@@ -5,9 +5,11 @@ import UIKit
 import OSLog
 import Mentalist
 
-// Logger at file scope so nonisolated static members can reach it without
-// inheriting the enclosing type's actor isolation. Logger itself is Sendable.
-private let analyzerLog = Logger(subsystem: "com.kiwifruit.moodmap", category: "MentalistEmotionAnalyzer")
+// File-scope logger. Explicitly `nonisolated` because the project is
+// configured with default-MainActor isolation (Swift 6.2) — otherwise
+// this `let` would inherit MainActor and the `nonisolated static`
+// analyze() entry point below couldn't reach it. Logger is Sendable.
+nonisolated private let analyzerLog = Logger(subsystem: "com.kiwifruit.moodmap", category: "MentalistEmotionAnalyzer")
 
 // MARK: - MentalistEmotionAnalyzer
 
