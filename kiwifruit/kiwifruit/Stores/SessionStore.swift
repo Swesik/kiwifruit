@@ -14,6 +14,8 @@ final class SessionStore {
     private(set) var currentUser: User? = nil
     // Whether the saved token/session has been validated against the server
     private(set) var isValidSession: Bool = false
+    // Whether the user is browsing as a guest (no account)
+    private(set) var isGuest: Bool = false
     // (no forced-login flag)
 
     let apiClient: RESTAPIClient
@@ -65,8 +67,16 @@ final class SessionStore {
         }
         apiClient.setAuthToken(token)
         AppAPI.shared = apiClient
+        isGuest = false
         isValidSession = true
         print("SessionStore.save: saved token=\(token.prefix(8)).. userId=\(user?.id ?? "<nil>") username=\(user?.username ?? "<nil>")")
+    }
+
+    func joinAsGuest() {
+        clear()
+        isGuest = true
+        isValidSession = true
+        print("SessionStore.joinAsGuest: entered guest mode")
     }
 
     func clear() {
@@ -74,6 +84,7 @@ final class SessionStore {
         userId = nil
         currentUser = nil
         isValidSession = false
+        isGuest = false
         UserDefaults.standard.removeObject(forKey: tokenKey)
         UserDefaults.standard.removeObject(forKey: userKey)
         UserDefaults.standard.removeObject(forKey: userJSONKey)

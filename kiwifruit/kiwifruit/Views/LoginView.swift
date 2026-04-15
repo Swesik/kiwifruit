@@ -37,6 +37,15 @@ struct LoginView: View {
                     Button("Create Account") { showingSignUp = true }
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                Button("Join as Guest") {
+                    session.joinAsGuest()
+                    dismiss()
+                }
+                .font(.subheadline).fontWeight(.bold)
+                .foregroundColor(.secondary)
+                .padding(.bottom, 16)
+            }
             .sheet(isPresented: $showingSignUp) { SignUpView() }
             .alert("Sign In Failed", isPresented: $showErrorAlert) {
                 Button("OK", role: .cancel) {}

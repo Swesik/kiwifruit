@@ -11,6 +11,7 @@ private enum ChallengesDesign {
 
 struct ChallengesView: View {
     @Environment(\.challengeViewModel) private var viewModel: ChallengeViewModel
+    @Environment(\.sessionStore) private var session: SessionStore
     @State private var showCreateSheet = false
 
     var body: some View {
@@ -18,11 +19,13 @@ struct ChallengesView: View {
             VStack(alignment: .leading, spacing: 0) {
                 headerSection
                 VStack(alignment: .leading, spacing: 32) {
-                    adaptiveChallengeSection
-                    yourChallengesSection
-                    if !viewModel.completedChallenges.isEmpty {
-                        completedChallengesSection
+                    if !session.isGuest {
+                        yourChallengesSection
+                        if !viewModel.completedChallenges.isEmpty {
+                            completedChallengesSection
+                        }
                     }
+                    adaptiveChallengeSection
                     discoverMoreSection
                 }
                 .padding(.horizontal, 24)
@@ -51,10 +54,12 @@ struct ChallengesView: View {
                 .font(.system(size: 36, weight: .black))
                 .foregroundColor(ChallengesDesign.uiText)
             Spacer()
-            NavigationLink(destination: StreakTrackerView(streakDays: viewModel.streak, activeDays: viewModel.activeDays, hasSessionToday: viewModel.hasSessionToday, firstSessionMonth: viewModel.firstSessionMonth, sessionActiveDays: viewModel.sessionActiveDays)) {
-                streakBadge
+            if !session.isGuest {
+                NavigationLink(destination: StreakTrackerView(streakDays: viewModel.streak, activeDays: viewModel.activeDays, hasSessionToday: viewModel.hasSessionToday, firstSessionMonth: viewModel.firstSessionMonth, sessionActiveDays: viewModel.sessionActiveDays)) {
+                    streakBadge
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 24)
         .padding(.top, 48)
