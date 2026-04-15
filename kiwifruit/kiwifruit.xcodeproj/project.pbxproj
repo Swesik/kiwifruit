@@ -23,32 +23,8 @@
 		5E766B9A2F2C5EF500A95C4D /* kiwifruit/Views/FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C2D /* kiwifruit/Views/FeedView.swift */; };
 		5E766B9A2F2C5EF500A95C4E /* kiwifruit/Views/PostRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C2E /* kiwifruit/Views/PostRow.swift */; };
 		5E766B9A2F2C5EF500A95C4F /* kiwifruit/Views/ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C2F /* kiwifruit/Views/ProfileView.swift */; };
-		5E766B9A2F2C5EF500A95C50 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C51 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C52 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C53 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C54 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C55 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C56 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C57 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C58 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C59 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C5A /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C5B /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C5C /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C5D /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C5E /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C5F /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C60 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C61 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C62 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C63 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C64 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C65 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C66 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C67 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C68 /* (null) in Sources */ = {isa = PBXBuildFile; };
-		5E766B9A2F2C5EF500A95C69 /* (null) in Sources */ = {isa = PBXBuildFile; };
+		C168144F2F8EDF0F0063A115 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
+		C16819FE2F8EEDD30063A115 /* Mentalist in Frameworks */ = {isa = PBXBuildFile; productRef = C16819FD2F8EEDD30063A115 /* Mentalist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -77,10 +53,22 @@
 		74A094812F676FD60083D4B4 /* Exceptions for "kiwifruit" folder in "kiwifruit" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				FeedViewModel.swift,
+				Models/MockData.swift,
+				Models/Models.swift,
+				Services/APIClient.swift,
 				Stores/CommentsStore.swift,
 				Stores/LikesStore.swift,
 				Stores/PostsStore.swift,
 				Stores/SessionStore.swift,
+				Views/CommentsView.swift,
+				Views/ContentView.swift,
+				Views/CreatePostView.swift,
+				Views/FeedView.swift,
+				Views/kiwifruitApp.swift,
+				Views/LoginView.swift,
+				Views/PostRow.swift,
+				Views/ProfileView.swift,
 			);
 			target = 3E766B9D2F2C5EF500A95C1B /* kiwifruit */;
 		};
@@ -102,6 +90,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C16819FE2F8EEDD30063A115 /* Mentalist in Frameworks */,
+				C168144F2F8EDF0F0063A115 /* (null) in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -162,6 +152,7 @@
 			);
 			name = kiwifruit;
 			packageProductDependencies = (
+				C16819FD2F8EEDD30063A115 /* Mentalist */,
 			);
 			productName = kiwifruit;
 			productReference = 3E766B9E2F2C5EF500A95C1B /* kiwifruit.app */;
@@ -175,7 +166,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2620;
-				LastUpgradeCheck = 2620;
+				LastUpgradeCheck = 2640;
 				TargetAttributes = {
 					3E766B9D2F2C5EF500A95C1B = {
 						CreatedOnToolsVersion = 26.2;
@@ -191,6 +182,9 @@
 			);
 			mainGroup = 3E766B952F2C5EF500A95C1B;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C16819FC2F8EEDD30063A115 /* XCRemoteSwiftPackageReference "Mentalist" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3E766B9F2F2C5EF500A95C1B /* Products */;
 			projectDirPath = "";
@@ -232,33 +226,6 @@
 				5E766B9A2F2C5EF500A95C4D /* kiwifruit/Views/FeedView.swift in Sources */,
 				5E766B9A2F2C5EF500A95C4E /* kiwifruit/Views/PostRow.swift in Sources */,
 				5E766B9A2F2C5EF500A95C4F /* kiwifruit/Views/ProfileView.swift in Sources */,
-				5E766B9A2F2C5EF500A95C60 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C50 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C51 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C52 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C53 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C54 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C55 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C56 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C69 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C57 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C58 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C59 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C5A /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C5B /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C5C /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C5D /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C5E /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C5F /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C60 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C61 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C62 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C63 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C64 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C65 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C66 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C67 /* (null) in Sources */,
-				5E766B9A2F2C5EF500A95C68 /* (null) in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -300,6 +267,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = CF5NLBP3VX;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -317,12 +285,13 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
@@ -364,6 +333,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = CF5NLBP3VX;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -375,11 +345,12 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_VERSION = 6.0;
 				VALIDATE_PRODUCT = YES;
@@ -396,6 +367,7 @@
 				DEVELOPMENT_TEAM = NX9P7FRPSV;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = kiwi;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kiwifruit uses the camera to scan book barcodes, capture book title and author text, and recognize your expression for Mood Map.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Kiwifruit uses your location to suggest reading challenges that fit today's weather.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -428,9 +400,9 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = NX9P7FRPSV;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = kiwi;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kiwifruit uses the camera to scan book barcodes, capture book title and author text, and recognize your expression for Mood Map.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Kiwifruit uses your location to suggest reading challenges that fit today's weather.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -478,6 +450,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C16819FC2F8EEDD30063A115 /* XCRemoteSwiftPackageReference "Mentalist" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/enebin/Mentalist";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.1.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C16819FD2F8EEDD30063A115 /* Mentalist */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C16819FC2F8EEDD30063A115 /* XCRemoteSwiftPackageReference "Mentalist" */;
+			productName = Mentalist;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 3E766B962F2C5EF500A95C1B /* Project object */;
 }

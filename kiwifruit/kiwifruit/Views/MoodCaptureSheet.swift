@@ -146,7 +146,7 @@ struct MoodCaptureSheet: View {
 
             // Tap to change alternatives.
             VStack(alignment: .leading, spacing: 4) {
-                Text("Not you? Tap to change:")
+                Text("Tap to change:")
                     .font(.caption).fontWeight(.semibold)
                     .foregroundColor(MoodCaptureDesign.uiText.opacity(0.5))
 
