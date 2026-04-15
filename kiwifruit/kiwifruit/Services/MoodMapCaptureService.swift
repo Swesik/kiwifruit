@@ -276,36 +276,38 @@ extension MoodMapCaptureService: AVCaptureVideoDataOutputSampleBufferDelegate {
 
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
-        // Step 1: Use Vision to quickly detect face region (only detects face rectangle, no expression analysis).
-        // Mentalist requires a face image, so Vision crops the face region first before passing to Mentalist.
-        let request = VNDetectFaceRectanglesRequest { [weak self] request, error in
+        // Step 1: Use Vision to quickly detect the face rectangle. We do NOT
+        // capture `self` in this outer (task-isolated) closure — Swift 6
+        // flags capturing a MainActor-isolated `self` from a nonisolated
+        // context as a data race risk. Instead, compute the emotion result
+        // locally here and hand it off through a fresh `[weak self]`
+        // capture inside the MainActor hop.
+        let request = VNDetectFaceRectanglesRequest { request, error in
+            let faceFound: Bool
             if error != nil {
-                Task { @MainActor in
-                    self?.ingestNoFace()
-                }
-                return
+                faceFound = false
+            } else if let observations = request.results as? [VNFaceObservation], !observations.isEmpty {
+                faceFound = true
+            } else {
+                faceFound = false
             }
 
-            guard let observations = request.results as? [VNFaceObservation],
-                  observations.first != nil else {
-                Task { @MainActor in
-                    self?.ingestNoFace()
-                }
-                return
+            let emotionResult: (mood: QuickMood, confidence: Double)?
+            if faceFound {
+                emotionResult = MentalistEmotionAnalyzer.analyze(
+                    pixelBuffer: pixelBuffer,
+                    orientation: .leftMirrored
+                )
+            } else {
+                emotionResult = nil
             }
 
-            // Step 2: Crop the face region and pass to Mentalist for emotion analysis.
-            // Mentalist will call Vision internally for face detection, then output emotion via CoreML model.
-            let emotionResult = MentalistEmotionAnalyzer.analyze(
-                pixelBuffer: pixelBuffer,
-                orientation: .leftMirrored
-            )
-
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
                 if let (mood, confidence) = emotionResult {
-                    self?.ingestFace(mood: mood, confidence: confidence)
+                    self.ingestFace(mood: mood, confidence: confidence)
                 } else {
-                    self?.ingestNoFace()
+                    self.ingestNoFace()
                 }
             }
         }
