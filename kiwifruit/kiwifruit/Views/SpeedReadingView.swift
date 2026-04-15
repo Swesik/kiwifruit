@@ -279,10 +279,8 @@ struct SpeedReadingView: View {
                     .font(.system(size: 36, weight: .bold))
                     .foregroundColor(Color(hex: "2D3748"))
             } else {
-                GeometryReader { geo in
-                    wordDisplayView(fontSize: fittedFontSize(for: geo.size.width - 48))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
+                wordDisplayView
+                    .padding(.horizontal, 24)
             }
 
             Spacer()
@@ -364,7 +362,7 @@ struct SpeedReadingView: View {
 
     // MARK: - Word Display
 
-    private func wordDisplayView(fontSize: CGFloat) -> some View {
+    private var wordDisplayView: some View {
         let word = viewModel.currentWord
         let pivot = Self.pivotIndex(for: word)
         let chars = Array(word)
@@ -373,34 +371,17 @@ struct SpeedReadingView: View {
         let pivotChar = pivot < chars.count ? String(chars[pivot]) : ""
         let after = pivot + 1 < chars.count ? String(chars[(pivot + 1)...]) : ""
 
-        return HStack(spacing: 0) {
-            Text(before)
-                .font(.system(size: fontSize, weight: .bold, design: .monospaced))
-                .foregroundColor(Color(hex: "2D3748"))
-                .fixedSize()
-                .frame(minWidth: 0, maxWidth: .infinity, alignment: .trailing)
+        let maxSide = max(before.count, after.count)
+        let paddedBefore = String(repeating: " ", count: maxSide - before.count) + before
+        let paddedAfter = after + String(repeating: " ", count: maxSide - after.count)
 
-            Text(pivotChar)
-                .font(.system(size: fontSize, weight: .bold, design: .monospaced))
-                .foregroundColor(.red)
-                .fixedSize()
-
-            Text(after)
-                .font(.system(size: fontSize, weight: .bold, design: .monospaced))
-                .foregroundColor(Color(hex: "2D3748"))
-                .fixedSize()
-                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    /// Compute a font size that fits the longest segment within the available width.
-    private func fittedFontSize(for availableWidth: CGFloat) -> CGFloat {
-        let maxLen = viewModel.maxSegmentLength
-        guard maxLen > 0, availableWidth > 0 else { return 48 }
-        // Monospaced: each character ≈ 0.6 × fontSize
-        let fitted = availableWidth / (CGFloat(maxLen) * 0.6)
-        return min(48, max(12, floor(fitted)))
+        return (Text(paddedBefore).foregroundColor(Color(hex: "2D3748"))
+                + Text(pivotChar).foregroundColor(.red)
+                + Text(paddedAfter).foregroundColor(Color(hex: "2D3748")))
+            .font(.system(size: 48, weight: .bold, design: .monospaced))
+            .lineLimit(1)
+            .minimumScaleFactor(0.1)
+            .frame(maxWidth: .infinity)
     }
 
     /// Validate and commit the WPM text field value.
@@ -419,7 +400,7 @@ struct SpeedReadingView: View {
         let chars = Array(word)
         guard !chars.isEmpty else { return 0 }
 
-        let nonSpaceIndices = chars.indices.filter { !chars[$0].isWhitespace }
+        let nonSpaceIndices = chars.indices.filter { !chars[$0].isWhitespace && !chars[$0].isPunctuation }
         guard !nonSpaceIndices.isEmpty else { return 0 }
 
         return nonSpaceIndices[nonSpaceIndices.count / 2]
