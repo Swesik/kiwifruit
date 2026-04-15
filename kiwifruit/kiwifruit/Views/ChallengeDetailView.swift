@@ -11,6 +11,9 @@ struct ChallengeDetailView: View {
                 headerSection
                 VStack(alignment: .leading, spacing: 40) {
                     descriptionSection
+                    if challenge.reason != nil {
+                        whyThisSection
+                    }
                     timeWindowSection
                     progressSection
                     actionSection
@@ -58,6 +61,33 @@ struct ChallengeDetailView: View {
                 .font(.subheadline).fontWeight(.medium)
                 .foregroundColor(Color(hex: "2D3748"))
                 .lineSpacing(4)
+        }
+    }
+
+    // MARK: - Why this (adaptive only)
+
+    @ViewBuilder
+    private var whyThisSection: some View {
+        if let reason = challenge.reason {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(Color(hex: "A3C985"))
+                    Text("Why this?")
+                        .font(.title2).fontWeight(.black)
+                        .foregroundColor(Color(hex: "2D3748"))
+                }
+                Text(reason)
+                    .font(.subheadline).fontWeight(.semibold)
+                    .foregroundColor(Color(hex: "2D3748"))
+                    .lineSpacing(4)
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(hex: "E6F0DC"))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "2D3748"), lineWidth: 2))
+            }
         }
     }
 

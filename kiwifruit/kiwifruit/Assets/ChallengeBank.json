@@ -1,6 +1,6 @@
 [
     {
-        "id": "B0000001-0000-0000-0000-000000000000",
+        "id": "11111111-1111-1111-1111-111111111111",
         "title": "Read 5 books in a month",
         "description": "Complete 5 books within a month. Your consistency will unlock special badges!",
         "goalUnit": "books/month",
@@ -8,7 +8,7 @@
         "rewardXP": 50
     },
     {
-        "id": "B0000002-0000-0000-0000-000000000000",
+        "id": "22222222-2222-2222-2222-222222222222",
         "title": "Daily 30 mins",
         "description": "Build a daily reading habit by dedicating at least 30 minutes every day.",
         "goalUnit": "minutes/week",
@@ -16,7 +16,7 @@
         "rewardXP": 30
     },
     {
-        "id": "B0000003-0000-0000-0000-000000000000",
+        "id": "33333333-3333-3333-3333-333333333333",
         "title": "Fantasy marathon: 1000 pages",
         "description": "Dive deep into magical realms and read 1000 pages this month.",
         "goalUnit": "pages/month",
@@ -24,7 +24,7 @@
         "rewardXP": 100
     },
     {
-        "id": "B0000004-0000-0000-0000-000000000000",
+        "id": "44444444-4444-4444-4444-444444444444",
         "title": "Read a classic",
         "description": "Time to tackle those must-reads. Finish one classic this month.",
         "goalUnit": "books/month",

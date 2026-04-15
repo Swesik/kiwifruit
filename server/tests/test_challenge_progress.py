@@ -170,5 +170,5 @@ class TestSessionHistoryForChallenges:
 
         resp = client.get('/session-history', headers=_auth())
         entry = resp.get_json()[0]
-        expected_keys = {'id', 'book_title', 'duration_seconds', 'pages_read', 'ended_at'}
+        expected_keys = {'id', 'book_title', 'duration_seconds', 'pages_read', 'mood', 'ended_at'}
         assert set(entry.keys()) == expected_keys

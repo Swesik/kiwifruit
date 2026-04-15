@@ -153,5 +153,5 @@ class TestSessionHistory:
 
         resp = client.get('/session-history', headers=_auth('alice-token'))
         entry = resp.get_json()[0]
-        assert set(entry.keys()) == {'id', 'book_title', 'duration_seconds', 'pages_read', 'ended_at'}
+        assert set(entry.keys()) == {'id', 'book_title', 'duration_seconds', 'pages_read', 'mood', 'ended_at'}
         assert entry['id'] == row_id
