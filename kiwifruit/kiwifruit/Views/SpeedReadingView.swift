@@ -3,9 +3,11 @@ import UniformTypeIdentifiers
 
 struct SpeedReadingView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.userPreferencesStore) private var preferencesStore
     @State private var showFilePicker = false
     private let api: APIClientProtocol
     @State private var viewModel: SpeedReadingViewModel
+    @State private var wpmText: String = "240"
 
     init(api: APIClientProtocol = AppAPI.shared) {
         self.api = api
@@ -39,7 +41,12 @@ struct SpeedReadingView: View {
         }
         .background(Color.white)
         .toolbar(.hidden, for: .navigationBar)
-        .onAppear { viewModel.loadBooks() }
+        .onAppear {
+            viewModel = SpeedReadingViewModel(api: api, preferencesStore: preferencesStore)
+            viewModel.loadSettings()
+            wpmText = "\(viewModel.wordsPerMinute)"
+            viewModel.loadBooks()
+        }
         .fileImporter(
             isPresented: $showFilePicker,
             allowedContentTypes: [UTType(filenameExtension: "epub") ?? .data],
@@ -137,6 +144,98 @@ struct SpeedReadingView: View {
                             .foregroundColor(Color(hex: "2D3748"))
                     }
                 }
+
+                // Settings section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Settings")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(Color(hex: "2D3748"))
+
+                    // Words per minute
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Words per minute")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(Color(hex: "2D3748"))
+
+                        HStack(spacing: 8) {
+                            TextField("WPM", text: $wpmText)
+                                .keyboardType(.numberPad)
+                                .font(.system(size: 18, weight: .bold, design: .monospaced))
+                                .foregroundColor(Color(hex: "2D3748"))
+                                .multilineTextAlignment(.center)
+                                .frame(width: 80)
+                                .padding(.horizontal, 8).padding(.vertical, 8)
+                                .background(Color.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "2D3748"), lineWidth: 2))
+                                .onChange(of: wpmText) {
+                                    if let value = Int(wpmText), value > 0 {
+                                        viewModel.wordsPerMinute = value
+                                    }
+                                }
+                                .onSubmit {
+                                    commitWpm()
+                                }
+
+                            VStack(spacing: 0) {
+                                Button {
+                                    let newWpm = viewModel.wordsPerMinute + 10
+                                    viewModel.wordsPerMinute = newWpm
+                                    wpmText = "\(newWpm)"
+                                    viewModel.saveSettings()
+                                } label: {
+                                    Image(systemName: "chevron.up")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(Color(hex: "2D3748"))
+                                        .frame(width: 32, height: 20)
+                                }
+
+                                Button {
+                                    let newWpm = max(1, viewModel.wordsPerMinute - 10)
+                                    viewModel.wordsPerMinute = newWpm
+                                    wpmText = "\(newWpm)"
+                                    viewModel.saveSettings()
+                                } label: {
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(Color(hex: "2D3748"))
+                                        .frame(width: 32, height: 20)
+                                }
+                            }
+                            .background(Color(hex: "D1BFAe"))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(hex: "2D3748"), lineWidth: 2))
+                        }
+                    }
+
+                    // Words per segment slider
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Words per segment: \(viewModel.wordsPerSegment)")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(Color(hex: "2D3748"))
+
+                        HStack(spacing: 8) {
+                            Text("1")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(Color(hex: "2D3748"))
+                            Slider(
+                                value: Binding(
+                                    get: { Double(viewModel.wordsPerSegment) },
+                                    set: { newVal in
+                                        viewModel.wordsPerSegment = Int(newVal.rounded())
+                                        viewModel.saveSettings()
+                                    }
+                                ),
+                                in: 1...7,
+                                step: 1
+                            )
+                            .tint(Color(hex: "7EA2A0"))
+                            Text("7")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(Color(hex: "2D3748"))
+                        }
+                    }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 24)
@@ -180,7 +279,10 @@ struct SpeedReadingView: View {
                     .font(.system(size: 36, weight: .bold))
                     .foregroundColor(Color(hex: "2D3748"))
             } else {
-                wordDisplayView
+                GeometryReader { geo in
+                    wordDisplayView(fontSize: fittedFontSize(for: geo.size.width - 48))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
 
             Spacer()
@@ -262,7 +364,7 @@ struct SpeedReadingView: View {
 
     // MARK: - Word Display
 
-    private var wordDisplayView: some View {
+    private func wordDisplayView(fontSize: CGFloat) -> some View {
         let word = viewModel.currentWord
         let pivot = Self.pivotIndex(for: word)
         let chars = Array(word)
@@ -273,23 +375,43 @@ struct SpeedReadingView: View {
 
         return HStack(spacing: 0) {
             Text(before)
-                .font(.system(size: 48, weight: .bold, design: .monospaced))
+                .font(.system(size: fontSize, weight: .bold, design: .monospaced))
                 .foregroundColor(Color(hex: "2D3748"))
                 .fixedSize()
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .trailing)
 
             Text(pivotChar)
-                .font(.system(size: 48, weight: .bold, design: .monospaced))
+                .font(.system(size: fontSize, weight: .bold, design: .monospaced))
                 .foregroundColor(.red)
                 .fixedSize()
 
             Text(after)
-                .font(.system(size: 48, weight: .bold, design: .monospaced))
+                .font(.system(size: fontSize, weight: .bold, design: .monospaced))
                 .foregroundColor(Color(hex: "2D3748"))
                 .fixedSize()
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// Compute a font size that fits the longest segment within the available width.
+    private func fittedFontSize(for availableWidth: CGFloat) -> CGFloat {
+        let maxLen = viewModel.maxSegmentLength
+        guard maxLen > 0, availableWidth > 0 else { return 48 }
+        // Monospaced: each character ≈ 0.6 × fontSize
+        let fitted = availableWidth / (CGFloat(maxLen) * 0.6)
+        return min(48, max(12, floor(fitted)))
+    }
+
+    /// Validate and commit the WPM text field value.
+    private func commitWpm() {
+        if let value = Int(wpmText), value > 0 {
+            viewModel.wordsPerMinute = value
+        } else {
+            viewModel.wordsPerMinute = max(1, viewModel.wordsPerMinute)
+        }
+        wpmText = "\(viewModel.wordsPerMinute)"
+        viewModel.saveSettings()
     }
 
     /// Compute the index of the center-most non-space character.
