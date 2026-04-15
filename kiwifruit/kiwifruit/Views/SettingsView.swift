@@ -14,9 +14,23 @@ struct SettingsView: View {
     @State private var selectedGenres: Set<String> = []
     @State private var isSaving = false
 
+    @AppStorage("kiwifruit.settings.reflectionEntry.moodSessionsEnabled") private var reflectionEntryMoodSessionsEnabled: Bool = true
+    @AppStorage("kiwifruit.settings.reflectionEntry.nonMoodSessionsEnabled") private var reflectionEntryNonMoodSessionsEnabled: Bool = true
+
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    Toggle(isOn: $reflectionEntryMoodSessionsEnabled) {
+                        Text("Show reflection after mood sessions")
+                    }
+                    Toggle(isOn: $reflectionEntryNonMoodSessionsEnabled) {
+                        Text("Show reflection after non-mood sessions")
+                    }
+                } header: {
+                    Text("Reflection")
+                }
+
                 Section {
                     Stepper(
                         "\(dailyGoal) min",

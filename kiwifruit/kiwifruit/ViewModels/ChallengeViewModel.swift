@@ -8,6 +8,7 @@ final class ChallengeViewModel {
     var discoverChallenges: [Challenge] = []
     var completedChallenges: [Challenge] = []
     var weatherChallenge: Challenge? = nil
+    var adaptiveChallenge: Challenge? = nil
     var streak: Int = 0
     var activeDays: Set<Int> = []
     var recentlyCompleted: [Challenge] = []
@@ -78,8 +79,44 @@ final class ChallengeViewModel {
 
     // MARK: - Progress update from server
 
-    func updateProgress() async {
-        async let weatherTask = weatherService.fetchWeatherChallenge()
+    func updateProgress(forceRefreshAdaptive: Bool = false) async {
+        refreshWeather(forceRefresh: forceRefreshAdaptive)
+        await refreshSessionData()
+        await refreshAdaptiveRecommendation(forceRefresh: forceRefreshAdaptive)
+        refreshDiscover()
+    }
+
+    /// Weather challenge rules:
+    ///   1. If the user has accepted one that's still in flight → clear any
+    ///      recommendation card and skip entirely.
+    ///   2. If we already fetched one today (persisted) → keep it.
+    ///   3. Otherwise fetch a new one and persist the date so we won't hit
+    ///      the server again until tomorrow (unless forceRefresh is set).
+    private func refreshWeather(forceRefresh: Bool) {
+        if hasActiveWeatherChallenge {
+            weatherChallenge = nil
+            return
+        }
+        let cached = storage.loadCachedWeatherChallenge()
+        let fetchedToday = cached.map { Calendar.current.isDate($0.fetchedAt, inSameDayAs: Date()) } ?? false
+
+        if fetchedToday && !forceRefresh {
+            if weatherChallenge == nil, let cached {
+                weatherChallenge = cached.challenge
+            }
+            return
+        }
+        // @Observable + SwiftUI infers main-actor isolation; Task{} inherits,
+        // so we write straight onto the main actor.
+        Task { [weak self] in
+            guard let self else { return }
+            let w = await self.weatherService.fetchWeatherChallenge()
+            self.weatherChallenge = w
+            self.storage.saveCachedWeatherChallenge(w, fetchedAt: Date())
+        }
+    }
+
+    private func refreshSessionData() async {
         do {
             async let historyTask = api.fetchSessionHistory()
             async let completedTask = api.fetchCompletedBooks()
@@ -93,8 +130,52 @@ final class ChallengeViewModel {
         } catch {
             print("[ChallengeViewModel] updateProgress fetch failed: \(error)")
         }
-        weatherChallenge = await weatherTask
-        refreshDiscover()
+    }
+
+    /// Adaptive fetch rules:
+    ///   1. User has an in-flight adaptive → clear any stale recommendation
+    ///      and skip.
+    ///   2. We already have a cached recommendation and caller didn't ask
+    ///      for a fresh one → keep it stable (avoids a new OpenAI roll
+    ///      every time the user navigates back to the tab).
+    ///   3. Otherwise → fetch a new one.
+    private func refreshAdaptiveRecommendation(forceRefresh: Bool) async {
+        if hasActiveAdaptiveChallenge {
+            adaptiveChallenge = nil
+            return
+        }
+        if adaptiveChallenge != nil && !forceRefresh { return }
+
+        do {
+            let resp = try await api.fetchAdaptiveChallenge()
+            if resp.available, let data = resp.challenge {
+                adaptiveChallenge = Challenge(
+                    title: data.title,
+                    description: data.description,
+                    goalUnit: data.goalUnit,
+                    goalCount: data.goalCount,
+                    rewardXP: data.rewardXP,
+                    isAdaptive: true,
+                    reason: data.reason
+                )
+            } else {
+                adaptiveChallenge = nil
+            }
+        } catch {
+            print("[ChallengeViewModel] fetchAdaptiveChallenge failed: \(error)")
+        }
+    }
+
+    /// True when an adaptive challenge is already in-flight (accepted, not yet
+    /// completed). Used to suppress further recommendations.
+    var hasActiveAdaptiveChallenge: Bool {
+        activeChallenges.contains { $0.isAdaptive && $0.state != .completed }
+    }
+
+    /// True when a weather challenge is already in-flight (accepted, not yet
+    /// completed). Used to suppress further weather recommendations.
+    var hasActiveWeatherChallenge: Bool {
+        activeChallenges.contains { $0.isWeather && $0.state != .completed }
     }
 
     private func applyProgress(history: [SessionHistoryEntry], completedBooks: [CompletedBookEntry]) {
@@ -229,19 +310,21 @@ final class ChallengeViewModel {
     private func loadPersisted() {
         activeChallenges = storage.loadActiveChallenges()
         completedChallenges = storage.loadCompletedChallenges()
+        // Rehydrate today's cached weather challenge (if any) so the card is
+        // available before updateProgress runs.
+        if let cached = storage.loadCachedWeatherChallenge(),
+           Calendar.current.isDate(cached.fetchedAt, inSameDayAs: Date()) {
+            weatherChallenge = cached.challenge
+        }
     }
 
     private func refreshDiscover() {
-        var discover = Challenge.bank.filter { c in
+        // Weather is now surfaced in the "Recommended for you" section along
+        // with adaptive, so it's no longer injected into Discover.
+        discoverChallenges = Challenge.bank.filter { c in
             !activeChallenges.contains(where: { $0.id == c.id }) &&
             !completedChallenges.contains(where: { $0.id == c.id })
         }
-        if let wc = weatherChallenge,
-           !activeChallenges.contains(where: { $0.id == wc.id }),
-           !completedChallenges.contains(where: { $0.id == wc.id }) {
-            discover.insert(wc, at: 0)
-        }
-        discoverChallenges = discover
     }
 }
 

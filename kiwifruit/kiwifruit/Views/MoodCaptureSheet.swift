@@ -17,29 +17,64 @@ struct MoodCaptureSheet: View {
 
     let bookTitle: String?
     let duration: String
+    let durationSeconds: Int
+    var pagesRead: Int? = nil
     /// Face-detection result from the mood camera; nil if manual entry.
     var suggestedMood: QuickMood? = nil
     var suggestedConfidencePercent: Int? = nil
     let onSkip: () -> Void
     let updateExisting: Bool
 
+    @State private var viewModel: MoodCaptureViewModel
+
     @State private var selectedMood: QuickMood? = nil
+    @State private var showReflection = false
+    @State private var reflectionTitle: String = ""
+    @State private var reflectionText: String = ""
+
+    init(
+        bookTitle: String?,
+        duration: String,
+        durationSeconds: Int,
+        pagesRead: Int? = nil,
+        suggestedMood: QuickMood? = nil,
+        suggestedConfidencePercent: Int? = nil,
+        onSkip: @escaping () -> Void,
+        updateExisting: Bool,
+        viewModel: MoodCaptureViewModel = MoodCaptureViewModel()
+    ) {
+        self.bookTitle = bookTitle
+        self.duration = duration
+        self.durationSeconds = durationSeconds
+        self.pagesRead = pagesRead
+        self.suggestedMood = suggestedMood
+        self.suggestedConfidencePercent = suggestedConfidencePercent
+        self.onSkip = onSkip
+        self.updateExisting = updateExisting
+        self._viewModel = State(wrappedValue: viewModel)
+    }
+
+    @AppStorage("kiwifruit.settings.reflectionEntry.moodSessionsEnabled") private var reflectionEntryMoodSessionsEnabled: Bool = true
 
     var body: some View {
-        VStack(spacing: 0) {
-            headerSection
-            if suggestedMood != nil {
-                detectedMoodSection
-            } else {
-                moodSelectionSection
+        if showReflection {
+            reflectionView
+        } else {
+            VStack(spacing: 0) {
+                headerSection
+                if suggestedMood != nil {
+                    detectedMoodSection
+                } else {
+                    moodSelectionSection
+                }
+                Spacer()
+                actionButtons
             }
-            Spacer()
-            actionButtons
-        }
-        .padding(24)
-        .background(Color.white)
-        .onAppear {
-            selectedMood = suggestedMood
+            .padding(24)
+            .background(Color.white)
+            .onAppear {
+                selectedMood = suggestedMood
+            }
         }
     }
 
@@ -77,8 +112,9 @@ struct MoodCaptureSheet: View {
                     withAnimation(.easeInOut(duration: 0.15)) { selectedMood = mood }
                 } label: {
                     HStack {
-                        Text(moodEmoji(mood))
-                            .font(.system(size: 44))
+                        Image(systemName: moodSymbol(mood))
+                            .font(.system(size: 36, weight: .bold))
+                            .foregroundColor(MoodCaptureDesign.uiText)
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
                                 Text(mood.displayName)
@@ -205,11 +241,11 @@ struct MoodCaptureSheet: View {
         }
     }
 
-    private func moodEmoji(_ mood: QuickMood) -> String {
+    private func moodSymbol(_ mood: QuickMood) -> String {
         switch mood {
-        case .focused: return "😌"
-        case .inspired: return "😊"
-        case .tired: return "😴"
+        case .focused: return "brain.head.profile"
+        case .inspired: return "sparkles"
+        case .tired: return "moon.zzz.fill"
         }
     }
 
@@ -265,7 +301,109 @@ struct MoodCaptureSheet: View {
             moodStore.saveSession(session)
         }
 
-        dismiss()
+        if reflectionEntryMoodSessionsEnabled {
+            showReflection = true
+        } else {
+            dismiss()
+        }
+    }
+
+    // MARK: - Reflection
+
+    private var reflectionView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Reflect")
+                .font(.system(size: 30, weight: .black))
+                .foregroundColor(MoodCaptureDesign.uiText)
+                .padding(.top, 24)
+
+            if viewModel.isLoadingPrompt {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Generating prompt...")
+                        .font(.subheadline).fontWeight(.semibold)
+                        .foregroundColor(MoodCaptureDesign.uiText.opacity(0.6))
+                }
+                .padding(.vertical, 32)
+            } else {
+                TextField("Title (optional)", text: $reflectionTitle)
+                    .textFieldStyle(.plain)
+                    .font(.subheadline).fontWeight(.semibold)
+                    .padding(12)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(MoodCaptureDesign.border.opacity(0.3), lineWidth: 1.5))
+
+                Text(viewModel.reflectionPrompt)
+                    .font(.subheadline).fontWeight(.semibold)
+                    .foregroundColor(MoodCaptureDesign.uiText.opacity(0.7))
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(MoodCaptureDesign.kiwiLight)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(MoodCaptureDesign.border.opacity(0.3), lineWidth: 1.5))
+
+                TextEditor(text: $reflectionText)
+                    .font(.subheadline)
+                    .frame(minHeight: 120)
+                    .padding(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(MoodCaptureDesign.border.opacity(0.3), lineWidth: 1.5)
+                    )
+
+                Button {
+                    Task {
+                        await viewModel.saveReflection(
+                            bookTitle: bookTitle,
+                            title: reflectionTitle,
+                            response: reflectionText,
+                            mood: selectedMood?.rawValue,
+                            durationSeconds: durationSeconds
+                        )
+                        dismiss()
+                    }
+                } label: {
+                    Text(viewModel.isSavingReflection ? "Saving..." : "Save Reflection")
+                        .font(.headline).fontWeight(.bold)
+                        .foregroundColor(reflectionText.isEmpty ? MoodCaptureDesign.uiText.opacity(0.3) : .white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(reflectionText.isEmpty ? MoodCaptureDesign.kiwi.opacity(0.3) : MoodCaptureDesign.kiwi)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(MoodCaptureDesign.border.opacity(reflectionText.isEmpty ? 0.3 : 1), lineWidth: 2)
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(reflectionText.isEmpty || viewModel.isSavingReflection)
+            }
+
+            Spacer()
+
+            Button {
+                dismiss()
+            } label: {
+                Text("Skip")
+                    .font(.subheadline).fontWeight(.semibold)
+                    .foregroundColor(MoodCaptureDesign.uiText.opacity(0.4))
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 16)
+        }
+        .padding(24)
+        .background(Color.white)
+        .task {
+            await viewModel.loadPrompt(
+                bookTitle: bookTitle,
+                durationSeconds: durationSeconds,
+                pagesRead: pagesRead,
+                mood: selectedMood?.rawValue
+            )
+        }
     }
 }
 
@@ -273,6 +411,7 @@ struct MoodCaptureSheet: View {
     MoodCaptureSheet(
         bookTitle: "The Great Gatsby",
         duration: "45 minutes",
+        durationSeconds: 2700,
         suggestedMood: .focused,
         suggestedConfidencePercent: 72,
         onSkip: {},
