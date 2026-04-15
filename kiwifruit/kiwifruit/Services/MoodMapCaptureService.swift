@@ -2,115 +2,83 @@ import AVFoundation
 import Foundation
 import Vision
 import Observation
+import Synchronization
+import Mentalist
 
-// MARK: - Pure face → mood (safe to call from any thread)
+// MARK: - Main service class: MoodMapCaptureService
 
-private enum FaceMoodAnalyzer {
-    nonisolated static func analyzeV2(_ face: VNFaceObservation) -> (mood: QuickMood, confidence: Double) {
-        let landmarks = face.landmarks
-
-        let leftEAR  = eyeContourEAR(landmarks?.leftEye)
-        let rightEAR = eyeContourEAR(landmarks?.rightEye)
-        let avgEAR   = (leftEAR + rightEAR) / 2.0
-
-        let smile = smileScore(landmarks)
-        let browSig = eyebrowSignal(landmarks)
-
-        let tilt = abs(face.yaw?.doubleValue ?? 0)
-
-        if avgEAR < 0.25 {
-            return (.tired, min(0.90, 0.40 + (0.25 - avgEAR) * 1.8))
-        }
-        // Looking away = not paying attention → tired.
-        if tilt > 0.35 {
-            let tiltConf = min(0.88, 0.30 + (0.35 - tilt) * -1.0)
-            return (.tired, tiltConf)
-        }
-
-        // Energy: eye 54%, eyebrow 30%, smile 14%.
-        let energy = avgEAR * 0.54 + browSig * 0.30 + max(0, smile) * 0.14
-        let positivity = max(0, smile) * 0.60 + avgEAR * 0.25 + browSig * 0.15
-
-        if energy > 0.55 && positivity > 0.45 {
-            return (.inspired, min(0.90, (energy + positivity) / 2.0))
-        }
-        if energy > 0.45 && positivity < 0.50 {
-            return (.focused, min(0.88, 0.40 + energy * 0.55))
-        }
-        if energy < 0.38 {
-            return (.tired, min(0.82, (0.38 - energy) * 2.2))
-        }
-        return (.focused, 0.42 + avgEAR * 0.28)
-    }
-
-    nonisolated private static func eyeContourEAR(_ eye: VNFaceLandmarkRegion2D?) -> Double {
-        guard let pts = eye?.normalizedPoints, pts.count >= 6 else { return 0.50 }
-        let top    = pts[1]
-        let bottom = pts[5]
-        let left   = pts[0]
-        let right  = pts[3]
-        let vert  = abs(top.y - bottom.y)
-        let horiz = abs(right.x - left.x)
-        guard horiz > 0.001 else { return 0.50 }
-        return min(1.0, (vert / horiz) / 0.40)
-    }
-
-    nonisolated private static func smileScore(_ landmarks: VNFaceLandmarks2D?) -> Double {
-        guard let outer = landmarks?.outerLips?.normalizedPoints,
-              let inner = landmarks?.innerLips?.normalizedPoints,
-              !outer.isEmpty, !inner.isEmpty else { return 0.0 }
-        let centerTop = inner.min(by: { $0.y < $1.y })?.y ?? 0.5
-        let centerBot = inner.max(by: { $0.y < $1.y })?.y ?? 0.5
-        let mouthOpenness = centerBot - centerTop
-        let corners = outer.filter { $0.x < 0.25 || $0.x > 0.75 }
-        guard corners.count >= 2 else { return 0.0 }
-        let cornerAvgY = corners.map { $0.y }.reduce(0, +) / Double(corners.count)
-        let curve = (centerTop - cornerAvgY) * 3.0
-        let opennessBonus: Double = mouthOpenness > 0.10 ? 0.15 : 0.0
-        return max(-1.0, min(1.0, curve + opennessBonus))
-    }
-
-    nonisolated private static func eyebrowSignal(_ landmarks: VNFaceLandmarks2D?) -> Double {
-        guard let leftEye  = landmarks?.leftEye?.normalizedPoints,
-              let rightEye = landmarks?.rightEye?.normalizedPoints,
-              let leftBrow = landmarks?.leftEyebrow?.normalizedPoints,
-              let rightBrow = landmarks?.rightEyebrow?.normalizedPoints,
-              !leftEye.isEmpty, !rightEye.isEmpty,
-              !leftBrow.isEmpty, !rightBrow.isEmpty else { return 0.50 }
-        let leftGap  = (leftBrow.map  { $0.y }.min() ?? 0.5)  - (leftEye.map  { $0.y }.min() ?? 0.5)
-        let rightGap = (rightBrow.map { $0.y }.min() ?? 0.5) - (rightEye.map { $0.y }.min() ?? 0.5)
-        return min(1.0, max(0.0, (leftGap + rightGap) / 2.0 / 0.12))
-    }
-}
-
-/// Camera + Vision run off the main thread; all `@Observable` mutations happen on MainActor
-/// so SwiftUI / Observation never see cross-queue writes (avoids `_dispatch_assert_queue_fail`).
-@MainActor
+/// Mood capture service: camera capture → Mentalist real-time emotion analysis → result output.
+///
+/// Core architecture:
+/// - `AVCaptureSession` runs on a background thread and receives each frame via `captureOutput`.
+/// - `VNDetectFaceRectanglesRequest` performs fast face detection (only detects face position, no expression analysis).
+///   After successful detection, the face region is cropped and passed to Mentalist CoreML model for emotion classification.
+/// - Mentalist is a third-party library (trained on FER2013 dataset) that returns 7 emotion types:
+///   happy / angry / disgust / fear / sad / surprise / neutral.
+/// - Emotion results are mapped to App's `QuickMood` type via `MentalistEmotionAnalyzer`.
+/// - Uses a voting system to confirm stable emotions: UI state only switches after reaching ≥60% majority votes.
 @Observable
 final class MoodMapCaptureService: NSObject {
-    private(set) var captureSession: AVCaptureSession?
-    private(set) var cameraError: String?
 
+    // MARK: Published state (observed by SwiftUI views)
+
+    /// Camera session (used to bind to PreviewLayer / AVPreviewLayer).
+    private(set) var captureSession: AVCaptureSession?
+    /// Camera error message; nil when there's no error.
+    private(set) var cameraError: String?
+    /// Current stable confirmed emotion type (requires 60% majority votes, used for final confirmation page).
     private(set) var detectedMood: QuickMood?
+    /// Current emotion confidence (average confidence of votes for this emotion).
     private(set) var detectionConfidence: Double = 0.0
+    /// Live emotion: outputs directly per frame during camera preview without waiting for vote threshold.
+    private(set) var liveMood: QuickMood?
+    /// Live emotion confidence.
+    private(set) var liveConfidence: Double = 0.0
+    /// Number of consecutive frames with the current emotion (used for UI stability display).
     private(set) var stableFrames: Int = 0
+    /// Whether a face is detected (used for UI "please align your face" prompt).
     private(set) var faceDetected: Bool = false
 
+    // MARK: Private state
+
+    /// Video frame output delegate.
     private var videoOutput: AVCaptureVideoDataOutput?
-    private let videoQueue = DispatchQueue(label: "moodCapture.video", qos: .userInitiated)
 
+    /// Video frame callback queue — background serial queue to avoid frame accumulation.
+    private let videoQueue = DispatchQueue(label: "com.kiwifruit.moodmap.capture", qos: .userInteractive)
+
+    /// Timestamp (CACurrentMediaTime seconds) of the most recently processed
+    /// frame. Wrapped in a Mutex so the read-modify-write in
+    /// ``captureOutput(_:didOutput:from:)`` is atomic, and so the field can
+    /// be reached from the nonisolated delegate callback without the
+    /// ``nonisolated(unsafe)`` escape hatch — the lock makes the concurrency
+    /// contract explicit instead of relying on "the videoQueue is serial".
     @ObservationIgnored
-    nonisolated(unsafe) private var lastProcessedTimestamp: TimeInterval = 0
+    private let lastProcessedTimestamp = Mutex<TimeInterval>(0)
 
-    // Voting: each face-detected frame adds one vote (updated only on MainActor).
+    /// Emotion vote counter.
     private var moodVotes: [QuickMood: Int] = [.focused: 0, .inspired: 0, .tired: 0]
+    /// Emotion confidence accumulator.
     private var moodConfSum: [QuickMood: Double] = [.focused: 0.0, .inspired: 0.0, .tired: 0.0]
+    /// Total frame count for the current session.
     private var totalFrames: Int = 0
+
+    // Timeline tracking: records each stable mood change with elapsed seconds from session start.
+    private var sessionStartTime: Date?
+    private var moodTimeline: [MoodTimelineEvent] = []
+    private var lastTimelineMood: QuickMood?
+
+    /// Rolling window of the most recent live mood readings for timeline tracking.
+    private var recentMoods: [QuickMood] = []
+    private let recentWindowSize = 15
 
     override init() {
         super.init()
     }
 
+    // MARK: Public API
+
+    /// Starts the camera session.
     func startSession() {
         cameraError = nil
         let status = AVCaptureDevice.authorizationStatus(for: .video)
@@ -136,7 +104,37 @@ final class MoodMapCaptureService: NSObject {
         }
     }
 
+    /// Clears the current error state.
+    func clearError() {
+        cameraError = nil
+    }
+
+    /// Stops the camera session and resets all state.
+    func stopSession() {
+        videoOutput?.setSampleBufferDelegate(nil, queue: nil)
+        captureSession?.stopRunning()
+        captureSession = nil
+        videoOutput = nil
+
+        detectedMood = nil
+        faceDetected = false
+        stableFrames = 0
+        liveMood = nil
+        liveConfidence = 0.0
+        moodVotes = [.focused: 0, .inspired: 0, .tired: 0]
+        moodConfSum = [.focused: 0.0, .inspired: 0.0, .tired: 0.0]
+        totalFrames = 0
+        lastProcessedTimestamp.withLock { $0 = 0 }
+        sessionStartTime = nil
+        moodTimeline = []
+        lastTimelineMood = nil
+        recentMoods = []
+    }
+
+    // MARK: Session setup (private)
+
     private func setupSession() {
+        sessionStartTime = Date()
         let session = AVCaptureSession()
         session.sessionPreset = .medium
 
@@ -157,31 +155,18 @@ final class MoodMapCaptureService: NSObject {
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
         ]
         output.setSampleBufferDelegate(self, queue: videoQueue)
+        output.alwaysDiscardsLateVideoFrames = true
+
         if session.canAddOutput(output) {
             session.addOutput(output)
         }
+
         videoOutput = output
         captureSession = session
         session.startRunning()
     }
 
-    func clearError() {
-        cameraError = nil
-    }
-
-    func stopSession() {
-        videoOutput?.setSampleBufferDelegate(nil, queue: nil)
-        captureSession?.stopRunning()
-        captureSession = nil
-        videoOutput = nil
-        detectedMood = nil
-        faceDetected = false
-        stableFrames = 0
-        moodVotes = [.focused: 0, .inspired: 0, .tired: 0]
-        moodConfSum = [.focused: 0.0, .inspired: 0.0, .tired: 0.0]
-        totalFrames = 0
-        lastProcessedTimestamp = 0
-    }
+    // MARK: Mood voting
 
     /// Most-voted mood over the session; confidence = average for that mood's votes.
     func snapshotSuggestion() -> (mood: QuickMood?, confidence: Double) {
@@ -192,7 +177,6 @@ final class MoodMapCaptureService: NSObject {
         let votes = moodVotes[mood] ?? 0
         let avgConf = votes > 0 ? (moodConfSum[mood] ?? 0.0) / Double(votes) : 0.0
 
-        // Tired ≤ 30% → treat as focused.
         if mood == .tired, Double(votes) <= Double(totalFrames) * 0.30 {
             let focusedVotes = moodVotes[.focused] ?? 0
             let focusedConf = (moodConfSum[.focused] ?? 0.0) / Double(max(1, focusedVotes))
@@ -200,6 +184,16 @@ final class MoodMapCaptureService: NSObject {
         }
 
         return (mood, avgConf)
+    }
+
+    /// Full session snapshot: dominant mood, confidence, per-mood frame distribution, and timeline.
+    /// Call this BEFORE stopSession() — all data is wiped on stop.
+    func snapshotFull() -> (mood: QuickMood?, confidence: Double, distribution: [String: Int], timeline: [MoodTimelineEvent]) {
+        let snap = snapshotSuggestion()
+        let distribution = Dictionary(
+            uniqueKeysWithValues: moodVotes.compactMap { mood, count in count > 0 ? (mood.rawValue, count) : nil }
+        )
+        return (snap.mood, snap.confidence, distribution, moodTimeline)
     }
 
     private func ingestNoFace() {
@@ -210,16 +204,35 @@ final class MoodMapCaptureService: NSObject {
 
     private func ingestFace(mood: QuickMood, confidence: Double) {
         faceDetected = true
+
+        // Live output: updates directly per frame without waiting for votes.
+        liveMood = mood
+        liveConfidence = confidence
+
         moodVotes[mood, default: 0] += 1
         moodConfSum[mood, default: 0.0] += confidence
         totalFrames += 1
+
+        // Rolling window timeline: record a mood shift whenever the short-term
+        // dominant mood changes. This reflects moment-to-moment mood journey
+        // independently of the cumulative vote threshold.
+        recentMoods.append(mood)
+        if recentMoods.count > recentWindowSize { recentMoods.removeFirst() }
+        if recentMoods.count >= recentWindowSize / 2 {
+            let windowCounts = recentMoods.reduce(into: [QuickMood: Int]()) { $0[$1, default: 0] += 1 }
+            if let windowDominant = windowCounts.max(by: { $0.value < $1.value })?.key,
+               windowDominant != lastTimelineMood {
+                let elapsed = sessionStartTime.map { Date().timeIntervalSince($0) } ?? 0
+                moodTimeline.append(MoodTimelineEvent(secondsFromStart: elapsed, mood: windowDominant))
+                lastTimelineMood = windowDominant
+            }
+        }
 
         guard let (dominantMood, count) = moodVotes.max(by: { $0.value < $1.value }) else {
             return
         }
         let dominantPct = Double(count) / Double(totalFrames)
 
-        // Tired ≤ 30% → always show focused (focus has priority).
         if let tiredVotes = moodVotes[.tired], Double(tiredVotes) <= Double(totalFrames) * 0.30 {
             detectedMood = .focused
             let focusedVotes = moodVotes[.focused] ?? 0
@@ -228,7 +241,6 @@ final class MoodMapCaptureService: NSObject {
             return
         }
 
-        // Need 60% majority before committing to any mood.
         guard dominantPct >= 0.60 else {
             detectedMood = nil
             stableFrames = 0
@@ -241,39 +253,61 @@ final class MoodMapCaptureService: NSObject {
     }
 }
 
-// MARK: - Video delegate (runs on videoQueue; Vision completion may use another queue)
+// MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
 
 extension MoodMapCaptureService: AVCaptureVideoDataOutputSampleBufferDelegate {
+
     nonisolated func captureOutput(
         _ output: AVCaptureOutput,
         didOutput sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
+        // Frame rate limit: at least 0.15 seconds between processing (~6-7 fps).
+        // Read-modify-write atomically so two overlapping delegate callbacks
+        // can never both pass the gate in the same window.
         let now = CACurrentMediaTime()
-        if now - lastProcessedTimestamp < 0.15 { return }
-        lastProcessedTimestamp = now
+        let shouldSkip = lastProcessedTimestamp.withLock { last -> Bool in
+            if now - last < 0.15 { return true }
+            last = now
+            return false
+        }
+        if shouldSkip { return }
 
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
-        let request = VNDetectFaceLandmarksRequest { request, error in
+        // Step 1: Use Vision to quickly detect the face rectangle. We do NOT
+        // capture `self` in this outer (task-isolated) closure — Swift 6
+        // flags capturing a MainActor-isolated `self` from a nonisolated
+        // context as a data race risk. Instead, compute the emotion result
+        // locally here and hand it off through a fresh `[weak self]`
+        // capture inside the MainActor hop.
+        let request = VNDetectFaceRectanglesRequest { request, error in
+            let faceFound: Bool
             if error != nil {
-                Task { @MainActor [weak self] in
-                    self?.ingestNoFace()
-                }
-                return
+                faceFound = false
+            } else if let observations = request.results as? [VNFaceObservation], !observations.isEmpty {
+                faceFound = true
+            } else {
+                faceFound = false
             }
 
-            guard let observations = request.results as? [VNFaceObservation],
-                  let face = observations.first else {
-                Task { @MainActor [weak self] in
-                    self?.ingestNoFace()
-                }
-                return
+            let emotionResult: (mood: QuickMood, confidence: Double)?
+            if faceFound {
+                emotionResult = MentalistEmotionAnalyzer.analyze(
+                    pixelBuffer: pixelBuffer,
+                    orientation: .leftMirrored
+                )
+            } else {
+                emotionResult = nil
             }
 
-            let result = FaceMoodAnalyzer.analyzeV2(face)
             Task { @MainActor [weak self] in
-                self?.ingestFace(mood: result.mood, confidence: result.confidence)
+                guard let self else { return }
+                if let (mood, confidence) = emotionResult {
+                    self.ingestFace(mood: mood, confidence: confidence)
+                } else {
+                    self.ingestNoFace()
+                }
             }
         }
 

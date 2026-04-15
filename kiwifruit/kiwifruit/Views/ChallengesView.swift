@@ -24,6 +24,10 @@ struct ChallengesView: View {
                         if !viewModel.completedChallenges.isEmpty {
                             completedChallengesSection
                         }
+                    adaptiveChallengeSection
+                    yourChallengesSection
+                    if !viewModel.completedChallenges.isEmpty {
+                        completedChallengesSection
                     }
                     discoverMoreSection
                 }
@@ -34,6 +38,12 @@ struct ChallengesView: View {
         .background(Color.white)
         .toolbar(.hidden, for: .navigationBar)
         .task { await viewModel.updateProgress() }
+        .onAppear {
+            Task { await viewModel.updateProgress() }
+        }
+        .refreshable {
+            await viewModel.updateProgress(forceRefreshAdaptive: true)
+        }
         .sheet(isPresented: $showCreateSheet) {
             CreateChallengeSheet(viewModel: viewModel)
         }
@@ -203,6 +213,85 @@ struct ChallengesView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(ChallengesDesign.border, lineWidth: 2))
         .sketchShadow()
+    }
+
+    // MARK: - Adaptive Challenge
+
+    private var adaptiveChallengeSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Recommended for you")
+                .font(.title2).fontWeight(.black)
+                .foregroundColor(ChallengesDesign.uiText)
+
+            if let challenge = viewModel.adaptiveChallenge {
+                adaptiveChallengeCard(challenge: challenge)
+            } else {
+                adaptivePlaceholderCard
+            }
+
+            if let weather = viewModel.weatherChallenge {
+                adaptiveChallengeCard(challenge: weather)
+            }
+        }
+    }
+
+    /// Adaptive card on the list is tap-to-detail only; the actual Accept /
+    /// Join action lives inside ChallengeDetailView.
+    private func adaptiveChallengeCard(challenge: Challenge) -> some View {
+        NavigationLink(destination: ChallengeDetailView(challenge: challenge, viewModel: viewModel)) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(challenge.title)
+                    .font(.subheadline).fontWeight(.bold)
+                    .foregroundColor(ChallengesDesign.uiText)
+                Text(challenge.description)
+                    .font(.caption).fontWeight(.semibold)
+                    .foregroundColor(ChallengesDesign.uiText.opacity(0.7))
+                    .lineLimit(2)
+                    .truncationMode(.tail)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(ChallengesDesign.tealCard)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(ChallengesDesign.border, lineWidth: 2))
+            .sketchShadow()
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var adaptivePlaceholderCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(adaptivePlaceholderTitle)
+                .font(.subheadline).fontWeight(.bold)
+                .foregroundColor(ChallengesDesign.uiText)
+            Text(adaptivePlaceholderBody)
+                .font(.caption).fontWeight(.semibold)
+                .foregroundColor(ChallengesDesign.uiText.opacity(0.7))
+                .lineLimit(3)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(ChallengesDesign.tealCard)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(ChallengesDesign.border, lineWidth: 2))
+        .sketchShadow()
+    }
+
+    /// Placeholder shown when no adaptive challenge card is available.
+    /// Two cases: (a) user already accepted one that's still in progress, or
+    /// (b) user has no session history yet for us to personalize on.
+    private var adaptivePlaceholderTitle: String {
+        if viewModel.hasActiveAdaptiveChallenge {
+            return "You're on it"
+        }
+        return "Start reading to personalize"
+    }
+
+    private var adaptivePlaceholderBody: String {
+        if viewModel.hasActiveAdaptiveChallenge {
+            return "Finish your current personalized challenge first — a new one will be recommended after you complete it."
+        }
+        return "Complete a reading session and we'll tailor a challenge to your mood and pace."
     }
 
     // MARK: - Discover More

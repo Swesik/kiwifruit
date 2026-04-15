@@ -26,18 +26,7 @@ struct ProfileView: View {
     @State private var showingSettings = false
     @State private var showingSignIn = false
 
-    private let recentUpdates: [RecentUpdateItem] = [
-        RecentUpdateItem(
-            kind: "Reading Status", timeAgo: "2h ago",
-            quote: "Just hit chapter 15! The plot twist was absolutely mind-blowing. Can't wait to see what happens next.",
-            imageURL: URL(string: "https://images.unsplash.com/photo-1614113489855-66422ad300a4?auto=format&fit=crop&q=80&w=200&h=300")
-        ),
-        RecentUpdateItem(
-            kind: "Finished", timeAgo: "Yesterday",
-            quote: "Finally finished this masterpiece. 5/5 stars. Highly recommend to anyone who loves deep world-building.",
-            imageURL: URL(string: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=200&h=300")
-        )
-    ]
+    @State private var recentUpdates: [RecentUpdateItem] = []
 
     private let libraryURLs: [URL?] = [
         URL(string: "https://images.unsplash.com/photo-1589829085413-56de8ae18c73?auto=format&fit=crop&q=80&w=200&h=300"),
@@ -85,6 +74,50 @@ struct ProfileView: View {
                 SettingsView()
             }
         }
+        .refreshable {
+            await loadRecentUpdates()
+        }
+        .background(Color.white)
+        .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $showingSettings) {
+            SettingsView()
+        }
+        .task {
+            await loadRecentUpdates()
+        }
+        .onAppear {
+            Task { await loadRecentUpdates() }
+        }
+    }
+
+    private func loadRecentUpdates() async {
+        do {
+            let reflections = try await AppAPI.shared.fetchReflections()
+            recentUpdates = reflections.prefix(10).map { r in
+                RecentUpdateItem(
+                    kind: "Reflection",
+                    timeAgo: relativeTimeLabel(fromISO: r.createdAt),
+                    quote: (r.title?.isEmpty == false ? r.title! : r.response),
+                    imageURL: nil
+                )
+            }
+        } catch {
+            print("[ProfileView] loadRecentUpdates failed: \(error)")
+            recentUpdates = []
+        }
+    }
+
+    private func relativeTimeLabel(fromISO iso: String) -> String {
+        let f = ISO8601DateFormatter()
+        guard let date = f.date(from: iso) else { return "" }
+        let seconds = Int(Date().timeIntervalSince(date))
+        if seconds < 60 { return "just now" }
+        let mins = seconds / 60
+        if mins < 60 { return "\(mins)m ago" }
+        let hours = mins / 60
+        if hours < 24 { return "\(hours)h ago" }
+        let days = hours / 24
+        return "\(days)d ago"
     }
 
     // MARK: - Header
@@ -205,6 +238,13 @@ struct ProfileView: View {
                 .font(.title2).fontWeight(.black)
                 .foregroundColor(ProfileDesign.uiText)
                 .padding(.horizontal, 20).padding(.top, 20)
+
+            if recentUpdates.isEmpty {
+                Text("No updates yet")
+                    .font(.subheadline).fontWeight(.semibold)
+                    .foregroundColor(ProfileDesign.uiText.opacity(0.6))
+                    .padding(.horizontal, 20)
+            }
 
             ForEach(recentUpdates) { item in
                 recentUpdateCard(item)
