@@ -371,9 +371,12 @@ struct SpeedReadingView: View {
         let pivotChar = pivot < chars.count ? String(chars[pivot]) : ""
         let after = pivot + 1 < chars.count ? String(chars[(pivot + 1)...]) : ""
 
-        let maxSide = max(before.count, after.count)
-        let paddedBefore = String(repeating: " ", count: maxSide - before.count) + before
-        let paddedAfter = after + String(repeating: " ", count: maxSide - after.count)
+        let displayLength = max(viewModel.maxSegmentLength, word.count)
+        let halfDisplay = displayLength / 2
+        let padBefore = max(0, halfDisplay - before.count)
+        let padAfter = max(0, displayLength - padBefore - before.count - 1 - after.count)
+        let paddedBefore = String(repeating: " ", count: padBefore) + before
+        let paddedAfter = after + String(repeating: " ", count: padAfter)
 
         return (Text(paddedBefore).foregroundColor(Color(hex: "2D3748"))
                 + Text(pivotChar).foregroundColor(.red)
