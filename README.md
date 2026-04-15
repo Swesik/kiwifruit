@@ -1,4 +1,29 @@
-# KiwiFruit
+# UM EECS 498-002 W25 KiwiFruit
+
+| Video  |  Wiki |  Agile |
+|:-----:|:-----:|:--------:|
+|[<img src="https://eecs441.eecs.umich.edu/img/admin/video.png">][video]|[<img src="https://github.com/Swesik/kiwifruit/wiki">][wiki]|[<img src="https://trello.com/invite/b/6983ed91a574f236ec3f9bce/ATTIfe84e35d73e2629422e5a359210baa65FACE6D16/kiwifruit-eecs-498">][agile]|
+<!-- reusing the icons from eecs441 -->
+
+![Elevator Pitch](assets/elevator_pitch.png)
+
+## Team
+
+| Name | Role | Focus Area |
+| :--- | :--- | :--- |
+| Anurag Krosuru | Backend, Full-Stack | Reading Sessions, Timer, Backend |
+| Savannah Brown | Backend, Full-Stack | Vision-based book recognition |
+| Zixiao Ma | Frontend, UI/UX | App Blocking Timer |
+| Tingrui Zhang | Computer Vision | Vision-based concentration/mood monitor |
+| Shawn Dong | UI/UX | UI Design, Mood extraction support |
+| Swesik Ramineni | Infrastructure, Backend | Speed reading, Home page UI |
+| Bonnie Huynh | UI/UX, Full-Stack | Book Recommendations, Rec Engine |
+| Varun Talluri | ML, Database Mgmt | Reading updates, Challenges, Streaks |
+
+
+[video]: https://youtu.be/sample
+[wiki]: https://github.com/Swesik/kiwifruit/wiki
+[agile]: https://trello.com/invite/b/6983ed91a574f236ec3f9bce/ATTIfe84e35d73e2629422e5a359210baa65FACE6D16/kiwifruit-eecs-498
 
 **Connect directly with your friends and stay focused to reclaim your reading time.**
 
@@ -104,16 +129,3 @@ The backend is a Flask application managing data persistence and API endpoints.
 
 ## Documentation
 * **API Specification:** Refer to kiwifruit/kiwifruit/ApiSpec.md for endpoint details.
-
-## Team
-
-| Name | Role | Focus Area |
-| :--- | :--- | :--- |
-| Anurag Krosuru | Backend, Full-Stack | Reading Sessions, Timer, Backend |
-| Savannah Brown | Backend, Full-Stack | Vision-based book recognition |
-| Zixiao Ma | Frontend, UI/UX | App Blocking Timer |
-| Tingrui Zhang | Computer Vision | Vision-based concentration/mood monitor |
-| Shawn Dong | UI/UX | UI Design, Mood extraction support |
-| Swesik Ramineni | Infrastructure, Backend | Speed reading, Home page UI |
-| Bonnie Huynh | UI/UX, Full-Stack | Book Recommendations, Rec Engine |
-| Varun Talluri | ML, Database Mgmt | Reading updates, Challenges, Streaks |
