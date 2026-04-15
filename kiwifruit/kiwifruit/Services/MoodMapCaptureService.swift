@@ -121,6 +121,9 @@ final class MoodMapCaptureService: NSObject {
         moodConfSum = [.focused: 0.0, .inspired: 0.0, .tired: 0.0]
         totalFrames = 0
         lastProcessedTimestamp.withLock { $0 = 0 }
+        sessionStartTime = nil
+        moodTimeline = []
+        lastTimelineMood = nil
     }
 
     // MARK: Session setup (private)
@@ -159,23 +162,6 @@ final class MoodMapCaptureService: NSObject {
     }
 
     // MARK: Mood voting
-
-    func stopSession() {
-        videoOutput?.setSampleBufferDelegate(nil, queue: nil)
-        captureSession?.stopRunning()
-        captureSession = nil
-        videoOutput = nil
-        detectedMood = nil
-        faceDetected = false
-        stableFrames = 0
-        moodVotes = [.focused: 0, .inspired: 0, .tired: 0]
-        moodConfSum = [.focused: 0.0, .inspired: 0.0, .tired: 0.0]
-        totalFrames = 0
-        lastProcessedTimestamp = 0
-        sessionStartTime = nil
-        moodTimeline = []
-        lastTimelineMood = nil
-    }
 
     /// Most-voted mood over the session; confidence = average for that mood's votes.
     func snapshotSuggestion() -> (mood: QuickMood?, confidence: Double) {
