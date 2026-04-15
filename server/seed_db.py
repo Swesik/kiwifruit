@@ -17,14 +17,12 @@ alice can tap the row to join. Her own timer starts at 0 regardless of bob's ela
 import os
 import sqlite3
 import uuid
-import csv
 from datetime import datetime, timedelta, timezone
 
 BASE_DIR = os.path.dirname(__file__)
 DB_PATH = os.path.join(BASE_DIR, 'kiwifruit.db')
 SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.sql')
 EPUB_FOLDER = os.path.join(BASE_DIR, 'uploads', 'epubs')
-CATALOG_PATH = os.path.join(BASE_DIR, 'catalog_books.csv')
 
 def main():
     if os.path.exists(DB_PATH):
@@ -132,19 +130,12 @@ def main():
     )
 
     # ------------------------------------------------------------------ #
-    # Recommendation catalog + demo session_history for alice             #
+    # Demo session_history for alice (AI /recommendations uses this context) #
     # ------------------------------------------------------------------ #
-    # Load catalog books from CSV file
-    with open(CATALOG_PATH, 'r', encoding='utf-8') as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            cur.execute(
-                'INSERT INTO catalog_books (title, author, genre, cover_url) VALUES (?, ?, ?, ?)',
-                (row['title'], row['author'], row['genre'], row['cover_url']),
-            )
+    # catalog_books is not seeded here; Discover recommendations are AI-driven.
 
     hist_time = now_utc.strftime('%Y-%m-%d %H:%M:%S')
-    # Alice has completed sessions for Dune + 1984 — recommendations exclude / deprioritize these
+    # Alice has completed sessions for Dune + 1984 — feeds personalization context to the AI
     cur.execute(
         'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read, ended_at) VALUES (?, ?, ?, ?, ?, ?)',
         (uuid.uuid4().hex, 'alice', 'Dune', 3600, 42, hist_time),
@@ -165,7 +156,7 @@ def main():
     print("  grace / password  — follows bob, sees bob's Dune session (~45min) in the Join feed")
     print()
     print("Recommendations (Discover tab):")
-    print("  alice has session_history for Dune + 1984; GET /recommendations excludes those and boosts genre.")
+    print("  alice has session_history for Dune + 1984; GET /recommendations (AI) uses history + preferences.")
 
 if __name__ == '__main__':
     main()
