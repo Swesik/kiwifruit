@@ -16,6 +16,7 @@ struct FocusView: View {
     @Environment(\.challengeViewModel) private var challengeViewModel: ChallengeViewModel
     @Environment(\.moodSessionStore) private var moodStore: MoodSessionStore
     @Environment(\.recommendationsStore) private var recommendationsStore: RecommendationsStore
+    @Environment(\.postsStore) private var postsStore: PostsStore
 
     @State private var isSelectingBook = false
     @State private var tempBookTitle = ""
@@ -31,13 +32,23 @@ struct FocusView: View {
     @State private var showingMoodMapStats = false
     @State private var showingMoodCameraActive = false
     @State private var showCameraPermissionDenied = false
+    @State private var showingNonMoodReflectionCapture = false
+    @State private var didSaveNonMoodReflection = false
+    @State private var sessionShareViewModel = SessionShareViewModel()
+    @State private var didShareCompletedSession = false
+    @State private var moodTrendsViewModel = MoodTrendsViewModel()
     /// True when user ended a mood capture before the end-page sheet; mood sheet should update that session, not insert a new one.
     @State private var moodCaptureUpdateExistingSession = false
     /// Camera capture service — started when mood session begins, stopped when ended.
     @State private var moodCaptureService: MoodMapCaptureService?
+    /// Set to true once `moodCaptureService` has been created and `startSession()` has had a chance to run its async permission callback.
+    /// Used to safely gate `showingMoodCameraActive` without a false-negative on async permission flow.
+    @State private var moodCaptureReady = false
     /// Face suggestion passed into the post-session mood sheet (after “End & choose mood”).
     @State private var moodPickerSuggestedMood: QuickMood?
     @State private var moodPickerSuggestedConfidencePercent: Int?
+
+    @AppStorage("kiwifruit.settings.reflectionEntry.nonMoodSessionsEnabled") private var reflectionEntryNonMoodSessionsEnabled: Bool = true
 
     /// The live camera session, exposed for CameraPreviewView.
     private var cameraPreviewSession: AVCaptureSession? {
@@ -79,6 +90,14 @@ struct FocusView: View {
         }
         .sheet(isPresented: $showingSpeedReading) { SpeedReadingView() }
         .sheet(isPresented: $showingMoodMapStats) { MoodMapStatsView() }
+        .sheet(isPresented: $showingNonMoodReflectionCapture) {
+            ReflectionCaptureSheet(
+                bookTitle: sessionStore.bookTitle,
+                durationSeconds: sessionStore.completedSeconds,
+                pagesRead: sessionStore.completedPagesRead,
+                onSave: { didSaveNonMoodReflection = true }
+            )
+        }
         .sheet(isPresented: $showingMoodCameraActive) {
             moodCameraActiveSheet
         }
@@ -92,6 +111,7 @@ struct FocusView: View {
                 moodCaptureService?.clearError()
                 moodCaptureService?.stopSession()
                 moodCaptureService = nil
+                moodCaptureReady = false
                 moodStore.endMoodMap()
             }
         } message: {
@@ -101,6 +121,8 @@ struct FocusView: View {
             MoodCaptureSheet(
                 bookTitle: sessionStore.bookTitle,
                 duration: formattedCompletedTime,
+                durationSeconds: sessionStore.completedSeconds,
+                pagesRead: sessionStore.completedPagesRead,
                 suggestedMood: moodPickerSuggestedMood,
                 suggestedConfidencePercent: moodPickerSuggestedConfidencePercent,
                 onSkip: {
@@ -325,6 +347,7 @@ struct FocusView: View {
     private var startSessionView: some View {
         ScrollView {
             VStack(spacing: 0) {
+                moodTrendsBanner
                 startSessionButton
                 speedReadingButton
                 joinSection
@@ -336,10 +359,56 @@ struct FocusView: View {
             .padding(.bottom, 24)
         }
         .task {
+            await moodTrendsViewModel.loadIfNewSession(
+                sessionCount: challengeViewModel.sessionHistory.count
+            )
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30))
                 sessionStore.loadFriendSessions()
             }
+        }
+        .onChange(of: challengeViewModel.sessionHistory.count) { _, newCount in
+            Task { await moodTrendsViewModel.loadIfNewSession(sessionCount: newCount) }
+        }
+    }
+
+    @ViewBuilder
+    private var moodTrendsBanner: some View {
+        if moodTrendsViewModel.shouldShowBanner,
+           let suggestion = moodTrendsViewModel.suggestion {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    Image(systemName: "leaf.fill")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(FocusDesign.kiwi)
+                    Text("A gentle nudge")
+                        .font(.caption).fontWeight(.black)
+                        .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.6))
+                    Spacer()
+                    Button {
+                        withAnimation { moodTrendsViewModel.dismissBanner() }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.5))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Text(suggestion)
+                    .font(.subheadline).fontWeight(.semibold)
+                    .foregroundStyle(FocusDesign.handDrawnBorder)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(hex: "E6F0DC"))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(FocusDesign.handDrawnBorder, lineWidth: 2))
+            )
+            .sketchShadow()
+            .padding(.bottom, 20)
         }
     }
 
@@ -624,7 +693,8 @@ struct FocusView: View {
     }
 
     private var moodCameraActiveSheet: some View {
-        let currentMood = moodCaptureService?.detectedMood
+        // Live emotion: displays directly per frame during camera preview without waiting for votes.
+        let currentMood = moodCaptureService?.liveMood
 
         return VStack(spacing: 24) {
             // Top bar
@@ -636,6 +706,7 @@ struct FocusView: View {
                 Button(action: {
                     moodCaptureService?.stopSession()
                     moodCaptureService = nil
+                    moodCaptureReady = false
                     moodStore.cancelMoodMap()
                     showingMoodCameraActive = false
                 }) {
@@ -703,7 +774,7 @@ struct FocusView: View {
             // Detected mood card
             VStack(spacing: 12) {
                 if let mood = currentMood {
-                    let conf = Int((moodCaptureService?.detectionConfidence ?? 0) * 100)
+                    let conf = Int((moodCaptureService?.liveConfidence ?? 0) * 100)
                     HStack {
                         Text("Detected:")
                             .font(.subheadline).fontWeight(.bold)
@@ -743,6 +814,7 @@ struct FocusView: View {
                 )
                 moodCaptureService?.stopSession()
                 moodCaptureService = nil
+                moodCaptureReady = false
                 if let snap, let m = snap.mood {
                     moodPickerSuggestedMood = m
                     moodPickerSuggestedConfidencePercent = max(0, min(100, Int(snap.confidence * 100)))
@@ -878,12 +950,7 @@ struct FocusView: View {
                 moodStore.startMoodMap()
                 moodCaptureService = MoodMapCaptureService()
                 moodCaptureService?.startSession()
-                // Deny alert before showing the camera sheet.
-                if moodCaptureService?.cameraError != nil {
-                    showCameraPermissionDenied = true
-                } else {
-                    showingMoodCameraActive = true
-                }
+                moodCaptureReady = true
             }
             .font(.headline)
             .fontWeight(.bold)
@@ -901,6 +968,15 @@ struct FocusView: View {
             )
         }
         .padding(.bottom, 80)
+        .onChange(of: moodCaptureReady) { _, ready in
+            guard ready else { return }
+            if moodCaptureService?.cameraError != nil {
+                showCameraPermissionDenied = true
+            } else {
+                showingMoodCameraActive = true
+            }
+            moodCaptureReady = false
+        }
     }
 
     private var completionView: some View {
@@ -908,6 +984,45 @@ struct FocusView: View {
             VStack(spacing: 32) {
                 completionHeader
                 readingTimeSummary
+                shareSessionButton
+
+                if reflectionEntryNonMoodSessionsEnabled && !moodCaptureUpdateExistingSession {
+                    if didSaveNonMoodReflection {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(FocusDesign.kiwi)
+                            Text("Reflection saved")
+                                .font(.subheadline).fontWeight(.bold)
+                        }
+                        .foregroundStyle(FocusDesign.handDrawnBorder)
+                        .padding(.horizontal, 24).padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(FocusDesign.kiwi.opacity(0.15))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(FocusDesign.kiwi, lineWidth: 2))
+                        )
+                        .sketchShadow()
+                    } else {
+                        Button(action: { showingNonMoodReflectionCapture = true }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "square.and.pencil")
+                                    .font(.system(size: 16, weight: .bold))
+                                Text("Reflect on this session")
+                                    .font(.subheadline).fontWeight(.bold)
+                            }
+                            .foregroundStyle(FocusDesign.handDrawnBorder)
+                            .padding(.horizontal, 24).padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.white)
+                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(FocusDesign.handDrawnBorder, lineWidth: 2))
+                            )
+                            .sketchShadow()
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
 
                 if !moodStore.savedSessions.isEmpty {
                     Button(action: { showingMoodMapStats = true }) {
@@ -1007,6 +1122,72 @@ struct FocusView: View {
                 .fill(FocusDesign.handDrawnBorder)
                 .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
         )
+    }
+
+    /// One-tap share of the just-finished session as a feed post. The
+    /// summary text comes from `/session-summary` on the server; here we
+    /// just orchestrate the user-intent → VM call → local store update.
+    @ViewBuilder
+    private var shareSessionButton: some View {
+        if didShareCompletedSession {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(FocusDesign.kiwi)
+                Text("Shared to feed")
+                    .font(.subheadline).fontWeight(.bold)
+            }
+            .foregroundStyle(FocusDesign.handDrawnBorder)
+            .padding(.horizontal, 24).padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(FocusDesign.kiwi.opacity(0.15))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(FocusDesign.kiwi, lineWidth: 2))
+            )
+            .sketchShadow()
+        } else {
+            Button(action: shareCompletedSessionToFeed) {
+                HStack(spacing: 8) {
+                    if sessionShareViewModel.isSharing {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 16, weight: .bold))
+                    }
+                    Text(sessionShareViewModel.isSharing ? "Sharing..." : "Share this session")
+                        .font(.subheadline).fontWeight(.bold)
+                }
+                .foregroundStyle(FocusDesign.handDrawnBorder)
+                .padding(.horizontal, 24).padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(FocusDesign.kiwi)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(FocusDesign.handDrawnBorder, lineWidth: 2))
+                )
+                .sketchShadow()
+            }
+            .buttonStyle(.plain)
+            .disabled(sessionShareViewModel.isSharing || session.userId == nil)
+        }
+    }
+
+    private func shareCompletedSessionToFeed() {
+        guard let userId = session.userId,
+              let bookTitle = sessionStore.bookTitle else { return }
+        let mood = moodStore.savedSessions.first?.postSessionMood?.rawValue
+        Task {
+            let post = await sessionShareViewModel.shareCompletedSession(
+                userId: userId,
+                bookTitle: bookTitle,
+                durationSeconds: sessionStore.completedSeconds,
+                pagesRead: sessionStore.completedPagesRead,
+                mood: mood
+            )
+            if let post {
+                postsStore.prepend(post)
+                didShareCompletedSession = true
+            }
+        }
     }
 
     private var challengeProgressSection: some View {

@@ -11,6 +11,10 @@ final class UserPreferencesStore {
     var dailyGoalMinutes: Int = UserPreferences().dailyGoalMinutes
     /// Preferred genres for the recommendation system.
     var preferredGenres: [String] = UserPreferences().preferredGenres
+    /// Speed reading words per minute.
+    var speedReadingWpm: Int = UserPreferences().speedReadingWpm
+    /// Words shown per segment during speed reading (1–7).
+    var wordsPerSegment: Int = UserPreferences().wordsPerSegment
 
     init(api: APIClientProtocol = AppAPI.shared) {
         self.api = api
@@ -22,6 +26,8 @@ final class UserPreferencesStore {
             let loaded = try await api.fetchPreferences()
             dailyGoalMinutes = loaded.dailyGoalMinutes
             preferredGenres = loaded.preferredGenres
+            speedReadingWpm = loaded.speedReadingWpm
+            wordsPerSegment = loaded.wordsPerSegment
         } catch {
             print("[UserPreferencesStore] load failed: \(error)")
         }
@@ -31,14 +37,21 @@ final class UserPreferencesStore {
     func update(dailyGoal: Int, genres: [String]) async {
         dailyGoalMinutes = dailyGoal
         preferredGenres = genres
+        await save()
+    }
+
+    /// Persists all current preference values to the server.
+    func save() async {
         let prefs = UserPreferences(
-            dailyGoalMinutes: dailyGoal,
-            preferredGenres: genres
+            dailyGoalMinutes: dailyGoalMinutes,
+            preferredGenres: preferredGenres,
+            speedReadingWpm: speedReadingWpm,
+            wordsPerSegment: wordsPerSegment
         )
         do {
             try await api.savePreferences(prefs)
         } catch {
-            print("[UserPreferencesStore] update failed: \(error)")
+            print("[UserPreferencesStore] save failed: \(error)")
         }
     }
 }

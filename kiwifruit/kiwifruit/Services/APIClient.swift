@@ -97,6 +97,23 @@ protocol APIClientProtocol: Sendable {
     func getSpeedReadingProgress(epubId: String) async throws -> SpeedReadingProgress
     /// Updates the user's reading position in an epub.
     func updateSpeedReadingProgress(epubId: String, chapter: Int, wordIndex: Int) async throws
+    // MARK: - Adaptive Challenges & Reflections
+    /// Fetches a single adaptive challenge based on mood trends. Returns nil if < 7 sessions.
+    func fetchAdaptiveChallenge() async throws -> AdaptiveChallengeResponse
+    /// Fetches an AI-generated reading challenge inspired by the user's local weather.
+    func fetchWeatherChallenge(latitude: Double, longitude: Double) async throws -> WeatherChallengeResponse
+    /// Generates a mood-aware reflection prompt.
+    func fetchReflectionPrompt(bookTitle: String, durationMinutes: Int, pagesRead: Int?, mood: String?) async throws -> ReflectionPromptResponse
+    /// Saves a user's reflection.
+    func createReflection(bookTitle: String, title: String?, prompt: String, response: String, mood: String?, durationMinutes: Int?, visibility: String) async throws
+    /// Updates an existing reflection (visibility/title/response).
+    func updateReflection(id: String, title: String?, response: String?, visibility: String?) async throws
+    /// Fetch reflections visible to the current user.
+    func fetchReflections() async throws -> [Reflection]
+    /// Generates a shareable session summary text from session stats.
+    func generateSessionSummary(bookTitle: String, durationMinutes: Int, pagesRead: Int?, mood: String?) async throws -> String
+    /// Aggregated mood trends + engagement signals (detects declining/tired patterns).
+    func fetchMoodTrends(days: Int) async throws -> MoodTrendsResponse
 }
 
 /// Simple in-memory/mock client used in previews and when no backend is configured.
@@ -249,6 +266,24 @@ final class MockAPIClient: APIClientProtocol {
         return SpeedReadingProgress(chapterNumber: 1, wordIndex: 0)
     }
     func updateSpeedReadingProgress(epubId: String, chapter: Int, wordIndex: Int) async throws {}
+    func fetchAdaptiveChallenge() async throws -> AdaptiveChallengeResponse {
+        return AdaptiveChallengeResponse(available: false, challenge: nil)
+    }
+    func fetchWeatherChallenge(latitude: Double, longitude: Double) async throws -> WeatherChallengeResponse {
+        return WeatherChallengeResponse(available: false, challenge: nil)
+    }
+    func fetchReflectionPrompt(bookTitle: String, durationMinutes: Int, pagesRead: Int?, mood: String?) async throws -> ReflectionPromptResponse {
+        return ReflectionPromptResponse(prompt: "What stood out to you while reading \(bookTitle)?", mood: mood)
+    }
+    func createReflection(bookTitle: String, title: String?, prompt: String, response: String, mood: String?, durationMinutes: Int?, visibility: String) async throws {}
+    func updateReflection(id: String, title: String?, response: String?, visibility: String?) async throws {}
+    func fetchReflections() async throws -> [Reflection] { return [] }
+    func generateSessionSummary(bookTitle: String, durationMinutes: Int, pagesRead: Int?, mood: String?) async throws -> String {
+        return "Just read \(bookTitle) for \(durationMinutes) minutes"
+    }
+    func fetchMoodTrends(days: Int) async throws -> MoodTrendsResponse {
+        return MoodTrendsResponse(days: days, totalSessions: 0, avgDurationMinutes: 0, trend: "insufficient_data", suggestion: nil)
+    }
 }
 
 /// A simple REST API client implementation using URLSession and async/await.
@@ -1003,6 +1038,137 @@ final class RESTAPIClient: APIClientProtocol {
             print("updateSpeedReadingProgress failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
             throw URLError(.badServerResponse)
         }
+    }
+
+    func fetchAdaptiveChallenge() async throws -> AdaptiveChallengeResponse {
+        let url = baseURL.appendingPathComponent("/adaptive-challenges")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        return try jsonDecoder.decode(AdaptiveChallengeResponse.self, from: data)
+    }
+
+    func fetchWeatherChallenge(latitude: Double, longitude: Double) async throws -> WeatherChallengeResponse {
+        let url = baseURL.appendingPathComponent("/weather-challenge")
+        var req = URLRequest(url: url); req.httpMethod = "POST"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["latitude": latitude, "longitude": longitude])
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("fetchWeatherChallenge failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+        return try jsonDecoder.decode(WeatherChallengeResponse.self, from: data)
+    }
+
+    func fetchReflectionPrompt(bookTitle: String, durationMinutes: Int, pagesRead: Int?, mood: String?) async throws -> ReflectionPromptResponse {
+        let url = baseURL.appendingPathComponent("/reflection-prompt")
+        var req = URLRequest(url: url); req.httpMethod = "POST"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        var body: [String: Any] = ["book_title": bookTitle, "duration_minutes": durationMinutes]
+        if let pagesRead { body["pages_read"] = pagesRead }
+        if let mood { body["mood"] = mood }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        return try jsonDecoder.decode(ReflectionPromptResponse.self, from: data)
+    }
+
+    func createReflection(bookTitle: String, title: String?, prompt: String, response: String, mood: String?, durationMinutes: Int?, visibility: String) async throws {
+        let url = baseURL.appendingPathComponent("/reflections")
+        var req = URLRequest(url: url); req.httpMethod = "POST"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        var body: [String: Any] = ["book_title": bookTitle, "prompt": prompt, "response": response, "visibility": visibility]
+        if let title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { body["title"] = title }
+        if let mood { body["mood"] = mood }
+        if let dur = durationMinutes { body["duration_minutes"] = dur }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("createReflection failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+    }
+
+    func updateReflection(id: String, title: String?, response: String?, visibility: String?) async throws {
+        let url = baseURL.appendingPathComponent("/reflections/\(id)")
+        var req = URLRequest(url: url); req.httpMethod = "PUT"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+
+        var body: [String: Any] = [:]
+        if let title { body["title"] = title }
+        if let response { body["response"] = response }
+        if let visibility { body["visibility"] = visibility }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        debugLogRequest(req)
+
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("updateReflection failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+    }
+
+    func fetchReflections() async throws -> [Reflection] {
+        let url = baseURL.appendingPathComponent("/reflections")
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("fetchReflections failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+        return try jsonDecoder.decode([Reflection].self, from: data)
+    }
+
+    func fetchMoodTrends(days: Int) async throws -> MoodTrendsResponse {
+        guard var comps = URLComponents(url: baseURL.appendingPathComponent("/mood-trends"), resolvingAgainstBaseURL: false) else {
+            throw URLError(.badURL)
+        }
+        comps.queryItems = [URLQueryItem(name: "days", value: String(days))]
+        guard let url = comps.url else { throw URLError(.badURL) }
+        var req = URLRequest(url: url)
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("fetchMoodTrends failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+        return try jsonDecoder.decode(MoodTrendsResponse.self, from: data)
+    }
+
+    func generateSessionSummary(bookTitle: String, durationMinutes: Int, pagesRead: Int?, mood: String?) async throws -> String {
+        let url = baseURL.appendingPathComponent("/session-summary")
+        var req = URLRequest(url: url); req.httpMethod = "POST"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        var body: [String: Any] = ["book_title": bookTitle, "duration_minutes": durationMinutes]
+        if let pagesRead { body["pages_read"] = pagesRead }
+        if let mood { body["mood"] = mood }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        debugLogRequest(req)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            print("generateSessionSummary failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
+            throw URLError(.badServerResponse)
+        }
+        struct SummaryResponse: Codable { let summary: String }
+        return try jsonDecoder.decode(SummaryResponse.self, from: data).summary
     }
 }
 

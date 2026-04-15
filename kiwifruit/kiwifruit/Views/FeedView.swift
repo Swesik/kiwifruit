@@ -23,6 +23,7 @@ struct FeedView: View {
             .padding(.top)
         }
         .navigationTitle("Kiwis")
+        .background(Color(hex: "FAFAFA"))
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: { showingCreate = true }) {
@@ -34,10 +35,8 @@ struct FeedView: View {
             await store.loadInitial()
         }
         .sheet(isPresented: $showingCreate) {
-            CreatePostView(isPresented: $showingCreate) { post in
-                store.prepend(post)
-            }
-            .environment(\.postsStore, store)
+            ShareComposerSheet()
+                .environment(\.postsStore, store)
         }
     }
 }

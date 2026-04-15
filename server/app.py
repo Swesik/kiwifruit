@@ -292,6 +292,34 @@ def init_db():
             db.executescript(f.read())
 
 
+def run_migrations():
+    """Apply lightweight, idempotent schema patches to an existing database.
+
+    Databases created before a column was added to ``schema.sql`` won't have
+    that column and any query that references it will throw
+    ``no such column``. Call this on every app startup (alongside ``init_db``
+    if the DB is new) so stale dev/demo databases stay usable without wiping.
+    """
+    with app.app_context():
+        db = get_db()
+
+        def column_exists(table, column):
+            rows = db.execute(f"PRAGMA table_info({table})").fetchall()
+            return any(row['name'] == column for row in rows)
+
+        # reflections.title was added after the initial schema shipped.
+        if not column_exists('reflections', 'title'):
+            db.execute("ALTER TABLE reflections ADD COLUMN title TEXT")
+            logger.info("migration: added reflections.title")
+
+        # session_history.mood was added with the mood-map feature.
+        if not column_exists('session_history', 'mood'):
+            db.execute("ALTER TABLE session_history ADD COLUMN mood TEXT")
+            logger.info("migration: added session_history.mood")
+
+        db.commit()
+
+
 
 def _to_iso(ts):
     # ts is a SQLite DATETIME like 'YYYY-MM-DD HH:MM:SS' or already ISO; return ISO8601 with timezone
@@ -1696,7 +1724,7 @@ def get_session_history():
         abort(403)
     db = get_db()
     rows = db.execute(
-        'SELECT id, book_title, duration_seconds, pages_read, ended_at '
+        'SELECT id, book_title, duration_seconds, pages_read, mood, ended_at '
         'FROM session_history WHERE username = ? ORDER BY ended_at DESC',
         (username,)
     ).fetchall()
@@ -1705,6 +1733,7 @@ def get_session_history():
         'book_title': r['book_title'],
         'duration_seconds': r['duration_seconds'],
         'pages_read': r['pages_read'],
+        'mood': r['mood'],
         'ended_at': _to_iso(r['ended_at'])
     } for r in rows])
 
@@ -1836,6 +1865,835 @@ def save_preferences():
         'daily_goal_minutes': daily_goal,
         'preferred_genres': genres
     })
+
+
+@app.route('/mood-trends', methods=['GET'])
+def mood_trends():
+    """Aggregated mood trends and engagement signals for the authenticated user.
+
+    **GET** ``/mood-trends``
+
+    :query int days: Look-back window in days (default 14, max 90).
+    :returns: JSON with mood distribution, engagement metrics, and recommendations.
+    :status 200: Trends returned.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    days = min(int(request.args.get('days', 14)), 90)
+    db = get_db()
+
+    # Fetch sessions within the window.
+    rows = db.execute(
+        'SELECT duration_seconds, pages_read, mood, ended_at '
+        'FROM session_history WHERE username = ? '
+        'AND ended_at >= datetime("now", ?)',
+        (username, f'-{days} days')
+    ).fetchall()
+
+    if not rows:
+        return jsonify({
+            'days': days,
+            'total_sessions': 0,
+            'mood_distribution': {},
+            'avg_duration_minutes': 0,
+            'avg_pages': 0,
+            'trend': 'insufficient_data',
+            'suggestion': None
+        })
+
+    # Mood distribution.
+    mood_counts = {}
+    for r in rows:
+        m = r['mood']
+        if m:
+            mood_counts[m] = mood_counts.get(m, 0) + 1
+
+    total_sessions = len(rows)
+    total_with_mood = sum(mood_counts.values())
+
+    mood_distribution = {}
+    for mood, count in mood_counts.items():
+        mood_distribution[mood] = {
+            'count': count,
+            'percent': round(count / total_with_mood * 100) if total_with_mood else 0
+        }
+
+    # Engagement metrics.
+    durations = [r['duration_seconds'] or 0 for r in rows]
+    pages = [r['pages_read'] or 0 for r in rows]
+    avg_duration = sum(durations) / total_sessions
+    avg_pages = sum(pages) / total_sessions if any(pages) else 0
+
+    # Split into halves to detect trend direction.
+    half = total_sessions // 2
+    if half >= 2:
+        first_half_dur = sum(durations[:half]) / half
+        second_half_dur = sum(durations[half:]) / (total_sessions - half)
+        duration_trend = (second_half_dur - first_half_dur) / first_half_dur if first_half_dur > 0 else 0
+    else:
+        duration_trend = 0
+
+    # Recent mood streak (last 3 sessions).
+    recent_moods = [r['mood'] for r in rows[-3:] if r['mood']]
+    sustained_tired = len(recent_moods) >= 3 and all(m == 'tired' for m in recent_moods)
+
+    # Determine trend. Only declining trends surface a nudge to the client.
+    if sustained_tired:
+        trend = 'declining'
+    elif duration_trend < -0.25 and total_sessions >= 4:
+        trend = 'declining'
+    elif duration_trend > 0.25 and total_sessions >= 4:
+        trend = 'improving'
+    else:
+        trend = 'stable'
+
+    # Nudge copy is AI-generated from the user's real stats when (and only
+    # when) the trend is declining. No template fallback — if OpenAI fails,
+    # suggestion stays None and the client simply doesn't show a banner.
+    suggestion = None
+    if trend == 'declining':
+        suggestion = _openai_mood_trend_nudge(
+            session_count=total_sessions,
+            avg_duration_minutes=round(avg_duration / 60, 1),
+            avg_pages=round(avg_pages, 1),
+            dur_trend_pct=round(duration_trend * 100, 1),
+            mood_distribution=mood_distribution,
+            sustained_tired=sustained_tired,
+        )
+
+    return jsonify({
+        'days': days,
+        'total_sessions': total_sessions,
+        'mood_distribution': mood_distribution,
+        'avg_duration_minutes': round(avg_duration / 60, 1),
+        'avg_pages': round(avg_pages, 1),
+        'duration_trend_pct': round(duration_trend * 100, 1),
+        'trend': trend,
+        'suggestion': suggestion
+    })
+
+
+@app.route('/adaptive-challenges', methods=['GET'])
+def adaptive_challenges():
+    """Return a single adaptive challenge based on the user's mood trends and
+    engagement signals. Returns ``available=false`` only when the user has no
+    session history at all (nothing to base a recommendation on).
+
+    **GET** ``/adaptive-challenges``
+
+    :returns: JSON with ``available`` bool and optional ``challenge`` object.
+    :status 200: Response returned.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    db = get_db()
+
+    rows = db.execute(
+        'SELECT duration_seconds, pages_read, mood, ended_at '
+        'FROM session_history WHERE username = ? '
+        'ORDER BY ended_at ASC',
+        (username,)
+    ).fetchall()
+
+    # No data at all — nothing to personalize on.
+    if not rows:
+        return jsonify({'available': False})
+
+    # Use last 14 days for trend analysis; fall back to everything available.
+    cutoff = db.execute("SELECT datetime('now', '-14 days')").fetchone()[0]
+    recent = [r for r in rows if r['ended_at'] and r['ended_at'] >= cutoff]
+    if not recent:
+        recent = rows
+
+    recent_moods = [r['mood'] for r in recent[-3:] if r['mood']]
+    sustained_tired = len(recent_moods) >= 3 and all(m == 'tired' for m in recent_moods)
+
+    total = len(recent)
+    durations = [r['duration_seconds'] or 0 for r in recent]
+    avg_duration = sum(durations) / total
+    pages_list = [r['pages_read'] or 0 for r in recent]
+    avg_pages = sum(pages_list) / total if any(pages_list) else 0
+
+    half = total // 2
+    if half >= 2:
+        first_avg = sum(durations[:half]) / half
+        second_avg = sum(durations[half:]) / (total - half)
+        dur_trend = (second_avg - first_avg) / first_avg if first_avg > 0 else 0
+    else:
+        dur_trend = 0
+
+    # Pick the most relevant challenge type and scale based on trend.
+    if sustained_tired:
+        branch = 'sustained_tired'
+        goal_minutes = max(5, round(avg_duration / 60 * 0.6))
+        challenge = {
+            'title': f'Gentle reading: {goal_minutes} min this week',
+            'goalUnit': 'minutes/week',
+            'goalCount': goal_minutes * 7,
+            'rewardXP': 20,
+        }
+    elif dur_trend < -0.25:
+        branch = 'declining'
+        goal_minutes = max(5, round(avg_duration / 60 * 0.75))
+        challenge = {
+            'title': f'Stay consistent: {goal_minutes} min/day',
+            'goalUnit': 'minutes/week',
+            'goalCount': goal_minutes * 7,
+            'rewardXP': 25,
+        }
+    elif dur_trend > 0.25:
+        branch = 'improving'
+        goal_minutes = max(10, round(avg_duration / 60 * 1.3))
+        challenge = {
+            'title': f'Push further: {goal_minutes} min/day',
+            'goalUnit': 'minutes/week',
+            'goalCount': goal_minutes * 7,
+            'rewardXP': 40,
+        }
+    else:
+        branch = 'stable'
+        goal_pages = max(10, round(avg_pages * 7))
+        challenge = {
+            'title': f'Read {goal_pages} pages this week',
+            'goalUnit': 'pages/week',
+            'goalCount': goal_pages,
+            'rewardXP': 30,
+        }
+
+    mood_distribution = {}
+    for m in [r['mood'] for r in recent if r['mood']]:
+        mood_distribution[m] = mood_distribution.get(m, 0) + 1
+
+    narrative = _openai_adaptive_narrative(
+        branch=branch,
+        title=challenge['title'],
+        goal_unit=challenge['goalUnit'],
+        goal_count=challenge['goalCount'],
+        avg_minutes=round(avg_duration / 60, 1),
+        avg_pages=round(avg_pages, 1),
+        dur_trend_pct=round(dur_trend * 100, 1),
+        session_count=total,
+        mood_distribution=mood_distribution,
+    )
+    if not narrative:
+        return jsonify({'available': False})
+
+    challenge['description'] = narrative['description']
+    challenge['reason'] = narrative['reason']
+    challenge['adaptive'] = True
+    return jsonify({'available': True, 'challenge': challenge})
+
+
+def _openai_adaptive_narrative(
+    branch, title, goal_unit, goal_count,
+    avg_minutes, avg_pages, dur_trend_pct,
+    session_count, mood_distribution,
+):
+    """Use OpenAI to generate a personalized description + reason for an
+    adaptive challenge based on the user's actual stats.
+
+    Returns {'description': str, 'reason': str} on success, None on any failure.
+    """
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        return None
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+
+        mood_summary = ", ".join(f"{m}: {c}" for m, c in mood_distribution.items()) or "no mood data"
+        branch_hint = {
+            'sustained_tired': "User has been tired across their last 3 sessions — we want to recommend a lighter goal without making them feel bad.",
+            'declining': "User's session duration has dropped noticeably recently — we're scaling back expectations.",
+            'improving': "User's session duration is growing — we're nudging them a bit further.",
+            'stable': "User has a steady reading rhythm — we're matching their current pace, not pushing harder.",
+        }[branch]
+
+        user_msg = (
+            f"Generate two short, personalized strings for a reading challenge card.\n\n"
+            f"Challenge title: {title}\n"
+            f"Goal: {goal_count} {goal_unit}\n"
+            f"\n"
+            f"User stats over the last {session_count} sessions (≤14 days):\n"
+            f"- Average session length: {avg_minutes} minutes\n"
+            f"- Average pages per session: {avg_pages}\n"
+            f"- Session duration trend vs earlier half: {dur_trend_pct:+.1f}%\n"
+            f"- Mood distribution: {mood_summary}\n"
+            f"\n"
+            f"Context for this recommendation: {branch_hint}\n"
+            f"\n"
+            f"Return a JSON object with exactly two fields:\n"
+            f'  "description": a 1-sentence description of the challenge that cites at least one concrete number from the stats above (max 160 chars).\n'
+            f'  "reason": a 1-sentence explanation of WHY this specific goal was chosen, grounded in the user\'s actual numbers or pattern (max 160 chars).\n'
+            f"\n"
+            f"Be specific, warm, and avoid generic phrases. Do not include markdown or prose outside the JSON."
+        )
+
+        resp = client.chat.completions.create(
+            model=os.environ.get('OPENAI_ADAPTIVE_MODEL', 'gpt-4o-mini'),
+            messages=[
+                {"role": "system", "content": "You write concise, personalized reading-challenge copy grounded in the user's real stats."},
+                {"role": "user", "content": user_msg},
+            ],
+            max_tokens=200,
+            temperature=0.7,
+            timeout=8,
+            response_format={"type": "json_object"},
+        )
+        raw = (resp.choices[0].message.content or '').strip()
+        data = json.loads(raw)
+        description = (data.get('description') or '').strip()
+        reason = (data.get('reason') or '').strip()
+        if not description or not reason:
+            return None
+        return {'description': description, 'reason': reason}
+    except Exception as e:
+        logger.warning(f"OpenAI adaptive narrative failed: {e}")
+        return None
+
+
+def _openai_mood_trend_nudge(
+    session_count, avg_duration_minutes, avg_pages,
+    dur_trend_pct, mood_distribution, sustained_tired,
+):
+    """Ask OpenAI for a one-sentence, compassionate nudge when we detect a
+    declining trend. Returns the sentence or None on any failure — the
+    client hides the banner when None.
+    """
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        return None
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+
+        mood_summary = ", ".join(f"{m}: {c}" for m, c in mood_distribution.items()) or "no mood data"
+        signal_hint = (
+            "Their last 3 sessions were all marked 'tired' — they seem to be burning out."
+            if sustained_tired
+            else f"Their session duration is down {abs(dur_trend_pct):.1f}% vs the earlier window — energy appears to be dipping."
+        )
+
+        user_msg = (
+            "Write a single, short, compassionate nudge (one sentence, <= 150 chars) "
+            "encouraging the reader to pace themselves.\n\n"
+            f"User stats over the last {session_count} sessions (up to 14 days):\n"
+            f"- Average session length: {avg_duration_minutes} minutes\n"
+            f"- Average pages per session: {avg_pages}\n"
+            f"- Session duration trend vs earlier window: {dur_trend_pct:+.1f}%\n"
+            f"- Mood distribution: {mood_summary}\n\n"
+            f"Context: {signal_hint}\n\n"
+            "REQUIREMENTS:\n"
+            "1. You MUST embed at least one specific number from the stats above "
+            "(the minutes, pages, trend %, session count, or tired count).\n"
+            "2. Warm, non-judgmental tone. Never scold.\n"
+            "3. Do not prescribe a specific new goal — leave action open.\n"
+            "4. Return only the single sentence, no markdown, no preamble."
+        )
+
+        resp = client.chat.completions.create(
+            model=os.environ.get('OPENAI_NUDGE_MODEL', 'gpt-4o-mini'),
+            messages=[
+                {"role": "system", "content": "You write short, warm nudges that help readers pace themselves when their reading is dipping."},
+                {"role": "user", "content": user_msg},
+            ],
+            max_tokens=80,
+            temperature=0.8,
+            timeout=8,
+        )
+        text = (resp.choices[0].message.content or '').strip().strip('"').strip()
+        return text if text else None
+    except Exception as e:
+        logger.warning(f"OpenAI mood-trend nudge failed: {e}")
+        return None
+
+
+def _wmo_condition_label(code):
+    """Human-readable condition string for a WMO weather code."""
+    if code == 0:       return "clear sky"
+    if code in (1, 2):  return "mainly clear"
+    if code == 3:       return "overcast"
+    if 45 <= code <= 48: return "fog"
+    if 51 <= code <= 55: return "drizzle"
+    if 56 <= code <= 57: return "freezing drizzle"
+    if 61 <= code <= 65: return "rain"
+    if 66 <= code <= 67: return "freezing rain"
+    if 71 <= code <= 77: return "snow"
+    if 80 <= code <= 82: return "rain showers"
+    if 85 <= code <= 86: return "snow showers"
+    if code == 95:      return "thunderstorm"
+    if 96 <= code <= 99: return "thunderstorm with hail"
+    return "mixed weather"
+
+
+def _openai_weather_challenge(condition, temp_c):
+    """Ask OpenAI for a weather-inspired reading challenge.
+
+    Returns a challenge dict on success, None on any failure. Failure is
+    intentional — per product direction we prefer to show nothing over a
+    generic fallback.
+    """
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        return None
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+
+        user_msg = (
+            f"Generate a short reading challenge inspired by today's weather.\n\n"
+            f"Current condition: {condition}\n"
+            f"Temperature: {temp_c:.0f}°C\n\n"
+            f"Return a JSON object with exactly these fields:\n"
+            f'  "title": evocative, under 40 characters\n'
+            f'  "description": 1 sentence (<= 140 chars) that ties the challenge to the weather\n'
+            f'  "reason": 1 sentence (<= 140 chars) explaining why this weather suits this challenge\n'
+            f'  "goalUnit": one of "minutes/week", "pages/month", "books/month"\n'
+            f'  "goalCount": positive integer goal amount matched to the unit\n'
+            f'  "rewardXP": integer between 20 and 50 (harsher weather → higher XP)\n\n'
+            f"Be vivid and specific — let the weather's mood show in the wording. No markdown."
+        )
+
+        resp = client.chat.completions.create(
+            model=os.environ.get('OPENAI_WEATHER_MODEL', 'gpt-4o-mini'),
+            messages=[
+                {"role": "system", "content": "You write short, atmospheric reading-challenge copy inspired by the current weather."},
+                {"role": "user", "content": user_msg},
+            ],
+            max_tokens=220,
+            temperature=0.9,
+            timeout=8,
+            response_format={"type": "json_object"},
+        )
+        data = json.loads((resp.choices[0].message.content or '').strip())
+        title = (data.get('title') or '').strip()
+        description = (data.get('description') or '').strip()
+        reason = (data.get('reason') or '').strip()
+        goal_unit = (data.get('goalUnit') or '').strip()
+        goal_count = int(data.get('goalCount') or 0)
+        reward_xp = int(data.get('rewardXP') or 0)
+
+        if not title or not description or not reason:
+            return None
+        if goal_unit not in ('minutes/week', 'pages/month', 'books/month'):
+            return None
+        if goal_count <= 0 or reward_xp <= 0:
+            return None
+
+        return {
+            'title': title,
+            'description': description,
+            'reason': reason,
+            'goalUnit': goal_unit,
+            'goalCount': goal_count,
+            'rewardXP': min(max(reward_xp, 20), 50),
+        }
+    except Exception as e:
+        logger.warning(f"OpenAI weather challenge failed: {e}")
+        return None
+
+
+@app.route('/weather-challenge', methods=['POST'])
+def weather_challenge():
+    """Generate an AI-written reading challenge inspired by the user's local
+    weather. Returns ``available=false`` on any failure (no template fallback).
+
+    **POST** ``/weather-challenge``
+
+    :json float latitude: User's latitude.
+    :json float longitude: User's longitude.
+    :returns: JSON ``{ available: bool, challenge?: {...} }`` matching the
+              adaptive-challenge shape for easy client reuse.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    data = request.get_json(silent=True) or {}
+    lat = data.get('latitude')
+    lon = data.get('longitude')
+    if lat is None or lon is None:
+        return jsonify({'available': False})
+
+    # Fetch current conditions from open-meteo.
+    try:
+        url = (
+            "https://api.open-meteo.com/v1/forecast"
+            f"?latitude={lat}&longitude={lon}"
+            "&current=weather_code,temperature_2m&forecast_days=1"
+        )
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            payload = json.loads(resp.read().decode('utf-8'))
+        current = payload.get('current') or {}
+        weather_code = int(current.get('weather_code', 0))
+        temp_c = float(current.get('temperature_2m', 20.0))
+    except Exception as e:
+        logger.warning(f"open-meteo fetch failed: {e}")
+        return jsonify({'available': False})
+
+    condition = _wmo_condition_label(weather_code)
+    challenge = _openai_weather_challenge(condition, temp_c)
+    if not challenge:
+        return jsonify({'available': False})
+
+    challenge['weather'] = True
+    challenge['conditionLabel'] = f"{condition}, {int(round(temp_c))}°C"
+    return jsonify({'available': True, 'challenge': challenge})
+
+
+def _fallback_reflection_prompt(book_title, duration, pages, mood):
+    """Template-based fallback when OpenAI is unavailable."""
+    import random
+    pages_clause = f" and {pages} pages" if pages else ""
+    prompts = {
+        'tired': [
+            f"You read {book_title} for {duration} minutes{pages_clause} even when tired — what kept you going?",
+            f"Rest is part of the journey. What's one thing from {book_title} you'll carry into tomorrow?",
+            f"Even a short session counts. What moment in {book_title} stood out today?",
+        ],
+        'focused': [
+            f"You were in the zone with {book_title} for {duration} minutes{pages_clause}. What clicked?",
+            f"Deep focus for {duration} minutes — what idea from {book_title} are you still thinking about?",
+            f"What connection did you make while reading {book_title} today?",
+        ],
+        'inspired': [
+            f"You're feeling inspired after {duration} minutes{pages_clause} with {book_title}! What sparked that?",
+            f"{book_title} clearly resonated — what would you share with a friend about it?",
+            f"Riding that energy! What's one thing from {book_title} you want to act on?",
+        ],
+    }
+    if mood in prompts:
+        return random.choice(prompts[mood])
+    return f"You just spent {duration} minutes{pages_clause} with {book_title}. What stood out?"
+
+
+def _openai_reflection_prompt(book_title, duration, pages, mood):
+    """Call OpenAI to generate a personalized reflection prompt.
+
+    Returns the prompt string on success, or None on any failure.
+    """
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        return None
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        pages_clause = f", read {pages} pages" if pages else ""
+        mood_clause = f", felt {mood} afterwards" if mood else ""
+        user_msg = (
+            f"A reader just finished a reading session: book \"{book_title}\", "
+            f"{duration} minutes{pages_clause}{mood_clause}. "
+            "Generate ONE short, warm, open-ended reflection question (under 25 words) "
+            "that takes their mood, session length, and pages read into account. "
+            "Return only the question, no preamble."
+        )
+        resp = client.chat.completions.create(
+            model=os.environ.get('OPENAI_PROMPT_MODEL', 'gpt-4o-mini'),
+            messages=[
+                {"role": "system", "content": "You craft thoughtful, personalized reading reflection prompts."},
+                {"role": "user", "content": user_msg},
+            ],
+            max_tokens=80,
+            temperature=0.8,
+            timeout=8,
+        )
+        text = (resp.choices[0].message.content or '').strip().strip('"')
+        return text if text else None
+    except Exception as e:
+        logger.warning(f"OpenAI reflection prompt failed, falling back to template: {e}")
+        return None
+
+
+@app.route('/reflection-prompt', methods=['POST'])
+def generate_reflection_prompt():
+    """Generate a mood-aware reflection prompt for the user's recent session.
+
+    **POST** ``/reflection-prompt``
+
+    :json string book_title: Title of the book just read.
+    :json int duration_minutes: Session length in minutes.
+    :json int pages_read: Pages read this session (optional).
+    :json string mood: Post-session mood (focused/inspired/tired).
+    :returns: JSON with ``prompt`` string and ``source`` ("openai" or "template").
+    :status 200: Prompt generated.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    data = request.get_json(silent=True) or {}
+    book_title = data.get('book_title', 'your book')
+    duration = data.get('duration_minutes', 0)
+    pages = data.get('pages_read')
+    mood = data.get('mood')
+
+    prompt = _openai_reflection_prompt(book_title, duration, pages, mood)
+    source = 'openai'
+    if not prompt:
+        prompt = _fallback_reflection_prompt(book_title, duration, pages, mood)
+        source = 'template'
+
+    return jsonify({'prompt': prompt, 'mood': mood, 'source': source})
+
+
+@app.route('/session-summary', methods=['POST'])
+def generate_session_summary():
+    """Generate a shareable session summary for the user's reading session.
+
+    **POST** ``/session-summary``
+
+    :json string book_title: Title of the book.
+    :json int duration_minutes: Session length in minutes.
+    :json int pages_read: Pages read (optional).
+    :json string mood: Post-session mood (optional).
+    :returns: JSON with ``summary`` string.
+    :status 200: Summary generated.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+
+    data = request.get_json(silent=True) or {}
+    book_title = data.get('book_title', 'a book')
+    duration = data.get('duration_minutes', 0)
+    pages = data.get('pages_read')
+    mood = data.get('mood')
+
+    # Build summary text.
+    parts = [f"Just read {book_title} for {duration} minutes"]
+    if pages:
+        parts.append(f"{pages} pages")
+
+    mood_labels = {'focused': 'Feeling focused', 'inspired': 'Feeling inspired', 'tired': 'Winding down'}
+    if mood and mood in mood_labels:
+        parts.append(mood_labels[mood])
+
+    # Fetch streak info.
+    db = get_db()
+    total_sessions = db.execute(
+        'SELECT COUNT(*) as cnt FROM session_history WHERE username = ?',
+        (username,)
+    ).fetchone()['cnt']
+
+    if total_sessions > 1:
+        parts.append(f"Session #{total_sessions} and counting")
+
+    summary = '\n'.join(parts)
+    return jsonify({'summary': summary, 'total_sessions': total_sessions})
+
+
+@app.route('/reflections', methods=['POST'])
+def create_reflection():
+    """Save a reflection after a reading session.
+
+    **POST** ``/reflections``
+
+    :json string book_title: Title of the book.
+    :json string title: Optional reflection title; if omitted the server generates one.
+    :json string prompt: The reflection prompt shown to the user.
+    :json string response: The user's written reflection.
+    :json string mood: Post-session mood (optional).
+    :json int duration_minutes: Session duration in minutes (optional).
+    :json string visibility: One of ``private``, ``friends_only``, ``public`` (default ``private``).
+    :returns: JSON with the created reflection.
+    :status 201: Reflection created.
+    :status 400: Missing required fields.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    def _generate_reflection_title(book_title: str, response: str) -> str:
+        # Lightweight fallback "AI" title: use the first meaningful sentence/line,
+        # otherwise a short book-based title.
+        text = (response or '').strip()
+        if text:
+            first_line = text.splitlines()[0].strip()
+            if first_line:
+                # Take first sentence-ish chunk.
+                for sep in ['. ', '。', '!', '?', '\n']:
+                    if sep in first_line:
+                        first_line = first_line.split(sep)[0].strip()
+                        break
+                if len(first_line) > 120:
+                    first_line = first_line[:117].rstrip() + '...'
+                return first_line
+        base = (book_title or 'Reflection').strip()[:80]
+        return f"Thoughts on {base}" if base else 'Reflection'
+
+    data = request.get_json(silent=True) or {}
+    book_title = data.get('book_title')
+    title = data.get('title')
+    prompt = data.get('prompt')
+    response_text = data.get('response')
+    if not book_title or not prompt or not response_text:
+        abort(400, description='book_title, prompt, and response are required')
+    if isinstance(title, str):
+        title = title.strip()
+        if title == '':
+            title = None
+    else:
+        title = None
+    if not title:
+        title = _generate_reflection_title(book_title, response_text)
+    mood = data.get('mood')
+    duration = data.get('duration_minutes')
+    visibility = data.get('visibility', 'private')
+    if visibility not in ('private', 'friends_only', 'public'):
+        abort(400, description='visibility must be private, friends_only, or public')
+
+    ref_id = uuid.uuid4().hex
+    db = get_db()
+    db.execute(
+        'INSERT INTO reflections (id, username, book_title, title, prompt, response, mood, duration_minutes, visibility) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        (ref_id, username, book_title, title, prompt, response_text, mood, duration, visibility)
+    )
+    db.commit()
+    return jsonify({
+        'id': ref_id,
+        'username': username,
+        'book_title': book_title,
+        'title': title,
+        'prompt': prompt,
+        'response': response_text,
+        'mood': mood,
+        'duration_minutes': duration,
+        'visibility': visibility
+    }), 201
+
+
+@app.route('/reflections', methods=['GET'])
+def get_reflections_feed():
+    """Return reflections visible to the authenticated user: own reflections
+    plus friends' reflections with ``friends_only`` or ``public`` visibility.
+
+    **GET** ``/reflections``
+
+    :returns: JSON list of reflection objects, most recent first.
+    :status 200: List returned.
+    :status 403: Not authenticated.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    # Get list of users this person follows.
+    friends = [r['followee'] for r in db.execute(
+        'SELECT followee FROM following WHERE follower = ?', (username,)
+    ).fetchall()]
+
+    # Own reflections (all visibilities) + friends' (friends_only or public).
+    own = db.execute(
+        'SELECT id, username, book_title, title, prompt, response, mood, duration_minutes, visibility, created_at '
+        'FROM reflections WHERE username = ? ORDER BY created_at DESC',
+        (username,)
+    ).fetchall()
+
+    friend_refs = []
+    if friends:
+        placeholders = ','.join('?' * len(friends))
+        friend_refs = db.execute(
+            f'SELECT id, username, book_title, title, prompt, response, mood, duration_minutes, visibility, created_at '
+            f'FROM reflections WHERE username IN ({placeholders}) '
+            f"AND visibility IN ('friends_only', 'public') ORDER BY created_at DESC",
+            friends
+        ).fetchall()
+
+    all_refs = sorted(
+        [dict(r) for r in own] + [dict(r) for r in friend_refs],
+        key=lambda x: x['created_at'],
+        reverse=True
+    )
+
+    return jsonify([{
+        'id': r['id'],
+        'username': r['username'],
+        'book_title': r['book_title'],
+        'title': r.get('title') if isinstance(r, dict) else r['title'],
+        'prompt': r['prompt'],
+        'response': r['response'],
+        'mood': r['mood'],
+        'duration_minutes': r['duration_minutes'],
+        'visibility': r['visibility'],
+        'created_at': _to_iso(r['created_at'])
+    } for r in all_refs])
+
+
+@app.route('/reflections/<reflection_id>', methods=['PUT'])
+def update_reflection(reflection_id):
+    """Update a reflection's visibility or response.
+
+    **PUT** ``/reflections/<reflection_id>``
+
+    :json string visibility: New visibility (optional).
+    :json string response: Updated response text (optional).
+    :returns: JSON ``{"status": "ok"}``.
+    :status 200: Updated.
+    :status 403: Not authenticated or not the owner.
+    :status 404: Reflection not found.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    row = db.execute('SELECT username FROM reflections WHERE id = ?', (reflection_id,)).fetchone()
+    if not row:
+        abort(404)
+    if row['username'] != username:
+        abort(403)
+    data = request.get_json(silent=True) or {}
+    if 'title' in data:
+        title = data['title']
+        if title is None:
+            db.execute('UPDATE reflections SET title = NULL WHERE id = ?', (reflection_id,))
+        else:
+            title = str(title).strip()
+            if title == '':
+                db.execute('UPDATE reflections SET title = NULL WHERE id = ?', (reflection_id,))
+            else:
+                db.execute('UPDATE reflections SET title = ? WHERE id = ?', (title, reflection_id))
+    if 'visibility' in data:
+        if data['visibility'] not in ('private', 'friends_only', 'public'):
+            abort(400, description='visibility must be private, friends_only, or public')
+        db.execute('UPDATE reflections SET visibility = ? WHERE id = ?', (data['visibility'], reflection_id))
+    if 'response' in data:
+        db.execute('UPDATE reflections SET response = ? WHERE id = ?', (data['response'], reflection_id))
+    db.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route('/reflections/<reflection_id>', methods=['DELETE'])
+def delete_reflection(reflection_id):
+    """Delete a reflection.
+
+    **DELETE** ``/reflections/<reflection_id>``
+
+    :returns: JSON ``{"status": "ok"}``.
+    :status 200: Deleted.
+    :status 403: Not authenticated or not the owner.
+    :status 404: Reflection not found.
+    """
+    username = get_username_from_token(request)
+    if not username:
+        abort(403)
+    db = get_db()
+    row = db.execute('SELECT username FROM reflections WHERE id = ?', (reflection_id,)).fetchone()
+    if not row:
+        abort(404)
+    if row['username'] != username:
+        abort(403)
+    db.execute('DELETE FROM reflections WHERE id = ?', (reflection_id,))
+    db.commit()
+    return jsonify({'status': 'ok'})
 
 
 @app.route('/epub', methods=['POST'])
@@ -2257,6 +3115,9 @@ except Exception:
 if __name__ == '__main__':
     if not os.path.exists(DB_PATH):
         init_db()
+    # Apply any lightweight schema patches against existing DBs so old demo
+    # databases stay usable without being wiped.
+    run_migrations()
     # Allow overriding the port with the environment (useful for running on non-default ports)
     port = int(os.environ.get('PORT', '5001'))
     app.run(debug=True, host='0.0.0.0', port=port)
