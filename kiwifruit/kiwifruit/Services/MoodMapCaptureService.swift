@@ -68,6 +68,10 @@ final class MoodMapCaptureService: NSObject {
     private var moodTimeline: [MoodTimelineEvent] = []
     private var lastTimelineMood: QuickMood?
 
+    /// Rolling window of the most recent live mood readings for timeline tracking.
+    private var recentMoods: [QuickMood] = []
+    private let recentWindowSize = 15
+
     override init() {
         super.init()
     }
@@ -124,6 +128,7 @@ final class MoodMapCaptureService: NSObject {
         sessionStartTime = nil
         moodTimeline = []
         lastTimelineMood = nil
+        recentMoods = []
     }
 
     // MARK: Session setup (private)
@@ -208,6 +213,21 @@ final class MoodMapCaptureService: NSObject {
         moodConfSum[mood, default: 0.0] += confidence
         totalFrames += 1
 
+        // Rolling window timeline: record a mood shift whenever the short-term
+        // dominant mood changes. This reflects moment-to-moment mood journey
+        // independently of the cumulative vote threshold.
+        recentMoods.append(mood)
+        if recentMoods.count > recentWindowSize { recentMoods.removeFirst() }
+        if recentMoods.count >= recentWindowSize / 2 {
+            let windowCounts = recentMoods.reduce(into: [QuickMood: Int]()) { $0[$1, default: 0] += 1 }
+            if let windowDominant = windowCounts.max(by: { $0.value < $1.value })?.key,
+               windowDominant != lastTimelineMood {
+                let elapsed = sessionStartTime.map { Date().timeIntervalSince($0) } ?? 0
+                moodTimeline.append(MoodTimelineEvent(secondsFromStart: elapsed, mood: windowDominant))
+                lastTimelineMood = windowDominant
+            }
+        }
+
         guard let (dominantMood, count) = moodVotes.max(by: { $0.value < $1.value }) else {
             return
         }
@@ -225,13 +245,6 @@ final class MoodMapCaptureService: NSObject {
             detectedMood = nil
             stableFrames = 0
             return
-        }
-
-        // Record a timeline event whenever the stable dominant mood changes.
-        if dominantMood != lastTimelineMood {
-            let elapsed = sessionStartTime.map { Date().timeIntervalSince($0) } ?? 0
-            moodTimeline.append(MoodTimelineEvent(secondsFromStart: elapsed, mood: dominantMood))
-            lastTimelineMood = dominantMood
         }
 
         detectedMood = dominantMood
