@@ -57,8 +57,9 @@ public final class MoodSessionStore {
         moodMapState = .capturing
     }
 
-    /// End Mood Map capture and save session (mood is selected by user in MoodCaptureSheet)
-    public func endMoodMap() {
+    /// End Mood Map capture and save session (mood is selected by user in MoodCaptureSheet).
+    /// Pass distribution and timeline from MoodMapCaptureService.snapshotFull() before calling stopSession().
+    public func endMoodMap(distribution: [String: Int]? = nil, timeline: [MoodTimelineEvent]? = nil) {
         guard let startedAt = moodMapStartedAt else {
             moodMapState = .idle
             moodMapStartedAt = nil
@@ -68,7 +69,9 @@ public final class MoodSessionStore {
         let session = MoodMapSession(
             startedAt: startedAt,
             endedAt: Date(),
-            postSessionMood: nil
+            postSessionMood: nil,
+            moodDistribution: distribution,
+            moodTimeline: timeline
         )
         savedSessions.insert(session, at: 0)
         persistSessions()
@@ -110,6 +113,21 @@ public final class MoodSessionStore {
         loadSessionsIfNeeded()
         let cal = Calendar.current
         return savedSessions.filter { cal.isDate($0.endedAt, inSameDayAs: date) }
+    }
+
+    // MARK: - Timeline Analysis
+
+    /// Time-weighted mood durations derived from a session's timeline.
+    /// Returns mood rawValue → total seconds that mood was stably detected.
+    public func moodDurations(for session: MoodMapSession) -> [String: Double] {
+        guard let timeline = session.moodTimeline, !timeline.isEmpty else { return [:] }
+        let sessionDuration = session.endedAt.timeIntervalSince(session.startedAt)
+        var durations: [String: Double] = [:]
+        for (idx, event) in timeline.enumerated() {
+            let nextStart = idx + 1 < timeline.count ? timeline[idx + 1].secondsFromStart : sessionDuration
+            durations[event.mood.rawValue, default: 0] += max(nextStart - event.secondsFromStart, 0)
+        }
+        return durations
     }
 
     // MARK: - Private

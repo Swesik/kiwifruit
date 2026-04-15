@@ -63,7 +63,14 @@ final class MoodMapCaptureService: NSObject {
     /// Total frame count for the current session.
     private var totalFrames: Int = 0
 
-    // MARK: Lifecycle
+    // Timeline tracking: records each stable mood change with elapsed seconds from session start.
+    private var sessionStartTime: Date?
+    private var moodTimeline: [MoodTimelineEvent] = []
+    private var lastTimelineMood: QuickMood?
+
+    /// Rolling window of the most recent live mood readings for timeline tracking.
+    private var recentMoods: [QuickMood] = []
+    private let recentWindowSize = 15
 
     override init() {
         super.init()
@@ -118,11 +125,16 @@ final class MoodMapCaptureService: NSObject {
         moodConfSum = [.focused: 0.0, .inspired: 0.0, .tired: 0.0]
         totalFrames = 0
         lastProcessedTimestamp.withLock { $0 = 0 }
+        sessionStartTime = nil
+        moodTimeline = []
+        lastTimelineMood = nil
+        recentMoods = []
     }
 
     // MARK: Session setup (private)
 
     private func setupSession() {
+        sessionStartTime = Date()
         let session = AVCaptureSession()
         session.sessionPreset = .medium
 
@@ -156,7 +168,7 @@ final class MoodMapCaptureService: NSObject {
 
     // MARK: Mood voting
 
-    /// Returns the final emotion suggestion for the current session.
+    /// Most-voted mood over the session; confidence = average for that mood's votes.
     func snapshotSuggestion() -> (mood: QuickMood?, confidence: Double) {
         guard totalFrames > 0 else { return (nil, 0.0) }
         guard let mood = moodVotes.max(by: { $0.value < $1.value })?.key else {
@@ -174,7 +186,15 @@ final class MoodMapCaptureService: NSObject {
         return (mood, avgConf)
     }
 
-    // MARK: Frame ingestion
+    /// Full session snapshot: dominant mood, confidence, per-mood frame distribution, and timeline.
+    /// Call this BEFORE stopSession() — all data is wiped on stop.
+    func snapshotFull() -> (mood: QuickMood?, confidence: Double, distribution: [String: Int], timeline: [MoodTimelineEvent]) {
+        let snap = snapshotSuggestion()
+        let distribution = Dictionary(
+            uniqueKeysWithValues: moodVotes.compactMap { mood, count in count > 0 ? (mood.rawValue, count) : nil }
+        )
+        return (snap.mood, snap.confidence, distribution, moodTimeline)
+    }
 
     private func ingestNoFace() {
         faceDetected = false
@@ -192,6 +212,21 @@ final class MoodMapCaptureService: NSObject {
         moodVotes[mood, default: 0] += 1
         moodConfSum[mood, default: 0.0] += confidence
         totalFrames += 1
+
+        // Rolling window timeline: record a mood shift whenever the short-term
+        // dominant mood changes. This reflects moment-to-moment mood journey
+        // independently of the cumulative vote threshold.
+        recentMoods.append(mood)
+        if recentMoods.count > recentWindowSize { recentMoods.removeFirst() }
+        if recentMoods.count >= recentWindowSize / 2 {
+            let windowCounts = recentMoods.reduce(into: [QuickMood: Int]()) { $0[$1, default: 0] += 1 }
+            if let windowDominant = windowCounts.max(by: { $0.value < $1.value })?.key,
+               windowDominant != lastTimelineMood {
+                let elapsed = sessionStartTime.map { Date().timeIntervalSince($0) } ?? 0
+                moodTimeline.append(MoodTimelineEvent(secondsFromStart: elapsed, mood: windowDominant))
+                lastTimelineMood = windowDominant
+            }
+        }
 
         guard let (dominantMood, count) = moodVotes.max(by: { $0.value < $1.value }) else {
             return
