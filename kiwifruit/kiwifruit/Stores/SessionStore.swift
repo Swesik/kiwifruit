@@ -67,6 +67,7 @@ final class SessionStore {
         }
         apiClient.setAuthToken(token)
         AppAPI.shared = apiClient
+        isGuest = false
         isValidSession = true
         print("SessionStore.save: saved token=\(token.prefix(8)).. userId=\(user?.id ?? "<nil>") username=\(user?.username ?? "<nil>")")
     }

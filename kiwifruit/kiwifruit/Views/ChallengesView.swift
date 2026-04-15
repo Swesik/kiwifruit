@@ -24,11 +24,8 @@ struct ChallengesView: View {
                         if !viewModel.completedChallenges.isEmpty {
                             completedChallengesSection
                         }
-                    adaptiveChallengeSection
-                    yourChallengesSection
-                    if !viewModel.completedChallenges.isEmpty {
-                        completedChallengesSection
                     }
+                    adaptiveChallengeSection
                     discoverMoreSection
                 }
                 .padding(.horizontal, 24)
