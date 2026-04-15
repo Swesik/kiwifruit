@@ -18,114 +18,111 @@ struct RecommendationDetailView: View {
     let book: BookRecommendation
 
     var body: some View {
-        ZStack {
-            Color.white.ignoresSafeArea()
-
-            VStack(alignment: .leading, spacing: 0) {
-                // Close button header
-                HStack {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(RecommendationDetailDesign.uiText)
-                            .frame(width: 32, height: 32)
-                            .contentShape(Rectangle())
-                    }
-                    Spacer()
+        VStack(alignment: .leading, spacing: 0) {
+            // Close button header
+            HStack {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(RecommendationDetailDesign.uiText)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
                 }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 16)
-                .background(Color.white)
+                Spacer()
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+            .background(Color.white)
 
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 24) {
-                        // "We Recommend:" title
-                        Text("We Recommend:")
-                            .font(.system(size: 24, weight: .black))
-                            .foregroundColor(RecommendationDetailDesign.uiText)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 24) {
+                    // "We Recommend:" title
+                    Text("We Recommend:")
+                        .font(.system(size: 24, weight: .black))
+                        .foregroundColor(RecommendationDetailDesign.uiText)
 
-                        // Book cover and title/author
-                        HStack(alignment: .top, spacing: 20) {
-                            // Book cover
-                            VStack {
-                                Rectangle()
-                                    .fill(RecommendationDetailDesign.tanLight)
-                                    .aspectRatio(2 / 3, contentMode: .fit)
-                                    .frame(maxWidth: 120)
-                                    .overlay {
-                                        recommendationCoverImage(book)
-                                    }
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(RecommendationDetailDesign.border, lineWidth: 2)
-                                    )
-                            }
+                    // Book cover and title/author
+                    HStack(alignment: .top, spacing: 20) {
+                        // Book cover
+                        VStack {
+                            Rectangle()
+                                .fill(RecommendationDetailDesign.tanLight)
+                                .aspectRatio(2 / 3, contentMode: .fit)
+                                .frame(maxWidth: 120)
+                                .overlay {
+                                    recommendationCoverImage(book)
+                                }
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(RecommendationDetailDesign.border, lineWidth: 2)
+                                )
+                        }
 
-                            // Title and author
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(book.title)
-                                    .font(.system(size: 18, weight: .black))
-                                    .foregroundColor(RecommendationDetailDesign.uiText)
-                                    .lineLimit(3)
+                        // Title and author
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(book.title)
+                                .font(.system(size: 18, weight: .black))
+                                .foregroundColor(RecommendationDetailDesign.uiText)
+                                .lineLimit(3)
 
-                                Text(book.author)
-                                    .font(.subheadline).fontWeight(.semibold)
-                                    .foregroundColor(RecommendationDetailDesign.uiText.opacity(0.7))
-                                    .lineLimit(2)
-
-                                Spacer()
-                            }
-                            .frame(maxHeight: 180, alignment: .topLeading)
+                            Text(book.author)
+                                .font(.subheadline).fontWeight(.semibold)
+                                .foregroundColor(RecommendationDetailDesign.uiText.opacity(0.7))
+                                .lineLimit(2)
 
                             Spacer()
                         }
-                        .frame(height: 180)
+                        .frame(maxHeight: 180, alignment: .topLeading)
 
-                        Divider()
-                            .background(RecommendationDetailDesign.border)
+                        Spacer()
+                    }
+                    .frame(height: 180)
 
-                        // Description section
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Description")
-                                .font(.subheadline).fontWeight(.bold)
-                                .foregroundColor(RecommendationDetailDesign.uiText)
+                    Divider()
+                        .background(RecommendationDetailDesign.border)
 
-                            if isLoading {
-                                HStack {
-                                    ProgressView()
-                                        .tint(RecommendationDetailDesign.uiText.opacity(0.35))
-                                    Text("Loading...")
-                                        .font(.body)
-                                        .foregroundColor(RecommendationDetailDesign.uiText.opacity(0.6))
-                                }
-                            } else {
-                                Text(description)
+                    // Description section
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Description")
+                            .font(.subheadline).fontWeight(.bold)
+                            .foregroundColor(RecommendationDetailDesign.uiText)
+
+                        if isLoading {
+                            HStack {
+                                ProgressView()
+                                    .tint(RecommendationDetailDesign.uiText.opacity(0.35))
+                                Text("Loading...")
                                     .font(.body)
-                                    .foregroundColor(RecommendationDetailDesign.uiText.opacity(0.8))
-                                    .lineSpacing(2)
+                                    .foregroundColor(RecommendationDetailDesign.uiText.opacity(0.6))
                             }
-                        }
-
-                        // Why? section
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Why?")
-                                .font(.subheadline).fontWeight(.bold)
-                                .foregroundColor(RecommendationDetailDesign.uiText)
-
-                            Text(book.whyRecommended ?? "Based on your reading history and preferences, we think you'll love this book. Its genre and themes align perfectly with the types of stories you enjoy.")
+                        } else {
+                            Text(description)
                                 .font(.body)
                                 .foregroundColor(RecommendationDetailDesign.uiText.opacity(0.8))
                                 .lineSpacing(2)
                         }
-
-                        addToLibraryControl
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 24)
+
+                    // Why? section
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Why?")
+                            .font(.subheadline).fontWeight(.bold)
+                            .foregroundColor(RecommendationDetailDesign.uiText)
+
+                        Text(book.whyRecommended ?? "Based on your reading history and preferences, we think you'll love this book. Its genre and themes align perfectly with the types of stories you enjoy.")
+                            .font(.body)
+                            .foregroundColor(RecommendationDetailDesign.uiText.opacity(0.8))
+                            .lineSpacing(2)
+                    }
+
+                    addToLibraryControl
                 }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 24)
             }
         }
+        .background(Color.white.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             Task {
