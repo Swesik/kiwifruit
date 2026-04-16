@@ -9,6 +9,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+- **OpenAI (optional, for `/recommendations`):** create **`server/.env`** (gitignored) with `OPENAI_API_KEY=sk-...` when running from this directory (`python3 app.py`). If you start the app from the repo root with `python3 -m server.app`, put `.env` in the **repo root** instead. See the main [README.md](../README.md) for details.
+
 - Seed the database and start the server:
 
 ```bash

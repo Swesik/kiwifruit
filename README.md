@@ -69,15 +69,29 @@ The backend is a Flask application managing data persistence and API endpoints.
     source .venv/bin/activate
     pip install -r requirements.txt
     ```
-3.  Seed the database with test users and focus sessions:
+3.  **OpenAI API key (book recommendations)**  
+    Discover **GET /recommendations** uses OpenAI when a key is present. Without it, the endpoint returns an empty list.
+
+    - Create a file named **`.env`** (gitignored) in one of these places, depending on how you start the server:
+      - **`server/.env`** if you run Flask with **`server` as the current working directory** (e.g. `cd server && python3 app.py`).
+      - **Repository root `.env`** (next to the `server/` folder) if you run **`python3 -m server.app`** from the repo root.
+    - Add your key in this form (no quotes needed):
+      ```bash
+      OPENAI_API_KEY=sk-...
+      ```
+    - Get a key from the [OpenAI API keys](https://platform.openai.com/api-keys) page. **Do not commit `.env` or paste keys into chat.** If a key is exposed, revoke it and create a new one.
+
+4.  Seed the database with test users and focus sessions:
     ```bash
     python3 seed_db.py
     ```
-4.  Run the application from project root:
+5.  Run the application from project root:
     ```bash
     cd .. && python3 -m server.app
     ```
-5.  Open the iOS app and **log in** (do not create a new account) with:
+    Alternatively, from **`server/`**: `python3 app.py` (use a **`server/.env`** file for the API key in that case).
+
+6.  Open the iOS app and **log in** (do not create a new account) with:
     - Username: `alice` — Password: `password`
 
 > To reset the database at any time, re-run `python3 seed_db.py` then restart the server.
