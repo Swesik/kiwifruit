@@ -419,10 +419,21 @@ struct RecentUpdateCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            AsyncImage(url: item.imageURL) { phase in
-                if let image = phase.image { image.resizable().scaledToFill() }
-                else if phase.error != nil { ProfileDesign.uiBorder.overlay(Image(systemName: "book.closed")) }
-                else { ProfileDesign.uiBorder.overlay(ProgressView()) }
+            Group {
+                if let url = item.imageURL {
+                    AsyncImage(url: url) { phase in
+                        if let image = phase.image { image.resizable().scaledToFill() }
+                        else if phase.error != nil { Color(hex: "E6F0DC").overlay(Image(systemName: "book.closed").foregroundColor(ProfileDesign.uiText.opacity(0.4))) }
+                        else { Color(hex: "E6F0DC").overlay(ProgressView()) }
+                    }
+                } else {
+                    Color(hex: "E6F0DC")
+                        .overlay(
+                            Image(systemName: "text.quote")
+                                .font(.system(size: 24))
+                                .foregroundColor(ProfileDesign.uiText.opacity(0.3))
+                        )
+                }
             }
             .frame(width: 80, height: 112)
             .clipShape(RoundedRectangle(cornerRadius: 6))
