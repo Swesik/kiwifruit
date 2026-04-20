@@ -92,7 +92,7 @@ struct ProfileView: View {
                 RecentUpdateItem(
                     kind: "Reflection",
                     timeAgo: relativeTimeLabel(fromISO: r.createdAt),
-                    quote: (r.title?.isEmpty == false ? r.title! : r.response),
+                    quote: r.title.flatMap { $0.isEmpty ? nil : $0 } ?? r.response,
                     imageURL: nil
                 )
             }
