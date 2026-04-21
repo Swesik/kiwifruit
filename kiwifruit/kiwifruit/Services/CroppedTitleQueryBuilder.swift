@@ -36,49 +36,7 @@ struct CroppedTitleQueryBuilder: CroppedTitleQueryBuilding {
     }
 
     private func removeNoise(from lines: [String]) -> [String] {
-        let noiseTerms = [
-            "bestseller",
-            "new york times",
-            "the #I",
-            "the #1",
-            "BOOK CLUB",
-            "edition",
-            "revised",
-            "updated",
-            "published by",
-            "publisher",
-            "isbn",
-            "copyright",
-            "translated by",
-            "foreword by",
-            "illustrated by",
-            "a novel",
-            "an novel",
-            "read with jenna",
-            "#readwithjenna",
-            "book club",
-            "book club favorites",
-            "readers's guide",
-            "good morning america",
-            "a gma book club pick",
-            "now a major motion picture"
-        ]
-
-        return lines
-            .map { line in
-                var cleanedLine = line
-
-                for term in noiseTerms {
-                    cleanedLine = cleanedLine.replacingOccurrences(
-                        of: NSRegularExpression.escapedPattern(for: term),
-                        with: "",
-                        options: [.regularExpression, .caseInsensitive]
-                    )
-                }
-
-                return collapsedWhitespace(cleanedLine)
-            }
-            .filter { !$0.isEmpty }
+        OCRNoiseFilter.removeNoise(from: lines, collapseWhitespace: collapsedWhitespace)
     }
 
     private func collapsedWhitespace(_ text: String) -> String {
