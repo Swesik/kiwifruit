@@ -4,9 +4,10 @@
 //
 //  Created by Savannah Brown on 4/21/26.
 //
+
 import Foundation
 
-enum OCRNoiseFilter {
+struct OCRNoiseFilter {
     static let noiseTerms = [
         "bestseller",
         "new york times",
