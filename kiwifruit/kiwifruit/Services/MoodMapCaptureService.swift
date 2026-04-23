@@ -78,30 +78,10 @@ final class MoodMapCaptureService: NSObject {
 
     // MARK: Public API
 
-    /// Starts the camera session.
+    /// Starts the camera session. Permissions are expected to have already been granted by the caller.
     func startSession() {
         cameraError = nil
-        let status = AVCaptureDevice.authorizationStatus(for: .video)
-
-        switch status {
-        case .authorized:
-            setupSession()
-        case .notDetermined:
-            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-                Task { @MainActor in
-                    guard let self else { return }
-                    if granted {
-                        self.setupSession()
-                    } else {
-                        self.cameraError = "Camera access was denied. Go to Settings > Privacy > Camera to enable it."
-                    }
-                }
-            }
-        case .denied, .restricted:
-            cameraError = "Camera access is not available. Go to Settings > Privacy > Camera to enable it."
-        @unknown default:
-            cameraError = "Unable to access the camera."
-        }
+        setupSession()
     }
 
     /// Clears the current error state.
