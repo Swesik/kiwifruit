@@ -31,7 +31,6 @@
   - Information fetch for personalized recommendations
   - Start session flow
   - Time-based reading session control
-  - End session flow and mood map data capture
 
 ### Bonnie Huynh
 - **Primary Role**: iOS Developer & Recommendation Engine
@@ -53,7 +52,6 @@
 - **Responsibilities**:
   - Initial recommendations development
   - Information fetch for personalized recommendations
-  - Enable mood map feature
 
 ### Shawn Dong
 - **Primary Role**: iOS Developer & User Modeling
@@ -67,8 +65,6 @@
 - **Primary Role**: Backend Developer & Data Processing
 - **Responsibilities**:
   - ePub file upload and processing
-  - Enable mood map functionality
-  - End session mood map data capture
 
 ---
 
@@ -106,9 +102,7 @@ Project Organization:
 | Start Session | Zixiao | Savannah | - |
 | Upload ePub Files | Swesik | Rebecca | - |
 | Time-based reading session control | Zixiao | Varun | - |
-| Enable mood map | Rebecca | Anurag | - |
 | End Session Flow | Zixiao | Bonnie | - |
-| End Session mood map data capture | Rebecca | Zixiao Ma | - |
 | Basic UI | Shawn | Bonnie | - |
 
 ---

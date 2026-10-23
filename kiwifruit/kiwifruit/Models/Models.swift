@@ -118,5 +118,4 @@ struct WeatherChallengeResponse: Codable {
 
 struct ReflectionPromptResponse: Codable {
     let prompt: String
-    let mood: String?
 }

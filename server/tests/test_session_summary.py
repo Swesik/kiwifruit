@@ -50,16 +50,16 @@ def _auth(token='alice-token'):
     return {'Authorization': f'Bearer {token}'}
 
 
-def _seed_sessions(app_module, count, mood=None):
+def _seed_sessions(app_module, count):
     """Insert N session_history rows for alice."""
     import uuid
     with app_module.app.app_context():
         db = sqlite3.connect(app_module.DB_PATH)
         for _ in range(count):
             db.execute(
-                'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read, mood) '
-                'VALUES (?, ?, ?, ?, ?, ?)',
-                (uuid.uuid4().hex, 'alice', 'Dune', 1800, 20, mood)
+                'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read) '
+                'VALUES (?, ?, ?, ?, ?)',
+                (uuid.uuid4().hex, 'alice', 'Dune', 1800, 20)
             )
         db.commit()
         db.close()
@@ -91,22 +91,6 @@ class TestSummaryContent:
                            headers=_auth())
         assert '42' in resp.get_json()['summary']
 
-    def test_includes_mood_label(self, app_client):
-        client, _ = app_client
-        resp = client.post('/session-summary',
-                           json={'book_title': 'Dune', 'duration_minutes': 30, 'mood': 'inspired'},
-                           headers=_auth())
-        assert 'inspired' in resp.get_json()['summary'].lower()
-
-    def test_unknown_mood_is_ignored(self, app_client):
-        """Client should never send an unknown mood, but the server shouldn't
-        crash or leak it into the summary either."""
-        client, _ = app_client
-        resp = client.post('/session-summary',
-                           json={'book_title': 'Dune', 'duration_minutes': 30, 'mood': 'grumpy'},
-                           headers=_auth())
-        summary = resp.get_json()['summary']
-        assert 'grumpy' not in summary.lower()
 
 
 class TestStreakCount:

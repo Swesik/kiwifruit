@@ -10,7 +10,6 @@ private enum StreakDesign {
 }
 
 struct StreakTrackerView: View {
-    @Environment(\.moodSessionStore) private var moodStore: MoodSessionStore
 
     let streakDays: Int
     let activeDays: Set<Int>
@@ -48,17 +47,6 @@ struct StreakTrackerView: View {
         days.append(contentsOf: range.map { Int($0) })
         while days.count % 7 != 0 { days.append(nil) }
         return days
-    }
-
-    private func dateForDay(_ day: Int) -> Date? {
-        let y = calendar.component(.year, from: displayMonth)
-        let m = calendar.component(.month, from: displayMonth)
-        return calendar.date(from: DateComponents(year: y, month: m, day: day))
-    }
-
-    private func moodSessionsForDay(_ day: Int) -> [MoodMapSession] {
-        guard let date = dateForDay(day) else { return [] }
-        return moodStore.sessions(byDate: date)
     }
 
     var body: some View {
@@ -160,190 +148,10 @@ struct StreakTrackerView: View {
         .background(Color.white)
         .navigationTitle("Streak")
         .navigationBarTitleDisplayMode(.large)
-        .onAppear {
-            moodStore.refreshSessionsIfNeeded()
-        }
     }
 
     private var calendar: Calendar {
         Calendar.current
-    }
-}
-
-// MARK: - Mood Day Detail View
-
-struct MoodDayDetailView: View {
-    let date: Date
-    let sessions: [MoodMapSession]
-    let isReadingDay: Bool
-
-    @Environment(\.dismiss) private var dismiss
-
-    private var dateString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE, MMMM d"
-        return formatter.string(from: date)
-    }
-
-    var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                headerSection
-                VStack(alignment: .leading, spacing: 24) {
-                    daySummarySection
-                    if !sessions.isEmpty {
-                        moodSessionsSection
-                    } else {
-                        emptySection
-                    }
-                }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 48)
-            }
-        }
-        .background(Color.white)
-        .toolbar(.hidden, for: .navigationBar)
-    }
-
-    // MARK: - Header
-
-    private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Button("close") { dismiss() }
-                .font(.subheadline).fontWeight(.bold)
-                .foregroundColor(StreakDesign.uiText)
-                .padding(.horizontal, 16).padding(.vertical, 8)
-                .background(StreakDesign.tan)
-                .clipShape(RoundedRectangle(cornerRadius: 20))
-                .overlay(RoundedRectangle(cornerRadius: 20).stroke(StreakDesign.border, lineWidth: 2))
-                .sketchShadow(cornerRadius: 20)
-
-            Text(dateString)
-                .font(.system(size: 30, weight: .black))
-                .foregroundColor(StreakDesign.uiText)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 24)
-        .padding(.top, 48)
-        .padding(.bottom, 24)
-    }
-
-    // MARK: - Day Summary
-
-    private var daySummarySection: some View {
-        summaryPill(
-            icon: "face.smiling",
-            label: sessions.isEmpty ? "No mood data" : "\(sessions.count) session\(sessions.count == 1 ? "" : "s")",
-            color: sessions.isEmpty ? StreakDesign.kiwiLight : StreakDesign.tealCard
-        )
-    }
-
-    private func summaryPill(icon: String, label: String, color: Color) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .bold))
-            Text(label)
-                .font(.caption).fontWeight(.bold)
-        }
-        .foregroundColor(StreakDesign.uiText)
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
-        .background(color)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(StreakDesign.border, lineWidth: 2))
-        .sketchShadow()
-    }
-
-    // MARK: - Mood Sessions
-
-    private var moodSessionsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Mood sessions")
-                .font(.title2).fontWeight(.black)
-                .foregroundColor(StreakDesign.uiText)
-
-            VStack(spacing: 12) {
-                ForEach(sessions.sorted(by: { $0.endedAt > $1.endedAt })) { session in
-                    moodSessionCard(session)
-                }
-            }
-        }
-    }
-
-    private func moodSessionCard(_ session: MoodMapSession) -> some View {
-        let timeFormatter: DateFormatter = {
-            let f = DateFormatter()
-            f.dateFormat = "h:mm a"
-            return f
-        }()
-
-        let duration = Int(session.endedAt.timeIntervalSince(session.startedAt))
-        let minutes = duration / 60
-        let seconds = duration % 60
-
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(timeFormatter.string(from: session.startedAt))
-                        .font(.subheadline).fontWeight(.bold)
-                        .foregroundColor(StreakDesign.uiText)
-                    Text("\(minutes)m \(seconds)s")
-                        .font(.caption).fontWeight(.semibold)
-                        .foregroundColor(StreakDesign.uiText.opacity(0.6))
-                }
-                Spacer()
-                if let mood = session.postSessionMood {
-                    moodBadge(mood)
-                } else {
-                    Text("No mood")
-                        .font(.caption).fontWeight(.bold)
-                        .foregroundColor(StreakDesign.uiText.opacity(0.4))
-                        .padding(.horizontal, 12).padding(.vertical, 6)
-                        .background(StreakDesign.kiwiLight)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(StreakDesign.border.opacity(0.3), lineWidth: 1.5))
-                }
-            }
-        }
-        .padding(16)
-        .background(StreakDesign.tealCard)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(StreakDesign.border, lineWidth: 2))
-        .sketchShadow()
-    }
-
-    private func moodBadge(_ mood: QuickMood) -> some View {
-        let color: Color = {
-            switch mood {
-            case .focused: return Color(hex: "88C0D0")
-            case .inspired: return StreakDesign.kiwi
-            case .tired: return StreakDesign.tan
-            }
-        }()
-
-        return Text(mood.displayName)
-            .font(.caption).fontWeight(.black)
-            .foregroundColor(StreakDesign.uiText)
-            .padding(.horizontal, 12).padding(.vertical, 6)
-            .background(color)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(StreakDesign.border, lineWidth: 2))
-    }
-
-    // MARK: - Empty
-
-    private var emptySection: some View {
-        VStack(spacing: 12) {
-            Text("No mood sessions")
-                .font(.title3).fontWeight(.black)
-                .foregroundColor(StreakDesign.uiText)
-            Text("Start a mood capture during your next reading session to track how you feel.")
-                .font(.subheadline).fontWeight(.medium)
-                .foregroundColor(StreakDesign.uiText.opacity(0.6))
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
     }
 }
 
@@ -356,6 +164,5 @@ struct MoodDayDetailView: View {
             firstSessionMonth: Calendar.current.date(from: DateComponents(year: 2026, month: 3)),
             sessionActiveDays: ["2026-3": [3, 11, 12, 17]]
         )
-        .environment(\.moodSessionStore, MoodSessionStore())
     }
 }

@@ -13,8 +13,6 @@
 | Anurag Krosuru | Backend, Full-Stack | Reading Sessions, Timer, Backend |
 | Savannah Brown | Backend, Full-Stack | Vision-based book recognition |
 | Zixiao Ma | Frontend, UI/UX | App Blocking Timer |
-| Tingrui Zhang | Computer Vision | Vision-based concentration/mood monitor |
-| Shawn Dong | UI/UX | UI Design, Mood extraction support |
 | Swesik Ramineni | Infrastructure, Backend | Speed reading, Home page UI |
 | Bonnie Huynh | UI/UX, Full-Stack | Book Recommendations, Rec Engine |
 | Varun Talluri | ML, Database Mgmt | Reading updates, Challenges, Streaks |
@@ -25,9 +23,7 @@
 
 ---
 
-**Build a steady reading habit with focus tools, mood mapping, and personalized book discovery.**
 
-KiwiFruit is a personal reading app that combines focus management, computer vision, mood mapping, and book discovery to help users build consistent reading habits.
 
 The application is composed of a native iOS client (SwiftUI) and a Python backend (Flask).
 
@@ -60,7 +56,6 @@ The backend is a Flask application managing data persistence and API endpoints.
 ### Reading & Focus
 * **Session Management:** A dedicated Orchestrator manages the state (idle, running, paused) of reading sessions.
 * **Focus Controller:** Integrates with iOS FamilyControls and ManagedSettings to block distracting apps during active sessions.
-* **Mood Map:** Uses Computer Vision (EmotiEffLib) to track user emotions during reading, creating a "Mood Map" of the experience.
 
 ### Library & Intelligence
 * **Scan Pipeline:** Adds books via barcode scanning (AVFoundation) or OCR (Vision).

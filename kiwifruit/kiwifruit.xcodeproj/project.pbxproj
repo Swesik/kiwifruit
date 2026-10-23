@@ -15,8 +15,6 @@
 		5E766B9A2F2C5EF500A95C48 /* kiwifruit/Models/MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C28 /* kiwifruit/Models/MockData.swift */; };
 		5E766B9A2F2C5EF500A95C4C /* kiwifruit/Stores/SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C2C /* kiwifruit/Stores/SessionStore.swift */; };
 		5E766B9A2F2C5EF500A95C4F /* kiwifruit/Views/ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C2F /* kiwifruit/Views/ProfileView.swift */; };
-		C168144F2F8EDF0F0063A115 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
-		C16819FE2F8EEDD30063A115 /* Mentalist in Frameworks */ = {isa = PBXBuildFile; productRef = C16819FD2F8EEDD30063A115 /* Mentalist */; };
 		A8120F002F8F000100000001 /* ReadiumShared in Frameworks */ = {isa = PBXBuildFile; productRef = A8120F012F8F000100000001 /* ReadiumShared */; };
 		A8120F022F8F000100000002 /* ReadiumStreamer in Frameworks */ = {isa = PBXBuildFile; productRef = A8120F032F8F000100000002 /* ReadiumStreamer */; };
 /* End PBXBuildFile section */
@@ -68,10 +66,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C16819FE2F8EEDD30063A115 /* Mentalist in Frameworks */,
 				A8120F002F8F000100000001 /* ReadiumShared in Frameworks */,
 				A8120F022F8F000100000002 /* ReadiumStreamer in Frameworks */,
-				C168144F2F8EDF0F0063A115 /* (null) in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -124,7 +120,6 @@
 			);
 			name = kiwifruit;
 			packageProductDependencies = (
-				C16819FD2F8EEDD30063A115 /* Mentalist */,
 				A8120F012F8F000100000001 /* ReadiumShared */,
 				A8120F032F8F000100000002 /* ReadiumStreamer */,
 			);
@@ -157,7 +152,6 @@
 			mainGroup = 3E766B952F2C5EF500A95C1B;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				C16819FC2F8EEDD30063A115 /* XCRemoteSwiftPackageReference "Mentalist" */,
 				A8120F042F8F000100000003 /* XCRemoteSwiftPackageReference "swift-toolkit" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -336,7 +330,6 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = kiwi;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Enable moodmap";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Kiwifruit uses your location to suggest reading challenges that fit today's weather.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -372,7 +365,6 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = kiwi;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Enable moodmap";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Kiwifruit uses your location to suggest reading challenges that fit today's weather.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -429,14 +421,6 @@
 				version = 3.8.0;
 			};
 		};
-		C16819FC2F8EEDD30063A115 /* XCRemoteSwiftPackageReference "Mentalist" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/enebin/Mentalist";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.1.2;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -449,11 +433,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A8120F042F8F000100000003 /* XCRemoteSwiftPackageReference "swift-toolkit" */;
 			productName = ReadiumStreamer;
-		};
-		C16819FD2F8EEDD30063A115 /* Mentalist */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = C16819FC2F8EEDD30063A115 /* XCRemoteSwiftPackageReference "Mentalist" */;
-			productName = Mentalist;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
