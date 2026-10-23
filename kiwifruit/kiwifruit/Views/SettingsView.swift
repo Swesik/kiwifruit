@@ -66,15 +66,17 @@ struct SettingsView: View {
                         .font(.caption)
                 }
 
-                Section {
-                    Button(role: .destructive) {
-                        showingSignOutConfirmation = true
-                    } label: {
-                        HStack {
-                            Spacer()
-                            Text("Sign Out")
-                                .fontWeight(.bold)
-                            Spacer()
+                if !session.isGuest {
+                    Section {
+                        Button(role: .destructive) {
+                            showingSignOutConfirmation = true
+                        } label: {
+                            HStack {
+                                Spacer()
+                                Text("Sign Out")
+                                    .fontWeight(.bold)
+                                Spacer()
+                            }
                         }
                     }
                 }
