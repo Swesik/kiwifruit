@@ -16,16 +16,12 @@ struct FocusView: View {
     @Environment(\.challengeViewModel) private var challengeViewModel: ChallengeViewModel
     @Environment(\.moodSessionStore) private var moodStore: MoodSessionStore
     @Environment(\.recommendationsStore) private var recommendationsStore: RecommendationsStore
-    @Environment(\.postsStore) private var postsStore: PostsStore
 
     @State private var isSelectingBook = false
     @State private var tempBookTitle = ""
     @State private var tempStartingPage = ""
     @State private var showEndPageSheet = false
     @State private var tempEndingPage = ""
-    @State private var pendingJoinSession: ActiveFriendSession? = nil
-    @State private var tempJoinBookTitle = ""
-    @State private var tempJoinStartingPage = ""
     @State private var showingSpeedReading = false
     @State private var didFinishBook = false
     @State private var showingMoodCapture = false
@@ -34,8 +30,6 @@ struct FocusView: View {
     @State private var showCameraPermissionDenied = false
     @State private var showingNonMoodReflectionCapture = false
     @State private var didSaveNonMoodReflection = false
-    @State private var sessionShareViewModel = SessionShareViewModel()
-    @State private var didShareCompletedSession = false
     @State private var moodTrendsViewModel = MoodTrendsViewModel()
     /// True when user ended a mood capture before the end-page sheet; mood sheet should update that session, not insert a new one.
     @State private var moodCaptureUpdateExistingSession = false
@@ -59,8 +53,6 @@ struct FocusView: View {
         Group {
             if isSelectingBook {
                 bookSelectionView
-            } else if let joinSession = pendingJoinSession {
-                joinSelectionView(for: joinSession)
             } else {
                 VStack(spacing: 0) {
                     switch sessionStore.status {
@@ -78,9 +70,6 @@ struct FocusView: View {
         .background(FocusDesign.uiBg)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
-            // Refresh every time the tab is switched to, so elapsed times stay reasonably fresh.
-            sessionStore.loadFriendSessions()
-            
             // Set up callback to refresh recommendations when session completes
             sessionStore.onSessionCompleted = { [weak recommendationsStore] in
                 Task {
@@ -240,117 +229,12 @@ struct FocusView: View {
         .padding(.bottom, 24)
     }
 
-    private func joinSelectionView(for friendSession: ActiveFriendSession) -> some View {
-        let hostName = friendSession.session.host.displayName ?? friendSession.session.host.username
-        let canJoin = sessionStore.canJoinSession(bookTitle: tempJoinBookTitle, startingPage: tempJoinStartingPage)
-
-        return VStack(spacing: 32) {
-            HStack {
-                Button(action: {
-                    tempJoinBookTitle = ""
-                    tempJoinStartingPage = ""
-                    pendingJoinSession = nil
-                }) {
-                    Text("Back")
-                        .font(.headline)
-                        .fontWeight(.bold)
-                        .foregroundStyle(FocusDesign.handDrawnBorder)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.white)
-                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
-                        )
-                }
-                .buttonStyle(.plain)
-                Spacer()
-            }
-            .padding(.top, 16)
-
-            Text("Joining \(hostName)'s session")
-                .font(.system(size: 28, weight: .black))
-                .foregroundStyle(FocusDesign.handDrawnBorder)
-                .multilineTextAlignment(.center)
-                .padding(.top, 16)
-
-            TextField("Book title", text: $tempJoinBookTitle)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.white)
-                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
-                )
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(FocusDesign.handDrawnBorder)
-                        .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
-                )
-                .font(.title3)
-                .foregroundStyle(FocusDesign.handDrawnBorder)
-
-                .padding(.horizontal, 32)
-
-            TextField("Starting page", text: $tempJoinStartingPage)
-                .keyboardType(.numberPad)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.white)
-                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
-                )
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(FocusDesign.handDrawnBorder)
-                        .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
-                )
-                .font(.title3)
-                .foregroundStyle(FocusDesign.handDrawnBorder)
-
-                .padding(.horizontal, 32)
-
-            Button(action: {
-                let title = tempJoinBookTitle.trimmingCharacters(in: .whitespaces)
-                let startPage = Int(tempJoinStartingPage.trimmingCharacters(in: .whitespaces))
-                tempJoinBookTitle = ""
-                tempJoinStartingPage = ""
-                pendingJoinSession = nil
-                sessionStore.joinSession(friendSession, bookTitle: title, startingPage: startPage)
-            }) {
-                Text("Join session")
-                    .font(.system(size: 24, weight: .black))
-                    .foregroundStyle(canJoin ? FocusDesign.handDrawnBorder : FocusDesign.handDrawnBorder.opacity(0.3))
-                    .padding(.horizontal, 32)
-                    .padding(.vertical, 14)
-                    .background(
-                        Capsule()
-                            .fill(canJoin ? FocusDesign.kiwi : FocusDesign.kiwi.opacity(0.3))
-                            .overlay(Capsule().stroke(FocusDesign.handDrawnBorder.opacity(canJoin ? 1 : 0.3), lineWidth: 3))
-                    )
-                    .background(
-                        Capsule()
-                            .fill(FocusDesign.handDrawnBorder.opacity(canJoin ? 1 : 0.3))
-                            .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
-                    )
-            }
-            .buttonStyle(.plain)
-            .disabled(!canJoin)
-
-            Spacer()
-        }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 24)
-    }
-
     private var startSessionView: some View {
         ScrollView {
             VStack(spacing: 0) {
                 moodTrendsBanner
                 startSessionButton
                 speedReadingButton
-                joinSection
                 Spacer()
                     .frame(height: 40)
             }
@@ -364,7 +248,6 @@ struct FocusView: View {
             )
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30))
-                sessionStore.loadFriendSessions()
             }
         }
         .onChange(of: challengeViewModel.sessionHistory.count) { _, newCount in
@@ -459,97 +342,6 @@ struct FocusView: View {
         .padding(.top, 32)
     }
 
-    private var joinSection: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Text("Join :")
-                .font(.system(size: 28, weight: .black))
-                .foregroundStyle(FocusDesign.handDrawnBorder)
-                .padding(.top, 48)
-
-            if sessionStore.activeFriendSessions.isEmpty {
-                Text("No friends reading right now")
-                    .font(.subheadline)
-                    .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.4))
-                    .padding(.leading, 16)
-            } else {
-                ForEach(sessionStore.activeFriendSessions) { friendSession in
-                    friendSessionRow(friendSession: friendSession)
-                        .onTapGesture {
-                            pendingJoinSession = friendSession
-                        }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-    }
-
-    private func friendSessionRow(friendSession: ActiveFriendSession) -> some View {
-        let name = friendSession.session.host.displayName ?? friendSession.session.host.username
-        let minutes = friendSession.hostElapsedSeconds / 60
-        let duration = minutes >= 60 ? "\(minutes / 60)hr" : "\(minutes)m"
-
-        return Text(name)
-            .font(.system(size: 20, weight: .bold))
-            .foregroundStyle(FocusDesign.handDrawnBorder)
-            .frame(maxWidth: .infinity)
-            .frame(height: 48)
-            .padding(.leading, 40) // 56 avatar - 28 overlap + 12 gap
-            .padding(.trailing, 90) // clear the 80pt timer circle + 10pt offset
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.white)
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
-            )
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(FocusDesign.handDrawnBorder)
-                    .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
-            )
-            .padding(.leading, 28) // shift pill right so avatar covers its left edge
-            .overlay {
-                HStack {
-                    Circle()
-                        .fill(Color.white)
-                        .overlay(Circle().stroke(FocusDesign.handDrawnBorder, lineWidth: 4))
-                        .frame(width: 56, height: 56)
-                        .overlay(
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 24))
-                                .foregroundStyle(FocusDesign.handDrawnBorder)
-                        )
-                        .background(
-                            Circle()
-                                .fill(FocusDesign.handDrawnBorder)
-                                .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
-                        )
-
-                    Spacer(minLength: 0)
-
-                    Text(duration)
-                        .font(.system(size: 24, weight: .black))
-                        .foregroundStyle(FocusDesign.handDrawnBorder)
-                        .frame(width: 80, height: 80)
-                        .background(
-                            Circle()
-                                .fill(FocusDesign.kiwi)
-                                .overlay(Circle().stroke(FocusDesign.handDrawnBorder, lineWidth: 4))
-                        )
-                        .background(
-                            Circle()
-                                .fill(FocusDesign.handDrawnBorder)
-                                .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
-                        )
-                        .offset(x: 10)
-                }
-                .frame(height: 80)
-            }
-            .frame(maxWidth: 280)
-            .frame(height: 80)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 8)
-    }
-
     private var activeSessionView: some View {
         VStack(spacing: 0) {
             Spacer()
@@ -573,10 +365,6 @@ struct FocusView: View {
                     .padding(.top, 8)
             }
 
-            if !sessionStore.otherParticipants(currentUserId: session.currentUser?.id).isEmpty {
-                participantsRow
-                    .padding(.top, 24)
-            }
 
             Spacer()
 
@@ -868,39 +656,6 @@ struct FocusView: View {
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(moodColor(mood), lineWidth: 2))
     }
 
-    private var participantsRow: some View {
-        VStack(spacing: 8) {
-            Text("Reading with")
-                .font(.subheadline)
-                .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.6))
-
-            HStack(spacing: -12) {
-                ForEach(sessionStore.otherParticipants(currentUserId: session.currentUser?.id)) { user in
-                    Circle()
-                        .fill(Color.white)
-                        .overlay(Circle().stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
-                        .frame(width: 44, height: 44)
-                        .overlay(
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 18))
-                                .foregroundStyle(FocusDesign.handDrawnBorder)
-                        )
-                        .background(
-                            Circle()
-                                .fill(FocusDesign.handDrawnBorder)
-                                .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
-                        )
-                }
-            }
-
-            let names = sessionStore.otherParticipants(currentUserId: session.currentUser?.id).map { $0.displayName ?? $0.username }.joined(separator: ", ")
-            Text(names)
-                .font(.footnote)
-                .fontWeight(.bold)
-                .foregroundStyle(FocusDesign.handDrawnBorder)
-        }
-    }
-
     private var sessionControls: some View {
         VStack(spacing: 16) {
             HStack(spacing: 20) {
@@ -984,7 +739,6 @@ struct FocusView: View {
             VStack(spacing: 32) {
                 completionHeader
                 readingTimeSummary
-                shareSessionButton
 
                 if reflectionEntryNonMoodSessionsEnabled && !moodCaptureUpdateExistingSession {
                     if didSaveNonMoodReflection {
@@ -1126,72 +880,6 @@ struct FocusView: View {
                 .fill(FocusDesign.handDrawnBorder)
                 .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
         )
-    }
-
-    /// One-tap share of the just-finished session as a feed post. The
-    /// summary text comes from `/session-summary` on the server; here we
-    /// just orchestrate the user-intent → VM call → local store update.
-    @ViewBuilder
-    private var shareSessionButton: some View {
-        if didShareCompletedSession {
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(FocusDesign.kiwi)
-                Text("Shared to feed")
-                    .font(.subheadline).fontWeight(.bold)
-            }
-            .foregroundStyle(FocusDesign.handDrawnBorder)
-            .padding(.horizontal, 24).padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(FocusDesign.kiwi.opacity(0.15))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(FocusDesign.kiwi, lineWidth: 2))
-            )
-            .sketchShadow()
-        } else {
-            Button(action: shareCompletedSessionToFeed) {
-                HStack(spacing: 8) {
-                    if sessionShareViewModel.isSharing {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 16, weight: .bold))
-                    }
-                    Text(sessionShareViewModel.isSharing ? "Sharing..." : "Share this session")
-                        .font(.subheadline).fontWeight(.bold)
-                }
-                .foregroundStyle(FocusDesign.handDrawnBorder)
-                .padding(.horizontal, 24).padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(FocusDesign.kiwi)
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(FocusDesign.handDrawnBorder, lineWidth: 2))
-                )
-                .sketchShadow()
-            }
-            .buttonStyle(.plain)
-            .disabled(sessionShareViewModel.isSharing || session.userId == nil)
-        }
-    }
-
-    private func shareCompletedSessionToFeed() {
-        guard let userId = session.userId,
-              let bookTitle = sessionStore.bookTitle else { return }
-        let mood = moodStore.savedSessions.first?.postSessionMood?.rawValue
-        Task {
-            let post = await sessionShareViewModel.shareCompletedSession(
-                userId: userId,
-                bookTitle: bookTitle,
-                durationSeconds: sessionStore.completedSeconds,
-                pagesRead: sessionStore.completedPagesRead,
-                mood: mood
-            )
-            if let post {
-                postsStore.prepend(post)
-                didShareCompletedSession = true
-            }
-        }
     }
 
     private var challengeProgressSection: some View {

@@ -928,356 +928,6 @@ def _fetch_cover_url_for_book(title, author):
     return None
 
 
-@app.route('/posts', methods=['GET', 'POST'])
-def posts_handler():
-    """Retrieve the paginated post feed or create a new post.
-
-    **GET** ``/posts``
-
-    Returns posts ordered by creation date descending.
-    Supports ``page`` (0-indexed, default 0) and ``pageSize`` (default 10)
-    query parameters. Authentication is not required to read posts.
-
-    **POST** ``/posts``
-
-    Creates a new post. Requires authentication. Expects a multipart form
-    with a ``file`` field (image) and an optional ``caption`` field.
-    The image is saved with a UUID-based filename to avoid collisions.
-
-    :returns: JSON list of post objects (GET) or the created post object (POST).
-    :status 200: Feed returned successfully.
-    :status 400: Missing file or empty filename (POST).
-    :status 403: Not authenticated (POST).
-    """
-    db = get_db()
-    if request.method == 'GET':
-        page = int(request.args.get('page', 0))
-        pageSize = int(request.args.get('pageSize', 10))
-        offset = page * pageSize
-        # select post filename as postfile and user filename as userfile to avoid ambiguity
-        rows = db.execute('SELECT p.postid, p.filename as postfile, p.owner, p.caption, p.created, u.username, u.fullname, u.filename as userfile FROM posts p JOIN users u ON u.username = p.owner ORDER BY p.created DESC LIMIT ? OFFSET ?', (pageSize, offset)).fetchall()
-
-        posts = []
-        for r in rows:
-            postid = r['postid']
-            owner = {'id': r['username'], 'username': r['username'], 'displayName': r['fullname'], 'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (r['userfile'] or 'default.jpg')}
-            imageURL = request.host_url.rstrip('/') + '/uploads/' + r['postfile']
-            likes = db.execute('SELECT COUNT(*) as c FROM likes WHERE postid = ?', (postid,)).fetchone()['c']
-            posts.append({'id': str(postid), 'author': owner, 'imageURL': imageURL, 'caption': r['caption'], 'likes': likes})
-        return jsonify(posts)
-
-    # POST - create
-    username = get_username_from_token(request)
-    if not username:
-        abort(403)
-    if 'file' not in request.files:
-        abort(400)
-    file = request.files['file']
-    if file.filename == '':
-        abort(400)
-    filename = file.filename
-    stem = uuid.uuid4().hex
-    suffix = os.path.splitext(filename)[1].lower()
-    uuid_basename = f"{stem}{suffix}"
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], uuid_basename)
-    file.save(filepath)
-    caption = request.form.get('caption')
-    # Insert post (AUTOINCREMENT postid)
-    cur = db.execute('INSERT INTO posts (filename, owner, caption) VALUES (?, ?, ?)', (uuid_basename, username, caption))
-    db.commit()
-    postid = cur.lastrowid
-    # Return the created post in the same shape as GET /posts so clients can decode it.
-    row = db.execute('SELECT p.postid, p.filename, p.owner, p.caption, p.created, u.username, u.fullname, u.filename as userfile FROM posts p JOIN users u ON u.username = p.owner WHERE p.postid = ?', (postid,)).fetchone()
-    if not row:
-        return jsonify({'status': 'ok', 'postId': postid})
-    # Build author dict
-    owner = {
-        'id': row['username'],
-        'username': row['username'],
-        'displayName': row['fullname'],
-        'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (row['userfile'] or 'default.jpg')
-    }
-    imageURL = request.host_url.rstrip('/') + '/uploads/' + row['filename']
-    likes = db.execute('SELECT COUNT(*) as c FROM likes WHERE postid = ?', (postid,)).fetchone()['c']
-    post = {
-        'id': str(postid),
-        'author': owner,
-        'imageURL': imageURL,
-        'caption': row['caption'],
-        'likes': likes
-    }
-    logger.info("post created: postId=%s owner=%s filename=%s", postid, username, uuid_basename)
-    return jsonify(post)
-
-@app.route('/posts/<post_id>/like', methods=['POST', 'DELETE'])
-def post_like(post_id):
-    """Like or unlike a post.
-
-    **POST** ``/posts/<post_id>/like`` — Adds a like for the authenticated user.
-    If already liked, returns the current count without inserting a duplicate.
-
-    **DELETE** ``/posts/<post_id>/like`` — Removes the authenticated user's like.
-
-    :param post_id: ID of the post to like or unlike.
-    :type post_id: str
-    :returns: JSON with ``likes`` (int) — the updated total like count.
-    :status 200: Like count returned.
-    :status 403: Not authenticated.
-    """
-    username = get_username_from_token(request)
-    if not username:
-        abort(403)
-    db = get_db()
-    if request.method == 'POST':
-        # insert like if not exists
-        exists = db.execute('SELECT 1 FROM likes WHERE owner = ? AND postid = ?', (username, post_id)).fetchone()
-        if exists:
-            # already liked; return current count
-            likes = db.execute('SELECT COUNT(*) as c FROM likes WHERE postid = ?', (post_id,)).fetchone()['c']
-            return jsonify({'likes': likes})
-        db.execute('INSERT INTO likes (owner, postid) VALUES (?, ?)', (username, post_id))
-        db.commit()
-        likes = db.execute('SELECT COUNT(*) as c FROM likes WHERE postid = ?', (post_id,)).fetchone()['c']
-        return jsonify({'likes': likes})
-
-    # DELETE - remove like
-    db.execute('DELETE FROM likes WHERE owner = ? AND postid = ?', (username, post_id))
-    db.commit()
-    likes = db.execute('SELECT COUNT(*) as c FROM likes WHERE postid = ?', (post_id,)).fetchone()['c']
-    return jsonify({'likes': likes})
-
-
-@app.route('/posts/<post_id>', methods=['GET','DELETE'])
-def post_detail(post_id):
-    """Retrieve or delete a single post.
-
-    **GET** ``/posts/<post_id>`` — Returns the post object. No authentication required.
-
-    **DELETE** ``/posts/<post_id>`` — Deletes the post and its associated image file.
-    Requires authentication; only the post owner may delete it.
-
-    :param post_id: ID of the post.
-    :type post_id: str
-    :returns: JSON post object (GET) or ``{"status": "ok"}`` (DELETE).
-    :status 200: Success.
-    :status 403: Not authenticated or not the post owner (DELETE).
-    :status 404: Post not found.
-    """
-    db = get_db()
-    if request.method == 'GET':
-        row = db.execute('SELECT p.postid, p.filename, p.owner, p.caption, p.created, u.username, u.fullname FROM posts p JOIN users u ON u.username = p.owner WHERE p.postid = ?', (post_id,)).fetchone()
-        if not row:
-            abort(404)
-        # ensure we select user file separately and convert created timestamp to ISO8601
-        row = db.execute('SELECT p.postid, p.filename as postfile, p.owner, p.caption, p.created, u.username, u.fullname, u.filename as userfile FROM posts p JOIN users u ON u.username = p.owner WHERE p.postid = ?', (post_id,)).fetchone()
-        owner = {'id': row['username'], 'username': row['username'], 'displayName': row['fullname'], 'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (row['userfile'] or 'default.jpg')}
-        imageURL = request.host_url.rstrip('/') + '/uploads/' + row['postfile']
-        likes = db.execute('SELECT COUNT(*) as c FROM likes WHERE postid = ?', (post_id,)).fetchone()['c']
-        post = {'id': str(row['postid']), 'author': owner, 'imageURL': imageURL, 'caption': row['caption'], 'likes': likes}
-        return jsonify(post)
-
-    # DELETE
-    username = get_username_from_token(request)
-    if not username:
-        abort(403)
-    row = db.execute('SELECT owner, filename FROM posts WHERE postid = ?', (post_id,)).fetchone()
-    if not row:
-        abort(404)
-    if row['owner'] != username:
-        abort(403)
-    # delete post record and associated file
-    db.execute('DELETE FROM posts WHERE postid = ?', (post_id,))
-    db.commit()
-    try:
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], row['filename'])
-        if os.path.exists(filepath):
-            os.remove(filepath)
-    except Exception as e:
-        logger.warning('failed to remove file %s: %s', row['filename'], e)
-    logger.info('post deleted: postId=%s owner=%s', post_id, username)
-    return jsonify({'status': 'ok'})
-
-
-@app.route('/posts/<post_id>/comments', methods=['GET'])
-def post_comments(post_id):
-    """Retrieve all comments for a post, ordered oldest first.
-
-    **GET** ``/posts/<post_id>/comments``
-
-    :param post_id: ID of the post whose comments to fetch.
-    :type post_id: str
-    :returns: JSON list of comment objects, each containing ``id``, ``author``,
-              ``text``, and ``createdAt`` (ISO 8601).
-    :status 200: Comments returned successfully.
-    """
-    db = get_db()
-    rows = db.execute('SELECT c.commentid, c.owner, c.text, c.created, u.username, u.fullname, u.filename FROM comments c JOIN users u ON u.username = c.owner WHERE c.postid = ? ORDER BY c.created ASC', (post_id,)).fetchall()
-    comments = []
-    for r in rows:
-        author = {'id': r['username'], 'username': r['username'], 'displayName': r['fullname'], 'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (r['filename'] or 'default.jpg')}
-        comments.append({'id': str(r['commentid']), 'author': author, 'text': r['text'], 'createdAt': _to_iso(r['created'])})
-    return jsonify(comments)
-
-@app.route('/comments', methods=['POST'])
-def comments_handler():
-    """Create or delete a comment.
-
-    **POST** ``/comments``
-
-    Dispatches on the ``operation`` form field:
-
-    - ``create``: Adds a new comment. Requires ``text`` and ``postid`` form fields.
-    - ``delete``: Removes a comment. Requires ``commentid`` form field.
-      Only the comment owner may delete it.
-
-    Requires authentication for all operations.
-
-    :returns: JSON ``{"status": "ok"}`` on success.
-    :status 200: Operation completed.
-    :status 400: Missing required fields or unknown operation.
-    :status 403: Not authenticated, or attempting to delete another user's comment.
-    """
-    username = get_username_from_token(request)
-    if not username:
-        abort(403)
-    operation = request.form.get('operation')
-    if operation == 'create':
-        text = request.form.get('text', '').strip()
-        postid = request.form.get('postid')
-        if not text or not postid:
-            abort(400)
-        db = get_db()
-        # create comment with AUTOINCREMENT id
-        db.execute('INSERT INTO comments (owner, postid, text) VALUES (?, ?, ?)', (username, postid, text))
-        db.commit()
-        return jsonify({'status': 'ok'})
-    if operation == 'delete':
-        commentid = request.form.get('commentid')
-        if not commentid:
-            abort(400)
-        db = get_db()
-        row = db.execute('SELECT owner FROM comments WHERE commentid = ?', (commentid,)).fetchone()
-        if not row or row['owner'] != username:
-            abort(403)
-        db.execute('DELETE FROM comments WHERE commentid = ?', (commentid,))
-        db.commit()
-        return jsonify({'status': 'ok'})
-    abort(400)
-
-
-@app.route('/users/<username>', methods=['GET'])
-def get_user(username):
-    """Retrieve a user's public profile.
-
-    **GET** ``/users/<username>``
-
-    :param username: The username to look up.
-    :type username: str
-    :returns: JSON user object with ``id``, ``username``, ``displayName``,
-              and ``avatarURL``.
-    :status 200: User found and returned.
-    :status 404: User not found.
-    """
-    db = get_db()
-    row = db.execute('SELECT username, fullname, filename FROM users WHERE username = ?', (username,)).fetchone()
-    if not row:
-        abort(404)
-    user = {
-        'id': row['username'],
-        'username': row['username'],
-        'displayName': row['fullname'],
-        'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (row['filename'] or 'default.jpg')
-    }
-    return jsonify(user)
-
-
-@app.route('/users/<username>/follow', methods=['POST', 'DELETE'])
-def follow_user(username):
-    """Follow or unfollow a user.
-
-    **POST** ``/users/<username>/follow`` — Follow the specified user.
-    Silently succeeds if the relationship already exists.
-
-    **DELETE** ``/users/<username>/follow`` — Unfollow the specified user.
-
-    Requires authentication. A user cannot follow themselves.
-
-    :param username: The username of the user to follow or unfollow.
-    :type username: str
-    :returns: JSON ``{"status": "ok"}``.
-    :status 200: Operation completed.
-    :status 400: Attempting to follow yourself.
-    :status 403: Not authenticated.
-    :status 404: Target user not found.
-    """
-    current = get_username_from_token(request)
-    if not current:
-        abort(403)
-    if current == username:
-        # cannot follow yourself
-        abort(400)
-    db = get_db()
-    # ensure target exists
-    if not db.execute('SELECT 1 FROM users WHERE username = ?', (username,)).fetchone():
-        abort(404)
-    if request.method == 'POST':
-        try:
-            db.execute('INSERT INTO following (follower, followee) VALUES (?, ?)', (current, username))
-            db.commit()
-        except sqlite3.IntegrityError:
-            # already following or constraint violation
-            pass
-        return jsonify({'status': 'ok'})
-    else:
-        db.execute('DELETE FROM following WHERE follower = ? AND followee = ?', (current, username))
-        db.commit()
-        return jsonify({'status': 'ok'})
-
-
-@app.route('/users/<username>/followers', methods=['GET'])
-def get_followers(username):
-    """Retrieve the list of users following the specified user.
-
-    **GET** ``/users/<username>/followers``
-
-    :param username: The username whose followers to retrieve.
-    :type username: str
-    :returns: JSON list of user objects, ordered by most-recently-followed first.
-    :status 200: Followers returned.
-    :status 404: User not found.
-    """
-    db = get_db()
-    if not db.execute('SELECT 1 FROM users WHERE username = ?', (username,)).fetchone():
-        abort(404)
-    rows = db.execute('SELECT u.username, u.fullname, u.filename FROM following f JOIN users u ON u.username = f.follower WHERE f.followee = ? ORDER BY f.created DESC', (username,)).fetchall()
-    out = []
-    for r in rows:
-        out.append({'id': r['username'], 'username': r['username'], 'displayName': r['fullname'], 'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (r['filename'] or 'default.jpg')})
-    return jsonify(out)
-
-
-@app.route('/users/<username>/following', methods=['GET'])
-def get_following(username):
-    """Retrieve the list of users that the specified user is following.
-
-    **GET** ``/users/<username>/following``
-
-    :param username: The username whose following list to retrieve.
-    :type username: str
-    :returns: JSON list of user objects, ordered by most-recently-followed first.
-    :status 200: Following list returned.
-    :status 404: User not found.
-    """
-    db = get_db()
-    if not db.execute('SELECT 1 FROM users WHERE username = ?', (username,)).fetchone():
-        abort(404)
-    rows = db.execute('SELECT u.username, u.fullname, u.filename FROM following f JOIN users u ON u.username = f.followee WHERE f.follower = ? ORDER BY f.created DESC', (username,)).fetchall()
-    out = []
-    for r in rows:
-        out.append({'id': r['username'], 'username': r['username'], 'displayName': r['fullname'], 'avatarURL': request.host_url.rstrip('/') + '/uploads/' + (r['filename'] or 'default.jpg')})
-    return jsonify(out)
-
-
 @app.route('/users', methods=['POST'])
 def create_user():
     """Create a new user account.
@@ -1403,25 +1053,19 @@ def capture_book_scan():
         'ocrText': ocr_text
     })
 
-def _user_dict(row, req):
-    """Build the standard user JSON object from a DB row with username/fullname/filename columns."""
-    return {
-        'id': row['username'],
-        'username': row['username'],
-        'displayName': row['fullname'],
-        'avatarURL': req.host_url.rstrip('/') + '/uploads/' + (row['filename'] or 'default.jpg')
-    }
-
-
-def _session_dict(session_row, host_row, participants, req):
-    """Build the ReadingSession JSON object the iOS client expects."""
+def _session_dict(session_row, host_row, req):
+    """Build the solo ReadingSession JSON object expected by the iOS client."""
     return {
         'id': session_row['session_id'],
-        'host': _user_dict(host_row, req),
+        'host': {
+            'id': host_row['username'],
+            'username': host_row['username'],
+            'displayName': host_row['fullname'],
+            'avatarURL': req.host_url.rstrip('/') + '/uploads/' + (host_row['filename'] or 'default.jpg')
+        },
         'book_title': session_row['book_title'],
         'started_at': _to_iso(session_row['started_at']),
         'status': session_row['status'],
-        'participants': [_user_dict(p, req) for p in participants],
     }
 
 
@@ -1460,7 +1104,7 @@ def create_reading_session():
     row = db.execute('SELECT * FROM reading_sessions WHERE session_id = ?', (session_id,)).fetchone()
     host_row = db.execute('SELECT username, fullname, filename FROM users WHERE username = ?', (username,)).fetchone()
     logger.info('reading_session created: session_id=%s host=%s book=%s', session_id, username, book_title)
-    return jsonify(_session_dict(row, host_row, [], request)), 201
+    return jsonify(_session_dict(row, host_row, request)), 201
 
 
 @app.route('/reading-sessions/<session_id>/complete', methods=['POST'])
@@ -1594,115 +1238,6 @@ def resume_reading_session(session_id):
     )
     db.commit()
     logger.info('reading_session resumed: session_id=%s host=%s', session_id, username)
-    return jsonify({'status': 'ok'})
-
-
-@app.route('/reading-sessions/friends', methods=['GET'])
-def get_friend_reading_sessions():
-    """Return active reading sessions of users the current user follows.
-
-    **GET** ``/reading-sessions/friends``
-
-    :returns: JSON list of ``ActiveFriendSession`` objects, each containing a
-              ``session`` (ReadingSession) and ``host_elapsed_seconds`` (int).
-    :status 200: List returned (may be empty).
-    :status 403: Not authenticated.
-    """
-    username = get_username_from_token(request)
-    if not username:
-        abort(403)
-    db = get_db()
-    # Active sessions belonging to anyone the current user follows
-    rows = db.execute(
-        '''SELECT rs.*, u.username, u.fullname, u.filename,
-                  CASE
-                      WHEN rs.status = 'paused' THEN COALESCE(rs.elapsed_seconds, 0)
-                      ELSE COALESCE(rs.elapsed_seconds, 0) +
-                           CAST((julianday('now') - julianday(COALESCE(rs.resumed_at, rs.started_at))) * 86400 AS INTEGER)
-                  END as elapsed
-           FROM reading_sessions rs
-           JOIN following f ON f.followee = rs.host AND f.follower = ?
-           JOIN users u ON u.username = rs.host
-           WHERE rs.status IN ('active', 'paused')
-           ORDER BY rs.started_at DESC''',
-        (username,)
-    ).fetchall()
-    result = []
-    for r in rows:
-        parts = db.execute(
-            'SELECT u.username, u.fullname, u.filename FROM session_participants sp JOIN users u ON u.username = sp.username WHERE sp.session_id = ?',
-            (r['session_id'],)
-        ).fetchall()
-        session_obj = _session_dict(r, r, parts, request)
-        result.append({'session': session_obj, 'host_elapsed_seconds': r['elapsed'] or 0})
-    return jsonify(result)
-
-
-@app.route('/reading-sessions/<session_id>/participants', methods=['POST'])
-def join_reading_session(session_id):
-    """Join a friend's active reading session.
-
-    **POST** ``/reading-sessions/<session_id>/participants``
-
-    :returns: JSON ``ReadingSession`` with updated participants list.
-    :status 200: Joined successfully.
-    :status 403: Not authenticated.
-    :status 404: Session not found or not active/paused.
-    """
-    username = get_username_from_token(request)
-    if not username:
-        abort(403)
-    db = get_db()
-    row = db.execute(
-        "SELECT * FROM reading_sessions WHERE session_id = ? AND status IN ('active', 'paused')",
-        (session_id,)
-    ).fetchone()
-    if not row:
-        abort(404)
-    try:
-        db.execute('INSERT INTO session_participants (session_id, username) VALUES (?, ?)', (session_id, username))
-        db.commit()
-    except sqlite3.IntegrityError:
-        logger.warning('join_reading_session: %s is already a participant of session %s — possible duplicate UI call', username, session_id)
-    host_row = db.execute('SELECT username, fullname, filename FROM users WHERE username = ?', (row['host'],)).fetchone()
-    parts = db.execute(
-        'SELECT u.username, u.fullname, u.filename FROM session_participants sp JOIN users u ON u.username = sp.username WHERE sp.session_id = ?',
-        (session_id,)
-    ).fetchall()
-    logger.info('reading_session joined: session_id=%s participant=%s', session_id, username)
-    return jsonify(_session_dict(row, host_row, parts, request))
-
-
-@app.route('/reading-sessions/<session_id>/participants', methods=['DELETE'])
-def leave_reading_session(session_id):
-    """Leave a reading session the current user previously joined.
-
-    **DELETE** ``/reading-sessions/<session_id>/participants``
-
-    Does not end the host's session.
-
-    :returns: JSON ``{"status": "ok"}``.
-    :status 200: Left successfully.
-    :status 403: Not authenticated.
-    """
-    username = get_username_from_token(request)
-    if not username:
-        abort(403)
-    db = get_db()
-    data = request.get_json() or {}
-    try:
-        db.execute('DELETE FROM session_participants WHERE session_id = ? AND username = ?', (session_id, username))
-        # Write session summary to history for the joiner.
-        if 'elapsed_seconds' in data and data.get('book_title'):
-            db.execute(
-                'INSERT INTO session_history (id, username, book_title, duration_seconds, pages_read) VALUES (?, ?, ?, ?, ?)',
-                (uuid.uuid4().hex, username, data['book_title'], int(data['elapsed_seconds']), data.get('pages_read'))
-            )
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    logger.info('reading_session left: session_id=%s participant=%s', session_id, username)
     return jsonify({'status': 'ok'})
 
 
@@ -2502,7 +2037,6 @@ def create_reflection():
     :json string response: The user's written reflection.
     :json string mood: Post-session mood (optional).
     :json int duration_minutes: Session duration in minutes (optional).
-    :json string visibility: One of ``private``, ``friends_only``, ``public`` (default ``private``).
     :returns: JSON with the created reflection.
     :status 201: Reflection created.
     :status 400: Missing required fields.
@@ -2546,9 +2080,7 @@ def create_reflection():
         title = _generate_reflection_title(book_title, response_text)
     mood = data.get('mood')
     duration = data.get('duration_minutes')
-    visibility = data.get('visibility', 'private')
-    if visibility not in ('private', 'friends_only', 'public'):
-        abort(400, description='visibility must be private, friends_only, or public')
+    visibility = 'private'
 
     ref_id = uuid.uuid4().hex
     db = get_db()
@@ -2571,70 +2103,12 @@ def create_reflection():
     }), 201
 
 
-@app.route('/reflections', methods=['GET'])
-def get_reflections_feed():
-    """Return reflections visible to the authenticated user: own reflections
-    plus friends' reflections with ``friends_only`` or ``public`` visibility.
-
-    **GET** ``/reflections``
-
-    :returns: JSON list of reflection objects, most recent first.
-    :status 200: List returned.
-    :status 403: Not authenticated.
-    """
-    username = get_username_from_token(request)
-    if not username:
-        abort(403)
-    db = get_db()
-    # Get list of users this person follows.
-    friends = [r['followee'] for r in db.execute(
-        'SELECT followee FROM following WHERE follower = ?', (username,)
-    ).fetchall()]
-
-    # Own reflections (all visibilities) + friends' (friends_only or public).
-    own = db.execute(
-        'SELECT id, username, book_title, title, prompt, response, mood, duration_minutes, visibility, created_at '
-        'FROM reflections WHERE username = ? ORDER BY created_at DESC',
-        (username,)
-    ).fetchall()
-
-    friend_refs = []
-    if friends:
-        placeholders = ','.join('?' * len(friends))
-        friend_refs = db.execute(
-            f'SELECT id, username, book_title, title, prompt, response, mood, duration_minutes, visibility, created_at '
-            f'FROM reflections WHERE username IN ({placeholders}) '
-            f"AND visibility IN ('friends_only', 'public') ORDER BY created_at DESC",
-            friends
-        ).fetchall()
-
-    all_refs = sorted(
-        [dict(r) for r in own] + [dict(r) for r in friend_refs],
-        key=lambda x: x['created_at'],
-        reverse=True
-    )
-
-    return jsonify([{
-        'id': r['id'],
-        'username': r['username'],
-        'book_title': r['book_title'],
-        'title': r.get('title') if isinstance(r, dict) else r['title'],
-        'prompt': r['prompt'],
-        'response': r['response'],
-        'mood': r['mood'],
-        'duration_minutes': r['duration_minutes'],
-        'visibility': r['visibility'],
-        'created_at': _to_iso(r['created_at'])
-    } for r in all_refs])
-
-
 @app.route('/reflections/<reflection_id>', methods=['PUT'])
 def update_reflection(reflection_id):
-    """Update a reflection's visibility or response.
+    """Update a private reflection's title or response.
 
     **PUT** ``/reflections/<reflection_id>``
 
-    :json string visibility: New visibility (optional).
     :json string response: Updated response text (optional).
     :returns: JSON ``{"status": "ok"}``.
     :status 200: Updated.
@@ -2661,10 +2135,6 @@ def update_reflection(reflection_id):
                 db.execute('UPDATE reflections SET title = NULL WHERE id = ?', (reflection_id,))
             else:
                 db.execute('UPDATE reflections SET title = ? WHERE id = ?', (title, reflection_id))
-    if 'visibility' in data:
-        if data['visibility'] not in ('private', 'friends_only', 'public'):
-            abort(400, description='visibility must be private, friends_only, or public')
-        db.execute('UPDATE reflections SET visibility = ? WHERE id = ?', (data['visibility'], reflection_id))
     if 'response' in data:
         db.execute('UPDATE reflections SET response = ? WHERE id = ?', (data['response'], reflection_id))
     db.commit()
@@ -3097,9 +2567,6 @@ def get_username_from_token(req):
 
 # Backwards-compatible aliases for clients calling /api/* paths
 try:
-    app.add_url_rule('/api/posts', endpoint='posts_handler_api', view_func=posts_handler, methods=['GET', 'POST'])
-    app.add_url_rule('/api/posts/<post_id>', endpoint='post_detail_api', view_func=post_detail, methods=['GET', 'DELETE'])
-    app.add_url_rule('/api/posts/<post_id>/like', endpoint='post_like_api', view_func=post_like, methods=['POST', 'DELETE'])
     app.add_url_rule('/api/books/search', endpoint='search_books_api', view_func=search_books, methods=['GET'])
     app.add_url_rule('/api/epub', endpoint='epub_upload_api', view_func=epub_upload, methods=['POST'])
     app.add_url_rule('/api/epub/<epub_id>', endpoint='epub_detail_api', view_func=epub_detail, methods=['GET'])

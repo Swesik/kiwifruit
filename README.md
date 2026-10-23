@@ -25,9 +25,9 @@
 
 ---
 
-**Connect directly with your friends and stay focused to reclaim your reading time.**
+**Build a steady reading habit with focus tools, mood mapping, and personalized book discovery.**
 
-KiwiFruit is a social reading ecosystem that combines focus management, computer vision, and social accountability to help users build consistent reading habits. It addresses distracted reading by integrating focus tools, mood mapping to track emotional responses, and a social feed to share progress.
+KiwiFruit is a personal reading app that combines focus management, computer vision, mood mapping, and book discovery to help users build consistent reading habits.
 
 The application is composed of a native iOS client (SwiftUI) and a Python backend (Flask).
 
@@ -38,10 +38,9 @@ The repository is organized into two main components: the iOS client and the bac
 ### iOS Client (kiwifruit/)
 The frontend is built using Swift and SwiftUI, utilizing an MVVM architecture with dedicated Stores for state management.
 
-* **Views:** UI components including FeedView, PostDetailView, ProfileView, and Login/SignUpView.
+* **Views:** UI components for focus sessions, book discovery, profile, and login/sign-up.
 * **Stores:** State management handles are separated by domain:
     * SessionStore.swift: Manages active reading sessions and timers.
-    * PostsStore.swift, LikesStore.swift, CommentsStore.swift: Manage social interactions and feed data.
 * **Services:** APIClient.swift handles networking and communication with the Flask backend.
 * **Models:** Data definitions (Models.swift) and mock data generation.
 
@@ -55,10 +54,8 @@ The backend is a Flask application managing data persistence and API endpoints.
 
 ## Key Features
 
-### Social & Community
-* **Feed System:** View friends' reading sessions, status updates, and progress.
-* **Interactions:** Comment on and like posts regarding reading milestones.
-* **Profile Management:** Track personal reading history and streaks.
+### Personal Reading
+* **Profile Management:** Track personal reading history, streaks, and saved books.
 
 ### Reading & Focus
 * **Session Management:** A dedicated Orchestrator manages the state (idle, running, paused) of reading sessions.
@@ -67,7 +64,7 @@ The backend is a Flask application managing data persistence and API endpoints.
 
 ### Library & Intelligence
 * **Scan Pipeline:** Adds books via barcode scanning (AVFoundation) or OCR (Vision).
-* **Recommendation Engine:** Utilizes a multi-signal approach (history, behavior, friends) to suggest books.
+* **Recommendation Engine:** Uses reading history and preferences to suggest books.
 
 ## Tech Stack
 

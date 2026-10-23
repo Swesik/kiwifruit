@@ -8,27 +8,6 @@ struct User: Identifiable, Codable, Hashable {
     let avatarURL: URL?
 }
 
-struct Post: Identifiable, Codable, Hashable {
-    let id: String
-    let author: User
-    let imageURL: URL
-    let caption: String?
-    var likes: Int
-    let createdAt: Date?
-    // Optional fields returned by the server for the MVP shape
-    var commentCount: Int?
-    var likedByMe: Bool?
-}
-
-struct Comment: Identifiable, Codable, Hashable {
-    let id: String
-    // Server responses may omit postId; make optional to be tolerant
-    let postId: String?
-    let author: User
-    let text: String
-    let createdAt: Date
-}
-
 struct BookSearchResult: Identifiable, Codable, Hashable {
     let id: String
     let title: String
@@ -73,7 +52,7 @@ struct BookRecommendation: Identifiable, Codable, Hashable {
     var id: Int { bookId }
 }
 
-/// A live reading session created by a user and optionally joined by friends.
+/// A live solo reading session.
 struct ReadingSession: Identifiable, Codable, Hashable {
     let id: String
     let host: User
@@ -81,17 +60,6 @@ struct ReadingSession: Identifiable, Codable, Hashable {
     let startedAt: Date
     /// "active" | "completed"
     var status: String
-    /// Friends who have joined this session.
-    var participants: [User]
-}
-
-/// A friend's active session as returned by the feed endpoint, with server-calculated elapsed time.
-struct ActiveFriendSession: Identifiable, Codable, Hashable {
-    let session: ReadingSession
-    /// How many seconds the host has been reading (calculated server-side from startedAt).
-    let hostElapsedSeconds: Int
-
-    var id: String { session.id }
 }
 
 /// Response from POST /api/epub upload.
@@ -151,17 +119,4 @@ struct WeatherChallengeResponse: Codable {
 struct ReflectionPromptResponse: Codable {
     let prompt: String
     let mood: String?
-}
-
-struct Reflection: Identifiable, Codable {
-    let id: String
-    let username: String
-    let bookTitle: String
-    let title: String?
-    let prompt: String
-    let response: String
-    let mood: String?
-    let durationMinutes: Int?
-    let visibility: String
-    let createdAt: String
 }

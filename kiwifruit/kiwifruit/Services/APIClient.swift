@@ -1,15 +1,11 @@
 import Foundation
 
-// Helper to build multipart/form-data requests.
 fileprivate extension Data {
     mutating func appendString(_ string: String) {
-        if let data = string.data(using: .utf8) {
-            append(data)
-        }
+        if let data = string.data(using: .utf8) { append(data) }
     }
 }
 
-/// Builds a multipart/form-data body from text fields and an optional file attachment.
 fileprivate struct MultipartFormData {
     let boundary = "Boundary-\(UUID().uuidString)"
     private var body = Data()
@@ -31,27 +27,12 @@ fileprivate struct MultipartFormData {
         body.appendString("\r\n")
     }
 
-    mutating func finalize() {
-        body.appendString("--\(boundary)--\r\n")
-    }
+    mutating func finalize() { body.appendString("--\(boundary)--\r\n") }
 }
 
 protocol APIClientProtocol: Sendable {
-    func fetchPosts(page: Int, pageSize: Int) async throws -> [Post]
-    /// Create a post. `imageData` is optional; if provided the client should upload it.
-    func createPost(authorId: String, imageData: Data?, caption: String?) async throws -> Post
     func createSession(username: String, password: String) async throws -> (token: String, user: User)
     func createAccount(username: String, password: String, fullname: String?) async throws -> User
-    func likePost(_ postId: String) async throws -> Int
-    func unlikePost(_ postId: String) async throws -> Int
-    func followUser(_ username: String) async throws -> Void
-    func unfollowUser(_ username: String) async throws -> Void
-    func fetchFollowers(username: String) async throws -> [User]
-    func fetchFollowing(username: String) async throws -> [User]
-    func fetchComments(postId: String) async throws -> [Comment]
-    func createComment(postId: String, text: String) async throws -> Void
-    func deleteComment(commentId: String) async throws -> Void
-    func deletePost(_ postId: String) async throws -> Void
     func searchBooks(query: String) async throws -> [BookSearchResult]
     // MARK: - Reading Sessions
     /// Creates a new reading session for the current user and returns the persisted session object.
@@ -62,12 +43,6 @@ protocol APIClientProtocol: Sendable {
     func pauseReadingSession(sessionId: String) async throws -> Void
     /// Resumes a paused session; server records resumed_at for the next interval.
     func resumeReadingSession(sessionId: String) async throws -> Void
-    /// Returns all active/paused sessions belonging to users the current user follows.
-    func fetchActiveFriendSessions() async throws -> [ActiveFriendSession]
-    /// Adds the current user as a participant of the given session.
-    func joinReadingSession(sessionId: String) async throws -> ReadingSession
-    /// Removes the current user from a session they joined (does not end the host's session).
-    func leaveReadingSession(sessionId: String, elapsedSeconds: Int, pagesRead: Int?, bookTitle: String?) async throws -> Void
     func sendBookScan(barcode: String?, ocrText: String?) async throws -> BookScanResponse
     /// Rule-based recommendations from catalog + session history (requires auth).
     func fetchRecommendations(limit: Int) async throws -> [BookRecommendation]
@@ -105,11 +80,9 @@ protocol APIClientProtocol: Sendable {
     /// Generates a mood-aware reflection prompt.
     func fetchReflectionPrompt(bookTitle: String, durationMinutes: Int, pagesRead: Int?, mood: String?) async throws -> ReflectionPromptResponse
     /// Saves a user's reflection.
-    func createReflection(bookTitle: String, title: String?, prompt: String, response: String, mood: String?, durationMinutes: Int?, visibility: String) async throws
-    /// Updates an existing reflection (visibility/title/response).
-    func updateReflection(id: String, title: String?, response: String?, visibility: String?) async throws
-    /// Fetch reflections visible to the current user.
-    func fetchReflections() async throws -> [Reflection]
+    func createReflection(bookTitle: String, title: String?, prompt: String, response: String, mood: String?, durationMinutes: Int?) async throws
+    /// Updates an existing private reflection's title or response.
+    func updateReflection(id: String, title: String?, response: String?) async throws
     /// Generates a shareable session summary text from session stats.
     func generateSessionSummary(bookTitle: String, durationMinutes: Int, pagesRead: Int?, mood: String?) async throws -> String
     /// Aggregated mood trends + engagement signals (detects declining/tired patterns).
@@ -118,34 +91,6 @@ protocol APIClientProtocol: Sendable {
 
 /// Simple in-memory/mock client used in previews and when no backend is configured.
 final class MockAPIClient: APIClientProtocol {
-    func fetchPosts(page: Int, pageSize: Int) async throws -> [Post] {
-        try await Task.sleep(nanoseconds: 200 * 1_000_000)
-        return MockData.makePosts(count: pageSize, page: page)
-    }
-
-    func createPost(authorId: String, imageData: Data?, caption: String?) async throws -> Post {
-        try await Task.sleep(nanoseconds: 150 * 1_000_000)
-        let imageURL: URL
-        if let data = imageData {
-            let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("kiwi_upload_\(UUID().uuidString).jpg")
-            try data.write(to: tmp)
-            imageURL = tmp
-        } else {
-            guard let fallback = URL(string: "https://picsum.photos/seed/kiwi/600/600") else {
-                throw URLError(.badURL)
-            }
-            imageURL = fallback
-        }
-        return Post(id: UUID().uuidString, author: MockData.sampleUser, imageURL: imageURL, caption: caption, likes: 0, createdAt: Date())
-    }
-
-    func likePost(_ postId: String) async throws -> Int { try await Task.sleep(nanoseconds: 80 * 1_000_000); return Int.random(in: 1...500) }
-    func unlikePost(_ postId: String) async throws -> Int { try await Task.sleep(nanoseconds: 80 * 1_000_000); return Int.random(in: 0...499) }
-    func followUser(_ username: String) async throws -> Void { try await Task.sleep(nanoseconds: 40 * 1_000_000); return }
-    func unfollowUser(_ username: String) async throws -> Void { try await Task.sleep(nanoseconds: 40 * 1_000_000); return }
-    func fetchFollowers(username: String) async throws -> [User] { try await Task.sleep(nanoseconds: 60 * 1_000_000); return [] }
-    func fetchFollowing(username: String) async throws -> [User] { try await Task.sleep(nanoseconds: 60 * 1_000_000); return [] }
-
     func createSession(username: String, password: String) async throws -> (token: String, user: User) {
         try await Task.sleep(nanoseconds: 120 * 1_000_000)
         return (token: UUID().uuidString, user: MockData.sampleUser)
@@ -156,10 +101,6 @@ final class MockAPIClient: APIClientProtocol {
         return MockData.sampleUser
     }
 
-    func fetchComments(postId: String) async throws -> [Comment] { try await Task.sleep(nanoseconds: 80 * 1_000_000); return MockData.makeComments(for: postId) }
-    func createComment(postId: String, text: String) async throws -> Void { try await Task.sleep(nanoseconds: 80 * 1_000_000); return }
-    func deleteComment(commentId: String) async throws -> Void { try await Task.sleep(nanoseconds: 60 * 1_000_000); return }
-    func deletePost(_ postId: String) async throws -> Void { try await Task.sleep(nanoseconds: 120 * 1_000_000); return }
     func searchBooks(query: String) async throws -> [BookSearchResult] {
         try await Task.sleep(nanoseconds: 120 * 1_000_000)
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -185,36 +126,12 @@ final class MockAPIClient: APIClientProtocol {
             bookTitle: bookTitle,
             startedAt: Date(),
             status: "active",
-            participants: []
         )
     }
 
     func endReadingSession(sessionId: String, pagesRead: Int?) async throws { try await Task.sleep(nanoseconds: 80 * 1_000_000) }
     func pauseReadingSession(sessionId: String) async throws { try await Task.sleep(nanoseconds: 50 * 1_000_000) }
     func resumeReadingSession(sessionId: String) async throws { try await Task.sleep(nanoseconds: 50 * 1_000_000) }
-
-    func fetchActiveFriendSessions() async throws -> [ActiveFriendSession] {
-        try await Task.sleep(nanoseconds: 100 * 1_000_000)
-        let alice = User(id: "alice-id", username: "alice", displayName: "Alice", avatarURL: nil)
-        let james = User(id: "james-id", username: "james", displayName: "James", avatarURL: nil)
-        return [
-            ActiveFriendSession(
-                session: ReadingSession(id: "s1", host: alice, bookTitle: "Dune", startedAt: Date().addingTimeInterval(-1800), status: "active", participants: []),
-                hostElapsedSeconds: 1800
-            ),
-            ActiveFriendSession(
-                session: ReadingSession(id: "s2", host: james, bookTitle: "1984", startedAt: Date().addingTimeInterval(-3600), status: "active", participants: []),
-                hostElapsedSeconds: 3600
-            ),
-        ]
-    }
-
-    func joinReadingSession(sessionId: String) async throws -> ReadingSession {
-        try await Task.sleep(nanoseconds: 100 * 1_000_000)
-        return ReadingSession(id: sessionId, host: MockData.sampleUser, bookTitle: "Mock Book", startedAt: Date().addingTimeInterval(-600), status: "active", participants: [MockData.sampleUser])
-    }
-
-    func leaveReadingSession(sessionId: String, elapsedSeconds: Int, pagesRead: Int?, bookTitle: String?) async throws { try await Task.sleep(nanoseconds: 80 * 1_000_000) }
 
     func fetchRecommendations(limit: Int) async throws -> [BookRecommendation] {
         try await Task.sleep(nanoseconds: 120 * 1_000_000)
@@ -275,9 +192,8 @@ final class MockAPIClient: APIClientProtocol {
     func fetchReflectionPrompt(bookTitle: String, durationMinutes: Int, pagesRead: Int?, mood: String?) async throws -> ReflectionPromptResponse {
         return ReflectionPromptResponse(prompt: "What stood out to you while reading \(bookTitle)?", mood: mood)
     }
-    func createReflection(bookTitle: String, title: String?, prompt: String, response: String, mood: String?, durationMinutes: Int?, visibility: String) async throws {}
-    func updateReflection(id: String, title: String?, response: String?, visibility: String?) async throws {}
-    func fetchReflections() async throws -> [Reflection] { return [] }
+    func createReflection(bookTitle: String, title: String?, prompt: String, response: String, mood: String?, durationMinutes: Int?) async throws {}
+    func updateReflection(id: String, title: String?, response: String?) async throws {}
     func generateSessionSummary(bookTitle: String, durationMinutes: Int, pagesRead: Int?, mood: String?) async throws -> String {
         return "Just read \(bookTitle) for \(durationMinutes) minutes"
     }
@@ -307,86 +223,6 @@ final class RESTAPIClient: APIClientProtocol {
     }
 
     func setAuthToken(_ token: String?) { self.authToken = token }
-
-    func fetchPosts(page: Int, pageSize: Int) async throws -> [Post] {
-        guard var comps = URLComponents(url: baseURL.appendingPathComponent("/posts"), resolvingAgainstBaseURL: false) else {
-            throw URLError(.badURL)
-        }
-        comps.queryItems = [ URLQueryItem(name: "page", value: String(page)), URLQueryItem(name: "pageSize", value: String(pageSize)) ]
-        guard let url = comps.url else { throw URLError(.badURL) }
-        var req = URLRequest(url: url)
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, _) = try await session.data(for: req)
-        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase; decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode([Post].self, from: data)
-    }
-
-    func createPost(authorId: String, imageData: Data?, caption: String?) async throws -> Post {
-        let url = baseURL.appendingPathComponent("/posts")
-        var req = URLRequest(url: url); req.httpMethod = "POST"
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-
-        if let imageData {
-            var form = MultipartFormData()
-            form.addField(name: "authorId", value: authorId)
-            if let caption { form.addField(name: "caption", value: caption) }
-            form.addFile(name: "file", filename: "image.jpg", mimeType: "image/jpeg", data: imageData)
-            form.finalize()
-            req.addValue(form.contentType, forHTTPHeaderField: "Content-Type")
-            req.httpBody = form.data
-        } else {
-            req.addValue("application/json", forHTTPHeaderField: "Content-Type")
-            var body: [String: Any] = [:]
-            if let caption = caption { body["caption"] = caption }
-            req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        }
-
-        debugLogRequest(req)
-        let (data, resp) = try await session.data(for: req)
-        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            let body = String(data: data, encoding: .utf8) ?? "<non-utf8>"
-            print("createPost failed: HTTP \(http.statusCode) body: \(body)")
-            throw URLError(.badServerResponse)
-        }
-        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase; decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(Post.self, from: data)
-    }
-
-    func likePost(_ postId: String) async throws -> Int {
-        let url = baseURL.appendingPathComponent("/posts/\(postId)/like")
-        var req = URLRequest(url: url); req.httpMethod = "POST"
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        debugLogRequest(req)
-        let (data, resp) = try await session.data(for: req)
-        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            let body = String(data: data, encoding: .utf8) ?? "<non-utf8>"
-            print("likePost failed HTTP \(http.statusCode): \(body)")
-            throw URLError(.badServerResponse)
-        }
-        let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        if let likes = decoded?["like_count"] as? Int { return likes }
-        if let likes = decoded?["likes"] as? Int { return likes }
-        throw URLError(.badServerResponse)
-    }
-
-    // Follow/unfollow and list implementations for REST client
-
-    func unlikePost(_ postId: String) async throws -> Int {
-        let url = baseURL.appendingPathComponent("/posts/\(postId)/like")
-        var req = URLRequest(url: url); req.httpMethod = "DELETE"
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        debugLogRequest(req)
-        let (data, resp) = try await session.data(for: req)
-        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            let body = String(data: data, encoding: .utf8) ?? "<non-utf8>"
-            print("unlikePost failed HTTP \(http.statusCode): \(body)")
-            throw URLError(.badServerResponse)
-        }
-        let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        if let likes = decoded?["like_count"] as? Int { return likes }
-        if let likes = decoded?["likes"] as? Int { return likes }
-        throw URLError(.badServerResponse)
-    }
 
     func createSession(username: String, password: String) async throws -> (token: String, user: User) {
         let url = baseURL.appendingPathComponent("/sessions")
@@ -425,96 +261,6 @@ final class RESTAPIClient: APIClientProtocol {
         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase; decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode(User.self, from: data)
     }
-
-    func fetchComments(postId: String) async throws -> [Comment] {
-        let url = baseURL.appendingPathComponent("/posts/")
-            .appendingPathComponent(postId)
-            .appendingPathComponent("comments")
-        var req = URLRequest(url: url)
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, _) = try await session.data(for: req)
-        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase; decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode([Comment].self, from: data)
-    }
-
-    func createComment(postId: String, text: String) async throws -> Void {
-        let url = baseURL.appendingPathComponent("/comments")
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        var comps = URLComponents()
-        comps.queryItems = [ URLQueryItem(name: "operation", value: "create"), URLQueryItem(name: "postid", value: postidValue(postId)), URLQueryItem(name: "text", value: text) ]
-        req.httpBody = comps.percentEncodedQuery?.data(using: .utf8)
-        req.addValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        debugLogRequest(req)
-        let (data, resp) = try await session.data(for: req)
-        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            let body = String(data: data, encoding: .utf8) ?? "<non-utf8>"
-            print("createComment failed HTTP \(http.statusCode): \(body)")
-            throw URLError(.badServerResponse)
-        }
-    }
-
-    func deleteComment(commentId: String) async throws -> Void {
-        let url = baseURL.appendingPathComponent("/comments")
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        var comps = URLComponents()
-        comps.queryItems = [ URLQueryItem(name: "operation", value: "delete"), URLQueryItem(name: "commentid", value: commentId) ]
-        req.httpBody = comps.percentEncodedQuery?.data(using: .utf8)
-        req.addValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        debugLogRequest(req)
-        let (data, resp) = try await session.data(for: req)
-        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            let body = String(data: data, encoding: .utf8) ?? "<non-utf8>"
-            print("deleteComment failed HTTP \(http.statusCode): \(body)")
-            throw URLError(.badServerResponse)
-        }
-    }
-
-    func deletePost(_ postId: String) async throws -> Void {
-        let url = baseURL.appendingPathComponent("/posts/")
-            .appendingPathComponent(postId)
-        var req = URLRequest(url: url); req.httpMethod = "DELETE"
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        _ = try await session.data(for: req)
-    }
-
-    func followUser(_ username: String) async throws -> Void {
-        let url = baseURL.appendingPathComponent("/users/").appendingPathComponent(username).appendingPathComponent("follow")
-        var req = URLRequest(url: url); req.httpMethod = "POST"
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        _ = try await session.data(for: req)
-    }
-
-    func unfollowUser(_ username: String) async throws -> Void {
-        let url = baseURL.appendingPathComponent("/users/").appendingPathComponent(username).appendingPathComponent("follow")
-        var req = URLRequest(url: url); req.httpMethod = "DELETE"
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        _ = try await session.data(for: req)
-    }
-
-    func fetchFollowers(username: String) async throws -> [User] {
-        let url = baseURL.appendingPathComponent("/users/").appendingPathComponent(username).appendingPathComponent("followers")
-        var req = URLRequest(url: url)
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, _) = try await session.data(for: req)
-        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase; decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode([User].self, from: data)
-    }
-
-    func fetchFollowing(username: String) async throws -> [User] {
-        let url = baseURL.appendingPathComponent("/users/").appendingPathComponent(username).appendingPathComponent("following")
-        var req = URLRequest(url: url)
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, _) = try await session.data(for: req)
-        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase; decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode([User].self, from: data)
-    }
-
-    // Helper to normalize postid value if needed
-    private func postidValue(_ id: String) -> String { return id }
 
     private var jsonDecoder: JSONDecoder {
         let d = JSONDecoder()
@@ -574,48 +320,6 @@ final class RESTAPIClient: APIClientProtocol {
         let (data, resp) = try await session.data(for: req)
         if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             print("resumeReadingSession failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
-            throw URLError(.badServerResponse)
-        }
-    }
-
-    func fetchActiveFriendSessions() async throws -> [ActiveFriendSession] {
-        let url = baseURL.appendingPathComponent("/reading-sessions/friends")
-        var req = URLRequest(url: url)
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        debugLogRequest(req)
-        let (data, resp) = try await session.data(for: req)
-        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            print("fetchActiveFriendSessions failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
-            throw URLError(.badServerResponse)
-        }
-        return try jsonDecoder.decode([ActiveFriendSession].self, from: data)
-    }
-
-    func joinReadingSession(sessionId: String) async throws -> ReadingSession {
-        let url = baseURL.appendingPathComponent("/reading-sessions/\(sessionId)/participants")
-        var req = URLRequest(url: url); req.httpMethod = "POST"
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        debugLogRequest(req)
-        let (data, resp) = try await session.data(for: req)
-        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            print("joinReadingSession failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
-            throw URLError(.badServerResponse)
-        }
-        return try jsonDecoder.decode(ReadingSession.self, from: data)
-    }
-
-    func leaveReadingSession(sessionId: String, elapsedSeconds: Int, pagesRead: Int?, bookTitle: String?) async throws {
-        let url = baseURL.appendingPathComponent("/reading-sessions/\(sessionId)/participants")
-        var req = URLRequest(url: url); req.httpMethod = "DELETE"
-        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        var body: [String: Any] = ["elapsed_seconds": elapsedSeconds]
-        if let pages = pagesRead { body["pages_read"] = pages }
-        if let title = bookTitle { body["book_title"] = title }
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        debugLogRequest(req)
-        let (_, resp) = try await session.data(for: req)
-        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             throw URLError(.badServerResponse)
         }
     }
@@ -1084,12 +788,12 @@ final class RESTAPIClient: APIClientProtocol {
         return try jsonDecoder.decode(ReflectionPromptResponse.self, from: data)
     }
 
-    func createReflection(bookTitle: String, title: String?, prompt: String, response: String, mood: String?, durationMinutes: Int?, visibility: String) async throws {
+    func createReflection(bookTitle: String, title: String?, prompt: String, response: String, mood: String?, durationMinutes: Int?) async throws {
         let url = baseURL.appendingPathComponent("/reflections")
         var req = URLRequest(url: url); req.httpMethod = "POST"
         req.addValue("application/json", forHTTPHeaderField: "Content-Type")
         if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        var body: [String: Any] = ["book_title": bookTitle, "prompt": prompt, "response": response, "visibility": visibility]
+        var body: [String: Any] = ["book_title": bookTitle, "prompt": prompt, "response": response]
         if let title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { body["title"] = title }
         if let mood { body["mood"] = mood }
         if let dur = durationMinutes { body["duration_minutes"] = dur }
@@ -1102,7 +806,7 @@ final class RESTAPIClient: APIClientProtocol {
         }
     }
 
-    func updateReflection(id: String, title: String?, response: String?, visibility: String?) async throws {
+    func updateReflection(id: String, title: String?, response: String?) async throws {
         let url = baseURL.appendingPathComponent("/reflections/\(id)")
         var req = URLRequest(url: url); req.httpMethod = "PUT"
         req.addValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -1111,7 +815,6 @@ final class RESTAPIClient: APIClientProtocol {
         var body: [String: Any] = [:]
         if let title { body["title"] = title }
         if let response { body["response"] = response }
-        if let visibility { body["visibility"] = visibility }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         debugLogRequest(req)
 
@@ -1120,19 +823,6 @@ final class RESTAPIClient: APIClientProtocol {
             print("updateReflection failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
             throw URLError(.badServerResponse)
         }
-    }
-
-    func fetchReflections() async throws -> [Reflection] {
-        let url = baseURL.appendingPathComponent("/reflections")
-        var req = URLRequest(url: url)
-        if let token = authToken { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        debugLogRequest(req)
-        let (data, resp) = try await session.data(for: req)
-        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            print("fetchReflections failed HTTP \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
-            throw URLError(.badServerResponse)
-        }
-        return try jsonDecoder.decode([Reflection].self, from: data)
     }
 
     func fetchMoodTrends(days: Int) async throws -> MoodTrendsResponse {

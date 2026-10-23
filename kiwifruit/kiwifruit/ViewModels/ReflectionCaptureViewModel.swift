@@ -54,7 +54,6 @@ final class ReflectionCaptureViewModel {
                 response: response,
                 mood: nil,
                 durationMinutes: (durationSeconds ?? 0) / 60,
-                visibility: "private"
             )
             return true
         } catch {

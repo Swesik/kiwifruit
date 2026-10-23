@@ -30,15 +30,6 @@ final class ReadingSessionStore {
     var currentSession: ReadingSession?
     /// Book title for the active session.
     var bookTitle: String?
-    /// Friends who have joined this session (populated from currentSession.participants).
-    var participants: [User] { currentSession?.participants ?? [] }
-    /// Active sessions from people the current user follows (shown in the "Join" feed).
-    var activeFriendSessions: [ActiveFriendSession] = []
-
-    /// True when the current user is the host (started the session).
-    /// False when they joined someone else's session.
-    private(set) var isHost = true
-
     /// Page the user was on when they started the session.
     var startingPage: Int? = nil
     /// Pages read this session, set after the user inputs their ending page on stop.
@@ -56,7 +47,6 @@ final class ReadingSessionStore {
         cancelTimerTaskIfNeeded()
         cancelStartSessionTask()
 
-        isHost = true
         self.bookTitle = bookTitle
         self.startingPage = startingPage
         self.currentSession = nil
@@ -84,7 +74,7 @@ final class ReadingSessionStore {
         switch status {
         case .active:
             status = .paused
-            if isHost, let sessionId = currentSession?.id {
+            if let sessionId = currentSession?.id {
                 Task {
                     do { try await api.pauseReadingSession(sessionId: sessionId) }
                     catch { print("ReadingSessionStore: pauseReadingSession failed: \(error)") }
@@ -92,7 +82,7 @@ final class ReadingSessionStore {
             }
         case .paused:
             status = .active
-            if isHost, let sessionId = currentSession?.id {
+            if let sessionId = currentSession?.id {
                 Task {
                     do { try await api.resumeReadingSession(sessionId: sessionId) }
                     catch { print("ReadingSessionStore: resumeReadingSession failed: \(error)") }
@@ -110,7 +100,6 @@ final class ReadingSessionStore {
         completedSeconds = elapsedSeconds
         status = .completed
 
-        let capturedElapsed = elapsedSeconds
         let pagesRead: Int?
         if let end = endingPage, let start = startingPage, end > start {
             pagesRead = end - start
@@ -120,8 +109,6 @@ final class ReadingSessionStore {
         completedPagesRead = pagesRead
 
         let alreadyKnownSession = currentSession
-        let wasHost = isHost
-        let capturedBookTitle = bookTitle
         let inFlightTask = startSessionTask
         startSessionTask = nil
 
@@ -140,12 +127,7 @@ final class ReadingSessionStore {
             }
 
             do {
-                if wasHost {
-                    try await api.endReadingSession(sessionId: sessionId, pagesRead: pagesRead)
-                } else {
-                    // Send the joiner's own book title so session_history records what they read.
-                    try await api.leaveReadingSession(sessionId: sessionId, elapsedSeconds: capturedElapsed, pagesRead: pagesRead, bookTitle: capturedBookTitle)
-                }
+                try await api.endReadingSession(sessionId: sessionId, pagesRead: pagesRead)
                 
                 // Session saved successfully — trigger refresh of recommendations
                 // (new reading session affects behavioral signals)
@@ -158,32 +140,6 @@ final class ReadingSessionStore {
         }
     }
 
-    // MARK: - Join (someone else's session)
-
-    func joinSession(_ friendSession: ActiveFriendSession, bookTitle: String? = nil, startingPage: Int? = nil) {
-        // Cancel any existing timer before starting a new one.
-        cancelTimerTaskIfNeeded()
-        cancelStartSessionTask()
-
-        self.startingPage = startingPage
-
-        Task {
-            do {
-                let joined = try await api.joinReadingSession(sessionId: friendSession.session.id)
-                isHost = false
-                // Use the user's own book title if provided; fall back to the session's book.
-                self.bookTitle = bookTitle ?? joined.bookTitle
-                currentSession = joined
-                // Timer starts at zero — independent of the host's elapsed time.
-                status = .active
-                elapsedSeconds = 0
-                startTimer()
-            } catch {
-                print("FocusSessionStore: joinReadingSession failed: \(error)")
-            }
-        }
-    }
-
     // MARK: - Reset after completion screen
 
     func closeCompletion() {
@@ -192,22 +148,9 @@ final class ReadingSessionStore {
         completedSeconds = 0
         currentSession = nil
         bookTitle = nil
-        isHost = true
         startingPage = nil
         completedPagesRead = nil
         saveError = nil
-    }
-
-    // MARK: - Friends feed
-
-    func loadFriendSessions() {
-        Task {
-            do {
-                activeFriendSessions = try await api.fetchActiveFriendSessions()
-            } catch {
-                print("FocusSessionStore: fetchActiveFriendSessions failed: \(error)")
-            }
-        }
     }
 
     // MARK: - Validation helpers
@@ -217,21 +160,10 @@ final class ReadingSessionStore {
             && Int(startingPage.trimmingCharacters(in: .whitespaces)) != nil
     }
 
-    func canJoinSession(bookTitle: String, startingPage: String) -> Bool {
-        canStartSession(bookTitle: bookTitle, startingPage: startingPage)
-    }
-
     func canSubmitEndPage(_ endingPage: String) -> Bool {
         guard let end = Int(endingPage.trimmingCharacters(in: .whitespaces)) else { return false }
         if let start = startingPage { return end > start }
         return true
-    }
-
-    func otherParticipants(currentUserId: String?) -> [User] {
-        let joiners = participants.filter { $0.id != currentUserId }
-        if isHost { return joiners }
-        if let host = currentSession?.host { return [host] + joiners }
-        return joiners
     }
 
     // MARK: - Private helpers

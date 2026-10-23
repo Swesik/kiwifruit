@@ -2,8 +2,6 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(\.sessionStore) private var session: SessionStore
-    @Environment(\.postsStore) private var postsStore: PostsStore
-    @Environment(\.readingSessionStore) private var readingSessionStore: ReadingSessionStore
     @Environment(\.userPreferencesStore) private var userPreferencesStore: UserPreferencesStore
     @Environment(\.recommendationsStore) private var recommendationsStore: RecommendationsStore
     @Environment(\.userBooksStore) private var userBooksStore: UserBooksStore
@@ -17,9 +15,6 @@ struct ContentView: View {
 
     private var currentUser: User {
         if let user = session.currentUser { return user }
-        if let id = session.userId, let user = postsStore.posts.first(where: { $0.author.id == id })?.author {
-            return user
-        }
         return MockData.sampleUser
     }
 
@@ -29,17 +24,13 @@ struct ContentView: View {
             CustomTabBar(selection: $selection)
         }
         .onAppear {
-            if session.isGuest {
-                selection = 2
-            } else if session.isValidSession && session.userId != nil {
-                Task { await postsStore.loadInitial() }
+            if session.isValidSession && session.userId != nil {
                 Task { await userPreferencesStore.load() }
             }
         }
         .onChange(of: session.userId) { _, new in
             if new != nil {
                 selection = 2
-                Task { await postsStore.loadInitial(force: true) }
                 Task { await recommendationsStore.load() }
             } else {
                 recommendationsStore.reset()
@@ -49,9 +40,7 @@ struct ContentView: View {
         .onChange(of: session.isValidSession) { _, valid in
             if valid && session.userId != nil {
                 selection = 2
-                Task { await postsStore.loadInitial(force: true) }
                 Task { await recommendationsStore.load() }
-                readingSessionStore.loadFriendSessions()
             }
         }
         .fullScreenCover(isPresented: Binding(get: { !session.isValidSession }, set: { _ in })) {
@@ -64,9 +53,8 @@ struct ContentView: View {
         switch selection {
         case 0: NavigationStack { ProfileView(user: currentUser) }.id(0)
         case 1: NavigationStack { DiscoverView(bookSearchViewModel: bookSearchViewModel, bookScanViewModel: bookScanViewModel) }.id(1)
-        case 2: NavigationStack { FeedView() }.id(2)
+        case 2: NavigationStack { FocusView() }.id(2)
         case 3: NavigationStack { ChallengesView() }.id(3)
-        case 4: NavigationStack { FocusView() }.id(4)
         default: EmptyView()
         }
     }
