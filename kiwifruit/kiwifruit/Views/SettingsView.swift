@@ -12,6 +12,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var dailyGoal: Int = 30
+    @State private var doubleTapSeekSeconds: Int = 5
     @State private var selectedGenres: Set<String> = []
     @State private var isSaving = false
     @State private var showingSignOutConfirmation = false
@@ -29,6 +30,19 @@ struct SettingsView: View {
                     )
                 } header: {
                     Text("Daily Reading Goal")
+                }
+
+                Section {
+                    Stepper(
+                        "\(doubleTapSeekSeconds) seconds",
+                        value: $doubleTapSeekSeconds,
+                        in: 1...30
+                    )
+                } header: {
+                    Text("Speed Run Double-Tap Seek")
+                } footer: {
+                    Text("Choose how many seconds a double tap skips forward or back.")
+                        .font(.caption)
                 }
 
                 Section {
@@ -84,6 +98,7 @@ struct SettingsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isSaving ? "Saving…" : "Save") {
                         isSaving = true
+                        store.doubleTapSeekSeconds = doubleTapSeekSeconds
                         Task {
                             await store.update(
                                 dailyGoal: dailyGoal,
@@ -101,6 +116,7 @@ struct SettingsView: View {
             }
             .onAppear {
                 dailyGoal = store.dailyGoalMinutes
+                doubleTapSeekSeconds = max(1, min(30, store.doubleTapSeekSeconds))
                 selectedGenres = Set(store.preferredGenres)
             }
         }

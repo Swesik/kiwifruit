@@ -15,6 +15,8 @@ final class UserPreferencesStore {
     var speedReadingWpm: Int = UserPreferences().speedReadingWpm
     /// Words shown per segment during speed reading (1–7).
     var wordsPerSegment: Int = UserPreferences().wordsPerSegment
+    /// Seconds to seek on a double tap during speed reading.
+    var doubleTapSeekSeconds: Int = UserPreferences().doubleTapSeekSeconds
 
     init() {
         loadFromLocalStorage()
@@ -38,7 +40,8 @@ final class UserPreferencesStore {
             dailyGoalMinutes: dailyGoalMinutes,
             preferredGenres: preferredGenres,
             speedReadingWpm: speedReadingWpm,
-            wordsPerSegment: wordsPerSegment
+            wordsPerSegment: wordsPerSegment,
+            doubleTapSeekSeconds: doubleTapSeekSeconds
         )
         guard let data = try? JSONEncoder().encode(prefs) else { return }
         UserDefaults.standard.set(data, forKey: storageKey)
@@ -51,6 +54,7 @@ final class UserPreferencesStore {
         preferredGenres = prefs.preferredGenres
         speedReadingWpm = prefs.speedReadingWpm
         wordsPerSegment = prefs.wordsPerSegment
+        doubleTapSeekSeconds = max(1, min(30, prefs.doubleTapSeekSeconds))
     }
 }
 
