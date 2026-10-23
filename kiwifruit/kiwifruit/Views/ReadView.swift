@@ -528,6 +528,29 @@ struct ReadView: View {
         .padding(.top)
     }
 
+    private var completionHeader: some View {
+        HStack {
+            Button("close") {
+                sessionStore.closeCompletion()
+                challengeViewModel.clearRecentlyCompleted()
+                Task { await recommendationsStore.load() }
+            }
+            .font(.headline)
+            .fontWeight(.bold)
+            .foregroundStyle(FocusDesign.handDrawnBorder)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.white)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
+            )
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.top)
+    }
+
     private var readingTimeSummary: some View {
         VStack(spacing: 8) {
             Text("You read")
