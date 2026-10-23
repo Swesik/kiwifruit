@@ -6,7 +6,7 @@
 kiwifruit-server documentation
 ==============================
 
-Backend REST API for the kiwifruit social reading app, built with Flask and SQLite.
+Backend REST API for the KiwiFruit reading and focus app, built with Flask and SQLite.
 
 .. toctree::
    :maxdepth: 2
@@ -14,4 +14,3 @@ Backend REST API for the kiwifruit social reading app, built with Flask and SQLi
 
    overview
    api
-

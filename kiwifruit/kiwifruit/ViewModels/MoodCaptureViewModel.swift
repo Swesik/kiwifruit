@@ -57,7 +57,6 @@ final class MoodCaptureViewModel {
                 response: response,
                 mood: mood,
                 durationMinutes: durationSeconds / 60,
-                visibility: "private"
             )
             return true
         } catch {

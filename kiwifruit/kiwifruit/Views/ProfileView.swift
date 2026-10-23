@@ -1,13 +1,5 @@
 import SwiftUI
 
-struct RecentUpdateItem: Identifiable {
-    let id = UUID()
-    let kind: String
-    let timeAgo: String
-    let quote: String
-    let imageURL: URL?
-}
-
 enum ProfileDesign {
     static let kiwiLight = Color(hex: "E6F0DC")
     static let kiwi = Color(hex: "A3C985")
@@ -26,7 +18,6 @@ struct ProfileView: View {
     @State private var showingSettings = false
     @State private var showingSignIn = false
 
-    @State private var recentUpdates: [RecentUpdateItem] = []
 
     private let libraryURLs: [URL?] = [
         URL(string: "https://images.unsplash.com/photo-1589829085413-56de8ae18c73?auto=format&fit=crop&q=80&w=200&h=300"),
@@ -63,56 +54,16 @@ struct ProfileView: View {
                     VStack(spacing: 0) {
                         profileHeaderSection
                         moodSessionHistorySection
-                        recentUpdatesSection
                         myLibrarySection
                     }
                 }
-                .refreshable {
-                    await loadRecentUpdates()
-                }
                 .sheet(isPresented: $showingSettings) {
                     SettingsView()
-                }
-                .task {
-                    await loadRecentUpdates()
-                }
-                .onAppear {
-                    Task { await loadRecentUpdates() }
                 }
             }
         }
         .background(Color.white)
         .toolbar(.hidden, for: .navigationBar)
-    }
-
-    private func loadRecentUpdates() async {
-        do {
-            let reflections = try await AppAPI.shared.fetchReflections()
-            recentUpdates = reflections.prefix(10).map { r in
-                RecentUpdateItem(
-                    kind: "Reflection",
-                    timeAgo: relativeTimeLabel(fromISO: r.createdAt),
-                    quote: r.title.flatMap { $0.isEmpty ? nil : $0 } ?? r.response,
-                    imageURL: nil
-                )
-            }
-        } catch {
-            print("[ProfileView] loadRecentUpdates failed: \(error)")
-            recentUpdates = []
-        }
-    }
-
-    private func relativeTimeLabel(fromISO iso: String) -> String {
-        let f = ISO8601DateFormatter()
-        guard let date = f.date(from: iso) else { return "" }
-        let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 60 { return "just now" }
-        let mins = seconds / 60
-        if mins < 60 { return "\(mins)m ago" }
-        let hours = mins / 60
-        if hours < 24 { return "\(hours)h ago" }
-        let days = hours / 24
-        return "\(days)d ago"
     }
 
     // MARK: - Header
@@ -223,47 +174,6 @@ struct ProfileView: View {
         }
         .padding(.top, 8)
         .background(Color.white)
-    }
-
-    // MARK: - Recent Updates
-
-    private var recentUpdatesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Recent Updates")
-                .font(.title2).fontWeight(.black)
-                .foregroundColor(ProfileDesign.uiText)
-                .padding(.horizontal, 20).padding(.top, 20)
-
-            if recentUpdates.isEmpty {
-                Text("No updates yet")
-                    .font(.subheadline).fontWeight(.semibold)
-                    .foregroundColor(ProfileDesign.uiText.opacity(0.6))
-                    .padding(.horizontal, 20)
-            }
-
-            ForEach(recentUpdates) { item in
-                recentUpdateCard(item)
-                    .padding(.horizontal, 20)
-            }
-
-            NavigationLink(destination: AllUpdatesView(updates: recentUpdates)) {
-                Text("LOAD MORE")
-                    .font(.subheadline).fontWeight(.black)
-                    .foregroundColor(ProfileDesign.uiText)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(ProfileDesign.kiwiLight)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(ProfileDesign.border, lineWidth: 2))
-                    .sketchShadow()
-            }
-            .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 20)
-        }
-        .background(Color.white)
-    }
-
-    private func recentUpdateCard(_ item: RecentUpdateItem) -> some View {
-        RecentUpdateCard(item: item)
     }
 
     // MARK: - My Library
@@ -383,68 +293,6 @@ struct ProfileView: View {
             else if phase.error != nil { ProfileDesign.uiBorder.overlay(Image(systemName: "book.closed")) }
             else { ProfileDesign.uiBorder.overlay(ProgressView()) }
         }
-    }
-}
-
-// MARK: - Shared card used by ProfileView and AllUpdatesView
-
-struct RecentUpdateCard: View {
-    let item: RecentUpdateItem
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Text(item.kind.uppercased())
-                        .font(.caption2).fontWeight(.black)
-                        .foregroundColor(ProfileDesign.uiText)
-                    Spacer()
-                    Text(item.timeAgo)
-                        .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(ProfileDesign.uiText.opacity(0.85))
-                }
-                Text("\"\(item.quote)\"")
-                    .font(.subheadline).fontWeight(.bold)
-                    .foregroundColor(ProfileDesign.uiText)
-                    .lineSpacing(4).padding(.bottom, 8)
-
-                Button("Edit") {}
-                    .font(.caption2).fontWeight(.black)
-                    .foregroundColor(ProfileDesign.uiText)
-                    .padding(.horizontal, 12).padding(.vertical, 4)
-                    .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(ProfileDesign.border, lineWidth: 2))
-                    .sketchShadow(cornerRadius: 6)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Group {
-                if let url = item.imageURL {
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image { image.resizable().scaledToFill() }
-                        else if phase.error != nil { Color(hex: "E6F0DC").overlay(Image(systemName: "book.closed").foregroundColor(ProfileDesign.uiText.opacity(0.4))) }
-                        else { Color(hex: "E6F0DC").overlay(ProgressView()) }
-                    }
-                } else {
-                    Color(hex: "E6F0DC")
-                        .overlay(
-                            Image(systemName: "text.quote")
-                                .font(.system(size: 24))
-                                .foregroundColor(ProfileDesign.uiText.opacity(0.3))
-                        )
-                }
-            }
-            .frame(width: 80, height: 112)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(ProfileDesign.border, lineWidth: 2))
-            .sketchShadow(cornerRadius: 6)
-        }
-        .padding(16)
-        .background(ProfileDesign.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(ProfileDesign.border, lineWidth: 2))
-        .sketchShadow()
     }
 }
 

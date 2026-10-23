@@ -22,7 +22,7 @@ python3 app.py
   - Username: `alice`
   - Password: `password`
 
-  The seed creates this account for you. Alice follows Bob, so Bob's active
+  The seed creates this account for you.
 
 Notes
 - Database schema is in `schema.sql`.

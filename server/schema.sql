@@ -10,48 +10,6 @@ CREATE TABLE users (
     created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Posts table with AUTOINCREMENT integer primary key
-CREATE TABLE posts (
-    postid INTEGER PRIMARY KEY AUTOINCREMENT,
-    filename TEXT NOT NULL CHECK (LENGTH(filename) <= 64),
-    owner TEXT NOT NULL CHECK (LENGTH(owner) <= 20),
-    caption TEXT,
-    created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (owner) REFERENCES users (username) ON DELETE CASCADE
-);
-
--- Following table (follower / followee)
-CREATE TABLE following (
-    follower TEXT NOT NULL CHECK (LENGTH(follower) <= 20),
-    followee TEXT NOT NULL CHECK (LENGTH(followee) <= 20),
-    created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (follower, followee),
-    FOREIGN KEY (follower) REFERENCES users (username) ON DELETE CASCADE,
-    FOREIGN KEY (followee) REFERENCES users (username) ON DELETE CASCADE
-);
-
--- Comments table with AUTOINCREMENT integer primary key
-CREATE TABLE comments (
-    commentid INTEGER PRIMARY KEY AUTOINCREMENT,
-    owner TEXT NOT NULL CHECK (LENGTH(owner) <= 20),
-    postid INTEGER NOT NULL,
-    text TEXT NOT NULL CHECK (LENGTH(text) <= 1024),
-    created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (owner) REFERENCES users (username) ON DELETE CASCADE,
-    FOREIGN KEY (postid) REFERENCES posts (postid) ON DELETE CASCADE
-);
-
--- Likes table with AUTOINCREMENT integer primary key; enforce one-like-per-user-per-post
-CREATE TABLE likes (
-    likeid INTEGER PRIMARY KEY AUTOINCREMENT,
-    owner TEXT NOT NULL CHECK (LENGTH(owner) <= 20),
-    postid INTEGER NOT NULL,
-    created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (owner) REFERENCES users (username) ON DELETE CASCADE,
-    FOREIGN KEY (postid) REFERENCES posts (postid) ON DELETE CASCADE,
-    UNIQUE (owner, postid)
-);
-
 -- Sessions table for token mapping (simple session storage)
 CREATE TABLE sessions (
     token TEXT PRIMARY KEY,
@@ -84,16 +42,6 @@ CREATE TABLE session_history (
     FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
 );
 
--- Friends who joined a reading session (many-to-many)
-CREATE TABLE session_participants (
-    session_id TEXT NOT NULL,
-    username TEXT NOT NULL,
-    joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (session_id, username),
-    FOREIGN KEY (session_id) REFERENCES reading_sessions (session_id) ON DELETE CASCADE,
-    FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
-);
-
 -- Seed catalog for recommendations (not user uploads; see epubs)
 CREATE TABLE catalog_books (
     book_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -119,7 +67,7 @@ CREATE TABLE user_preferences (
     FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
 );
 
--- User reflections (post-session thoughts with visibility control)
+-- Private post-session reflections
 CREATE TABLE reflections (
     id TEXT PRIMARY KEY,
     username TEXT NOT NULL,
@@ -129,7 +77,7 @@ CREATE TABLE reflections (
     response TEXT NOT NULL CHECK (LENGTH(response) <= 2000),
     mood TEXT CHECK (mood IN ('focused', 'inspired', 'tired')),
     duration_minutes INTEGER,
-    visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private', 'friends_only', 'public')),
+    visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility = 'private'),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
 );

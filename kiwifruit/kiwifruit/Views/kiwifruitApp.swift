@@ -4,7 +4,6 @@ import SwiftUI
 struct kiwifruitApp: App {
     // Shared stores injected into the SwiftUI environment so all views
     // observe the same source-of-truth instances.
-    private let postsStore = PostsStore()
     private let sessionStore = SessionStore()
     private let moodSessionStore = MoodSessionStore()
     private let userPreferencesStore = UserPreferencesStore()
@@ -17,7 +16,6 @@ struct kiwifruitApp: App {
         WindowGroup {
             ContentView()
                 .preferredColorScheme(.light)
-                .environment(\.postsStore, postsStore)
                 .environment(\.sessionStore, sessionStore)
                 .environment(\.moodSessionStore, moodSessionStore)
                 .environment(\.userPreferencesStore, userPreferencesStore)
@@ -28,4 +26,3 @@ struct kiwifruitApp: App {
         }
     }
 }
-
