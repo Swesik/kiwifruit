@@ -17,6 +17,8 @@
 		5E766B9A2F2C5EF500A95C4F /* kiwifruit/Views/ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E766B952F2C5EF500A95C2F /* kiwifruit/Views/ProfileView.swift */; };
 		C168144F2F8EDF0F0063A115 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
 		C16819FE2F8EEDD30063A115 /* Mentalist in Frameworks */ = {isa = PBXBuildFile; productRef = C16819FD2F8EEDD30063A115 /* Mentalist */; };
+		A8120F002F8F000100000001 /* ReadiumShared in Frameworks */ = {isa = PBXBuildFile; productRef = A8120F012F8F000100000001 /* ReadiumShared */; };
+		A8120F022F8F000100000002 /* ReadiumStreamer in Frameworks */ = {isa = PBXBuildFile; productRef = A8120F032F8F000100000002 /* ReadiumStreamer */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -67,6 +69,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				C16819FE2F8EEDD30063A115 /* Mentalist in Frameworks */,
+				A8120F002F8F000100000001 /* ReadiumShared in Frameworks */,
+				A8120F022F8F000100000002 /* ReadiumStreamer in Frameworks */,
 				C168144F2F8EDF0F0063A115 /* (null) in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -121,6 +125,8 @@
 			name = kiwifruit;
 			packageProductDependencies = (
 				C16819FD2F8EEDD30063A115 /* Mentalist */,
+				A8120F012F8F000100000001 /* ReadiumShared */,
+				A8120F032F8F000100000002 /* ReadiumStreamer */,
 			);
 			productName = kiwifruit;
 			productReference = 3E766B9E2F2C5EF500A95C1B /* kiwifruit.app */;
@@ -152,6 +158,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				C16819FC2F8EEDD30063A115 /* XCRemoteSwiftPackageReference "Mentalist" */,
+				A8120F042F8F000100000003 /* XCRemoteSwiftPackageReference "swift-toolkit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3E766B9F2F2C5EF500A95C1B /* Products */;
@@ -414,6 +421,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		A8120F042F8F000100000003 /* XCRemoteSwiftPackageReference "swift-toolkit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/readium/swift-toolkit.git";
+			requirement = {
+				kind = exactVersion;
+				version = 3.8.0;
+			};
+		};
 		C16819FC2F8EEDD30063A115 /* XCRemoteSwiftPackageReference "Mentalist" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/enebin/Mentalist";
@@ -425,6 +440,16 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		A8120F012F8F000100000001 /* ReadiumShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A8120F042F8F000100000003 /* XCRemoteSwiftPackageReference "swift-toolkit" */;
+			productName = ReadiumShared;
+		};
+		A8120F032F8F000100000002 /* ReadiumStreamer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A8120F042F8F000100000003 /* XCRemoteSwiftPackageReference "swift-toolkit" */;
+			productName = ReadiumStreamer;
+		};
 		C16819FD2F8EEDD30063A115 /* Mentalist */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = C16819FC2F8EEDD30063A115 /* XCRemoteSwiftPackageReference "Mentalist" */;

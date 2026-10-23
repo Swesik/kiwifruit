@@ -3,13 +3,11 @@ import SwiftUI
 struct SpeedReadingView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.userPreferencesStore) private var preferencesStore
-    private let api: APIClientProtocol
     @State private var viewModel: SpeedReadingViewModel
     @State private var wpmText: String = "240"
 
-    init(api: APIClientProtocol = AppAPI.shared) {
-        self.api = api
-        self._viewModel = State(initialValue: SpeedReadingViewModel(api: api))
+    init() {
+        self._viewModel = State(initialValue: SpeedReadingViewModel())
     }
 
     var body: some View {
@@ -40,7 +38,7 @@ struct SpeedReadingView: View {
         .background(Color.white)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
-            viewModel = SpeedReadingViewModel(api: api, preferencesStore: preferencesStore)
+            viewModel = SpeedReadingViewModel(preferencesStore: preferencesStore)
             viewModel.loadSettings()
             wpmText = "\(viewModel.wordsPerMinute)"
             viewModel.loadBooks()

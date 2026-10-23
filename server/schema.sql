@@ -42,7 +42,7 @@ CREATE TABLE session_history (
     FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
 );
 
--- Seed catalog for recommendations (not user uploads; see epubs)
+-- Seed catalog for recommendations.
 CREATE TABLE catalog_books (
     book_id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL CHECK (LENGTH(title) <= 512),
@@ -82,30 +82,6 @@ CREATE TABLE reflections (
     FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
 );
 
--- Epub uploads table (tracks uploaded epub files and parsing state)
-CREATE TABLE epubs (
-    epubid INTEGER PRIMARY KEY AUTOINCREMENT,
-    owner TEXT NOT NULL CHECK (LENGTH(owner) <= 20),
-    title TEXT NOT NULL DEFAULT '' CHECK (LENGTH(title) <= 512),
-    author TEXT NOT NULL DEFAULT '' CHECK (LENGTH(author) <= 512),
-    original_filename TEXT NOT NULL CHECK (LENGTH(original_filename) <= 256),
-    stored_filename TEXT NOT NULL CHECK (LENGTH(stored_filename) <= 128),
-    status TEXT NOT NULL DEFAULT 'LOADING' CHECK (status IN ('LOADING', 'PARSED', 'FAILED')),
-    error_message TEXT,
-    created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (owner) REFERENCES users (username) ON DELETE CASCADE
-);
-
--- Epub chapters table (one row per chapter, text stored as .txt file on disk)
-CREATE TABLE epub_chapters (
-    chapterid INTEGER PRIMARY KEY AUTOINCREMENT,
-    epubid INTEGER NOT NULL,
-    chapter_number INTEGER NOT NULL,
-    title TEXT NOT NULL DEFAULT '' CHECK (LENGTH(title) <= 512),
-    filename TEXT NOT NULL CHECK (LENGTH(filename) <= 128),
-    created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (epubid) REFERENCES epubs (epubid) ON DELETE CASCADE
-);
 -- Book description cache (to avoid rate-limiting external APIs)
 CREATE TABLE book_description_cache (
     cache_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,16 +90,4 @@ CREATE TABLE book_description_cache (
     description TEXT NOT NULL,
     fetched_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(title, author)
-);
-
--- Speed reading progress (tracks where a user is in a given epub)
-CREATE TABLE speed_reading_progress (
-    username TEXT NOT NULL CHECK (LENGTH(username) <= 20),
-    epubid INTEGER NOT NULL,
-    chapter_number INTEGER NOT NULL DEFAULT 1,
-    word_index INTEGER NOT NULL DEFAULT 0,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (username, epubid),
-    FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE,
-    FOREIGN KEY (epubid) REFERENCES epubs (epubid) ON DELETE CASCADE
 );
