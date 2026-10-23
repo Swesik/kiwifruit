@@ -2,7 +2,7 @@
 
 Flow under test:
   1. User completes a reading session.
-  2. Client requests a mood-aware reflection prompt.
+  2. Client requests a reflection prompt.
   3. Client POSTs the reflection with the returned prompt.
   4. The saved reflection is returned as private data.
 """
@@ -74,7 +74,7 @@ class TestReflectionFlow:
 
         # 1. Fetch prompt.
         prompt_resp = client.post('/reflection-prompt',
-                                  json={'book_title': 'Dune', 'duration_minutes': 30, 'mood': 'focused'},
+                                  json={'book_title': 'Dune', 'duration_minutes': 30},
                                   headers=_auth())
         assert prompt_resp.status_code == 200
         prompt_text = prompt_resp.get_json()['prompt']
@@ -85,7 +85,6 @@ class TestReflectionFlow:
             'book_title': 'Dune',
             'prompt': prompt_text,
             'response': 'The idea of prescient sight fascinated me.',
-            'mood': 'focused',
             'duration_minutes': 30,
         }, headers=_auth())
         assert save_resp.status_code == 201
@@ -98,7 +97,6 @@ class TestReflectionFlow:
         assert r['book_title'] == 'Dune'
         assert r['prompt'] == prompt_text
         assert r['response'].startswith('The idea')
-        assert r['mood'] == 'focused'
         assert r['visibility'] == 'private'
         # createdAt must be ISO8601 for the iOS client's date parser.
         assert 'T' in r['created_at']

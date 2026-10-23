@@ -16,8 +16,6 @@ Screenshots of the current app implementation, organized by user flow.
 ### Starting a New Reading Session & Selecting a Book to Read
 <img src="start-session.png" width="280"> <img src="choosing-book.png" width="280">
 
-### Active Reading Session Timer & Post-Session Mood Evaluation
-<img src="session-ongoing.png" width="280"> <img src="post-session-mood-evaluation.png" width="280">
 
 ---
 
@@ -28,10 +26,7 @@ Screenshots of the current app implementation, organized by user flow.
 
 ---
 
-## Streak & Mood History
 
-### Reading Streak Calendar & Daily Mood Session History
-<img src="streak.png" width="280"> <img src="past-mood-history.png" width="280">
 
 ---
 

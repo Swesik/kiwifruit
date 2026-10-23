@@ -1,5 +1,5 @@
 {
-  "originHash" : "a8bee8bd13a437e7de72861818ef6098f9fa460e639675ba2f92bd319a0029ca",
+  "originHash" : "14b46f42cb821f6a724bf97b4f0934138d5657736c3fa49e7f435436abed729a",
   "pins" : [
     {
       "identity" : "cryptoswift",
@@ -35,15 +35,6 @@
       "state" : {
         "revision" : "584db89a4c3c3be27206cce6afde037b2b6e38d8",
         "version" : "4.0.1"
-      }
-    },
-    {
-      "identity" : "mentalist",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/enebin/Mentalist",
-      "state" : {
-        "revision" : "a41b36d21208675024debfb60ccdba22d6ca77f8",
-        "version" : "0.1.2"
       }
     },
     {

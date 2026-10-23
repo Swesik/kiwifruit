@@ -1,8 +1,8 @@
-"""Tests for the mood-aware reflection prompt endpoint.
+"""Tests for the reflection prompt endpoint.
 
 Covers:
-- Template fallback when no mood / no OpenAI key
-- Template variants per mood
+- Template fallback when no OpenAI key
+- Generic template prompts
 - Pages_read is reflected in output when provided
 - OpenAI path is used when key present (mocked)
 - Graceful fallback when OpenAI call raises
@@ -86,7 +86,7 @@ class TestTemplateFallback:
     def _no_openai_key(self, monkeypatch):
         monkeypatch.delenv('OPENAI_API_KEY', raising=False)
 
-    def test_no_mood_uses_generic_template(self, app_client):
+    def test_generic_template_prompt(self, app_client):
         client, _ = app_client
         resp = client.post('/reflection-prompt',
                            json={'book_title': 'Dune', 'duration_minutes': 30},
@@ -97,25 +97,6 @@ class TestTemplateFallback:
         assert 'Dune' in data['prompt']
         assert '30' in data['prompt']
         assert data['source'] == 'template'
-
-    def test_tired_mood_uses_tired_template_language(self, app_client):
-        client, _ = app_client
-        resp = client.post('/reflection-prompt',
-                           json={'book_title': 'Dune', 'duration_minutes': 15, 'mood': 'tired'},
-                           headers=_auth())
-        data = resp.get_json()
-        # All 3 tired templates mention "tired", "rest", or "short".
-        lower = data['prompt'].lower()
-        assert any(k in lower for k in ['tired', 'rest', 'short', 'stood out'])
-        assert data['mood'] == 'tired'
-
-    def test_focused_mood_prompts_differ_from_tired(self, app_client):
-        """Mood selection influences template choice."""
-        client, _ = app_client
-        resp = client.post('/reflection-prompt',
-                           json={'book_title': 'Dune', 'duration_minutes': 45, 'mood': 'focused'},
-                           headers=_auth())
-        assert resp.get_json()['mood'] == 'focused'
 
     def test_pages_read_included_in_template(self, app_client):
         """When pages_read provided, template string should include it."""
@@ -129,8 +110,7 @@ class TestTemplateFallback:
                                json={
                                    'book_title': 'Dune',
                                    'duration_minutes': 30,
-                                   'pages_read': 42,
-                                   'mood': 'tired'
+                                   'pages_read': 42
                                },
                                headers=_auth())
             if '42' in resp.get_json()['prompt']:
@@ -157,7 +137,7 @@ class TestOpenAIPath:
 
         with patch('openai.OpenAI', return_value=fake_client):
             resp = client.post('/reflection-prompt',
-                               json={'book_title': 'Dune', 'duration_minutes': 30, 'mood': 'focused'},
+                               json={'book_title': 'Dune', 'duration_minutes': 30},
                                headers=_auth())
 
         data = resp.get_json()
@@ -175,7 +155,7 @@ class TestOpenAIPath:
 
         with patch('openai.OpenAI', return_value=fake_client):
             resp = client.post('/reflection-prompt',
-                               json={'book_title': 'Dune', 'duration_minutes': 30, 'mood': 'focused'},
+                               json={'book_title': 'Dune', 'duration_minutes': 30},
                                headers=_auth())
 
         data = resp.get_json()

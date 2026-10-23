@@ -11,7 +11,6 @@ struct SessionHistoryEntry: Codable, Identifiable {
     let bookTitle: String
     let durationSeconds: Int
     let pagesRead: Int?
-    let mood: String?
     let endedAt: String
 }
 
@@ -21,13 +20,6 @@ struct CompletedBookEntry: Codable {
     let completedAt: String
 }
 
-struct MoodTrendsResponse: Codable {
-    let days: Int
-    let totalSessions: Int
-    let avgDurationMinutes: Double
-    let trend: String
-    let suggestion: String?
-}
 
 struct Challenge: Identifiable, Codable, Equatable {
     var id: UUID = UUID()

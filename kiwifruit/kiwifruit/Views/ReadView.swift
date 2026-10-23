@@ -1,4 +1,3 @@
-import AVFoundation
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -24,7 +23,6 @@ struct ReadView: View {
     @Environment(\.readingSessionStore) private var sessionStore: ReadingSessionStore
     @Environment(\.sessionStore) private var session: SessionStore
     @Environment(\.challengeViewModel) private var challengeViewModel: ChallengeViewModel
-    @Environment(\.moodSessionStore) private var moodStore: MoodSessionStore
     @Environment(\.recommendationsStore) private var recommendationsStore: RecommendationsStore
     @Environment(\.userPreferencesStore) private var preferencesStore: UserPreferencesStore
 
@@ -37,30 +35,8 @@ struct ReadView: View {
     @State private var showFilePicker = false
     @State private var speedReadingViewModel = SpeedReadingViewModel()
     @State private var didFinishBook = false
-    @State private var showingMoodCapture = false
-    @State private var showingMoodMapStats = false
-    @State private var showingMoodCameraActive = false
-    @State private var showCameraPermissionDenied = false
-    @State private var showingNonMoodReflectionCapture = false
-    @State private var didSaveNonMoodReflection = false
-    @State private var moodTrendsViewModel = MoodTrendsViewModel()
-    /// True when user ended a mood capture before the end-page sheet; mood sheet should update that session, not insert a new one.
-    @State private var moodCaptureUpdateExistingSession = false
-    /// Camera capture service — started when mood session begins, stopped when ended.
-    @State private var moodCaptureService: MoodMapCaptureService?
-    /// Set to true once `moodCaptureService` has been created and `startSession()` has had a chance to run its async permission callback.
-    /// Used to safely gate `showingMoodCameraActive` without a false-negative on async permission flow.
-    @State private var moodCaptureReady = false
-    /// Face suggestion passed into the post-session mood sheet (after “End & choose mood”).
-    @State private var moodPickerSuggestedMood: QuickMood?
-    @State private var moodPickerSuggestedConfidencePercent: Int?
-
-    @AppStorage("kiwifruit.settings.reflectionEntry.nonMoodSessionsEnabled") private var reflectionEntryNonMoodSessionsEnabled: Bool = true
-
-    /// The live camera session, exposed for CameraPreviewView.
-    private var cameraPreviewSession: AVCaptureSession? {
-        moodCaptureService?.captureSession
-    }
+    @State private var showingReflectionCapture = false
+    @State private var didSaveReflection = false
 
     var body: some View {
         Group {
@@ -92,6 +68,14 @@ struct ReadView: View {
             }
         }
         .sheet(isPresented: $showingSpeedReading) { SpeedReadingView() }
+        .sheet(isPresented: $showingReflectionCapture) {
+            ReflectionCaptureSheet(
+                bookTitle: sessionStore.bookTitle,
+                durationSeconds: sessionStore.completedSeconds,
+                pagesRead: sessionStore.completedPagesRead,
+                onSave: { didSaveReflection = true }
+            )
+        }
         .fileImporter(
             isPresented: $showFilePicker,
             allowedContentTypes: [UTType(filenameExtension: "epub") ?? .data],
@@ -103,53 +87,6 @@ struct ReadView: View {
                 speedReadingViewModel.uploadEpub(from: url)
             case .failure(let error):
                 speedReadingViewModel.uploadMessage = "Failed to pick file: \(error.localizedDescription)"
-            }
-        }
-        .sheet(isPresented: $showingMoodMapStats) { MoodMapStatsView() }
-        .sheet(isPresented: $showingNonMoodReflectionCapture) {
-            ReflectionCaptureSheet(
-                bookTitle: sessionStore.bookTitle,
-                durationSeconds: sessionStore.completedSeconds,
-                pagesRead: sessionStore.completedPagesRead,
-                onSave: { didSaveNonMoodReflection = true }
-            )
-        }
-        .sheet(isPresented: $showingMoodCameraActive) {
-            moodCameraActiveSheet
-        }
-        .alert("Camera Access Required", isPresented: $showCameraPermissionDenied) {
-            Button("Open Settings") {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
-                }
-            }
-            Button("OK", role: .cancel) {
-                moodCaptureService?.clearError()
-                moodCaptureService?.stopSession()
-                moodCaptureService = nil
-                moodCaptureReady = false
-                moodStore.endMoodMap()
-            }
-        } message: {
-            Text("Camera access is needed to detect your mood. Please enable it in Settings.")
-        }
-        .fullScreenCover(isPresented: $showingMoodCapture) {
-            MoodCaptureSheet(
-                bookTitle: sessionStore.bookTitle,
-                duration: formattedCompletedTime,
-                durationSeconds: sessionStore.completedSeconds,
-                pagesRead: sessionStore.completedPagesRead,
-                suggestedMood: moodPickerSuggestedMood,
-                suggestedConfidencePercent: moodPickerSuggestedConfidencePercent,
-                onSkip: {
-                    moodPickerSuggestedMood = nil
-                    moodPickerSuggestedConfidencePercent = nil
-                },
-                updateExisting: moodCaptureUpdateExistingSession
-            )
-            .onDisappear {
-                moodPickerSuggestedMood = nil
-                moodPickerSuggestedConfidencePercent = nil
             }
         }
     }
@@ -259,7 +196,6 @@ struct ReadView: View {
     private var startSessionView: some View {
         ScrollView {
             VStack(spacing: 0) {
-                moodTrendsBanner
                 startSessionButton
                 speedReadingButton
                 uploadFilesButton
@@ -280,57 +216,6 @@ struct ReadView: View {
             .padding(.horizontal, 24)
             .padding(.top, 48)
             .padding(.bottom, 24)
-        }
-        .task {
-            await moodTrendsViewModel.loadIfNewSession(
-                sessionCount: challengeViewModel.sessionHistory.count
-            )
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(30))
-            }
-        }
-        .onChange(of: challengeViewModel.sessionHistory.count) { _, newCount in
-            Task { await moodTrendsViewModel.loadIfNewSession(sessionCount: newCount) }
-        }
-    }
-
-    @ViewBuilder
-    private var moodTrendsBanner: some View {
-        if moodTrendsViewModel.shouldShowBanner,
-           let suggestion = moodTrendsViewModel.suggestion {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
-                    Image(systemName: "leaf.fill")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(FocusDesign.kiwi)
-                    Text("A gentle nudge")
-                        .font(.caption).fontWeight(.black)
-                        .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.6))
-                    Spacer()
-                    Button {
-                        withAnimation { moodTrendsViewModel.dismissBanner() }
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.5))
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                Text(suggestion)
-                    .font(.subheadline).fontWeight(.semibold)
-                    .foregroundStyle(FocusDesign.handDrawnBorder)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(hex: "E6F0DC"))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(FocusDesign.handDrawnBorder, lineWidth: 2))
-            )
-            .sketchShadow()
-            .padding(.bottom, 20)
         }
     }
 
@@ -509,17 +394,12 @@ struct ReadView: View {
                 let endPage = Int(tempEndingPage.trimmingCharacters(in: .whitespaces))
                 let bookTitle = sessionStore.bookTitle
                 let finished = didFinishBook
-                let fromMoodSession = moodCaptureUpdateExistingSession
                 tempEndingPage = ""
                 didFinishBook = false
                 showEndPageSheet = false
                 sessionStore.stopSession(endingPage: endPage)
                 if finished, let title = bookTitle {
                     Task { await challengeViewModel.markBookCompleted(title: title) }
-                }
-                // If mood session → end-page → Done: then show the mood picker.
-                if fromMoodSession {
-                    showingMoodCapture = true
                 }
             }) {
                 Text("Done")
@@ -542,182 +422,6 @@ struct ReadView: View {
         .background(FocusDesign.uiBg)
         .presentationDetents([.medium])
         .interactiveDismissDisabled(true)
-    }
-
-    private var moodCameraActiveSheet: some View {
-        // Live emotion: displays directly per frame during camera preview without waiting for votes.
-        let currentMood = moodCaptureService?.liveMood
-
-        return VStack(spacing: 24) {
-            // Top bar
-            HStack {
-                Text("Mood Detection")
-                    .font(.system(size: 20, weight: .black))
-                    .foregroundStyle(FocusDesign.handDrawnBorder)
-                Spacer()
-                Button(action: {
-                    moodCaptureService?.stopSession()
-                    moodCaptureService = nil
-                    moodCaptureReady = false
-                    moodStore.cancelMoodMap()
-                    showingMoodCameraActive = false
-                }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(FocusDesign.handDrawnBorder)
-                        .frame(width: 32, height: 32)
-                        .background(
-                            Circle()
-                                .fill(Color.white)
-                                .overlay(Circle().stroke(FocusDesign.handDrawnBorder, lineWidth: 2))
-                        )
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 20)
-
-            // Camera preview
-            if let session = cameraPreviewSession {
-                CameraPreviewView(session: session)
-                    .frame(width: 200, height: 266)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(FocusDesign.handDrawnBorder, lineWidth: 3)
-                    )
-                    .background(
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(FocusDesign.handDrawnBorder)
-                            .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
-                    )
-
-                // Face detection indicator
-                if moodCaptureService?.faceDetected == true {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 8, height: 8)
-                        Text("Face detected")
-                            .font(.caption).fontWeight(.bold)
-                            .foregroundStyle(Color.green)
-                    }
-                } else {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(Color.orange)
-                            .frame(width: 8, height: 8)
-                        Text("Looking for face...")
-                            .font(.caption).fontWeight(.bold)
-                            .foregroundStyle(Color.orange)
-                    }
-                }
-            } else {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color.black.opacity(0.1))
-                    .frame(width: 200, height: 266)
-                    .overlay(
-                        Text("Camera loading...")
-                            .font(.caption)
-                            .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.5))
-                    )
-            }
-
-            // Detected mood card
-            VStack(spacing: 12) {
-                if let mood = currentMood {
-                    let conf = Int((moodCaptureService?.liveConfidence ?? 0) * 100)
-                    HStack {
-                        Text("Detected:")
-                            .font(.subheadline).fontWeight(.bold)
-                            .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.6))
-                        Text(mood.displayName)
-                            .font(.subheadline).fontWeight(.black)
-                            .foregroundStyle(FocusDesign.handDrawnBorder)
-                        Text("(\(conf)%)")
-                            .font(.caption).fontWeight(.semibold)
-                            .foregroundStyle(Color.green)
-                        Spacer()
-                    }
-                    moodBadgeDisplay(mood)
-                        .sketchShadow()
-                } else {
-                    Text("Analyzing your expression...")
-                        .font(.subheadline).fontWeight(.bold)
-                        .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.5))
-                        .padding(.vertical, 8)
-                }
-            }
-            .padding(.horizontal, 24)
-
-            Text("When you’re done, you’ll confirm or change your mood on the next screen.")
-                .font(.caption).fontWeight(.semibold)
-                .foregroundStyle(FocusDesign.handDrawnBorder.opacity(0.55))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
-
-            Spacer()
-
-            Button {
-                let snap = moodCaptureService?.snapshotFull()
-                moodStore.endMoodMap(
-                    distribution: snap?.distribution.isEmpty == false ? snap?.distribution : nil,
-                    timeline: snap?.timeline.isEmpty == false ? snap?.timeline : nil
-                )
-                moodCaptureService?.stopSession()
-                moodCaptureService = nil
-                moodCaptureReady = false
-                if let snap, let m = snap.mood {
-                    moodPickerSuggestedMood = m
-                    moodPickerSuggestedConfidencePercent = max(0, min(100, Int(snap.confidence * 100)))
-                } else {
-                    moodPickerSuggestedMood = nil
-                    moodPickerSuggestedConfidencePercent = nil
-                }
-                moodCaptureUpdateExistingSession = true
-                showingMoodCameraActive = false
-                // End the reading session first, then the mood picker comes after the end-page sheet.
-                if sessionStore.status == .active { sessionStore.togglePause() }
-                showingMoodMapStats = false
-                showEndPageSheet = true
-            } label: {
-                Text("End Mood Session")
-                    .font(.headline).fontWeight(.bold)
-                    .foregroundStyle(FocusDesign.handDrawnBorder)
-                    .frame(width: 280, height: 50)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(FocusDesign.kiwi)
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
-                    )
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(FocusDesign.handDrawnBorder)
-                            .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
-                    )
-            }
-            .buttonStyle(.plain)
-            .padding(.bottom, 40)
-        }
-        .padding(.horizontal, 24)
-        .background(FocusDesign.uiBg)
-        .presentationDetents([.large])
-        .interactiveDismissDisabled(true)
-    }
-
-    private func moodBadgeDisplay(_ mood: QuickMood) -> some View {
-        HStack(spacing: 4) {
-            Text(moodDescription(mood))
-                .font(.caption).fontWeight(.bold)
-                .foregroundStyle(FocusDesign.handDrawnBorder)
-            Image(systemName: moodEmoji(mood))
-                .font(.caption)
-                .foregroundStyle(FocusDesign.handDrawnBorder)
-        }
-        .padding(.horizontal, 14).padding(.vertical, 8)
-        .background(moodColor(mood).opacity(0.4))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(moodColor(mood), lineWidth: 2))
     }
 
     private var sessionControls: some View {
@@ -744,7 +448,6 @@ struct ReadView: View {
                 Button("Stop") {
                     // Freeze the timer now so the sheet doesn't add extra seconds.
                     if sessionStore.status == .active { sessionStore.togglePause() }
-                    moodCaptureUpdateExistingSession = false
                     showEndPageSheet = true
                 }
                 .font(.headline)
@@ -763,39 +466,8 @@ struct ReadView: View {
                 )
             }
 
-            Button("mood session") {
-                moodPickerSuggestedMood = nil
-                moodPickerSuggestedConfidencePercent = nil
-                moodStore.startMoodMap()
-                moodCaptureService = MoodMapCaptureService()
-                moodCaptureService?.startSession()
-                moodCaptureReady = true
-            }
-            .font(.headline)
-            .fontWeight(.bold)
-            .foregroundStyle(FocusDesign.handDrawnBorder)
-            .frame(width: 300, height: 50)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(FocusDesign.kiwi)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
-            )
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(FocusDesign.handDrawnBorder)
-                    .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
-            )
         }
         .padding(.bottom, 80)
-        .onChange(of: moodCaptureReady) { _, ready in
-            guard ready else { return }
-            if moodCaptureService?.cameraError != nil {
-                showCameraPermissionDenied = true
-            } else {
-                showingMoodCameraActive = true
-            }
-            moodCaptureReady = false
-        }
     }
 
     private var completionView: some View {
@@ -804,86 +476,56 @@ struct ReadView: View {
                 completionHeader
                 readingTimeSummary
 
-                if reflectionEntryNonMoodSessionsEnabled && !moodCaptureUpdateExistingSession {
-                    if didSaveNonMoodReflection {
-                        HStack(spacing: 8) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(FocusDesign.kiwi)
-                            Text("Reflection saved")
-                                .font(.subheadline).fontWeight(.bold)
-                        }
-                        .foregroundStyle(FocusDesign.handDrawnBorder)
-                        .padding(.horizontal, 24).padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(FocusDesign.kiwi.opacity(0.15))
-                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(FocusDesign.kiwi, lineWidth: 2))
-                        )
-                        .sketchShadow()
-                    } else {
-                        Button(action: { showingNonMoodReflectionCapture = true }) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "square.and.pencil")
-                                    .font(.system(size: 16, weight: .bold))
-                                Text("Reflect on this session")
-                                    .font(.subheadline).fontWeight(.bold)
-                            }
-                            .foregroundStyle(FocusDesign.handDrawnBorder)
-                            .padding(.horizontal, 24).padding(.vertical, 12)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color.white)
-                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(FocusDesign.handDrawnBorder, lineWidth: 2))
-                            )
-                            .sketchShadow()
-                        }
-                        .buttonStyle(.plain)
+                if didSaveReflection {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(FocusDesign.kiwi)
+                        Text("Reflection saved")
+                            .font(.subheadline).fontWeight(.bold)
                     }
-                }
-
-                if !moodStore.savedSessions.isEmpty {
-                    Button(action: { showingMoodMapStats = true }) {
+                    .foregroundStyle(FocusDesign.handDrawnBorder)
+                    .padding(.horizontal, 24).padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(FocusDesign.kiwi.opacity(0.15))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(FocusDesign.kiwi, lineWidth: 2))
+                    )
+                    .sketchShadow()
+                } else {
+                    Button(action: { showingReflectionCapture = true }) {
                         HStack(spacing: 8) {
-                            Image(systemName: "face.smiling")
+                            Image(systemName: "square.and.pencil")
                                 .font(.system(size: 16, weight: .bold))
-                            Text("View mood stats")
+                            Text("Reflect on this session")
                                 .font(.subheadline).fontWeight(.bold)
                         }
                         .foregroundStyle(FocusDesign.handDrawnBorder)
                         .padding(.horizontal, 24).padding(.vertical, 12)
                         .background(
                             RoundedRectangle(cornerRadius: 8)
-                                .fill(Color(hex: "CFE6EC"))
+                                .fill(Color.white)
                                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(FocusDesign.handDrawnBorder, lineWidth: 2))
                         )
                         .sketchShadow()
                     }
                     .buttonStyle(.plain)
                 }
-
-                if !session.isGuest {
-                    challengeProgressSection
-                }
-
-                Spacer()
-                    .frame(height: 40)
             }
+            .font(.headline)
+            .fontWeight(.bold)
+            .foregroundStyle(FocusDesign.handDrawnBorder)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.white)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
+            )
+            Spacer()
         }
-        .task {
-            if !session.isGuest {
-                await challengeViewModel.updateProgress()
-            }
-            await recommendationsStore.load()
-        }
-        .alert("Session not saved", isPresented: Binding(
-            get: { sessionStore.saveError != nil },
-            set: { if !$0 { sessionStore.saveError = nil } }
-        )) {
-            Button("OK") { sessionStore.saveError = nil }
-        } message: {
-            Text(sessionStore.saveError ?? "")
-        }
+        .padding(.horizontal)
+        .padding(.top)
     }
 
     private var completionHeader: some View {
@@ -891,9 +533,7 @@ struct ReadView: View {
             Button("close") {
                 sessionStore.closeCompletion()
                 challengeViewModel.clearRecentlyCompleted()
-                Task {
-                    await recommendationsStore.load()
-                }
+                Task { await recommendationsStore.load() }
             }
             .font(.headline)
             .fontWeight(.bold)
@@ -1020,29 +660,6 @@ struct ReadView: View {
         return String(format: "%d:%02d", minutes, seconds)
     }
 
-    private func moodEmoji(_ mood: QuickMood) -> String {
-        switch mood {
-        case .focused: return "target"
-        case .inspired: return "sparkles"
-        case .tired: return "zzz"
-        }
-    }
-
-    private func moodColor(_ mood: QuickMood) -> Color {
-        switch mood {
-        case .focused: return Color(hex: "88C0D0")
-        case .inspired: return Color(hex: "A3C985")
-        case .tired: return Color(hex: "D1BFAe")
-        }
-    }
-
-    private func moodDescription(_ mood: QuickMood) -> String {
-        switch mood {
-        case .focused: return "Calm and concentrated"
-        case .inspired: return "Happy and energized"
-        case .tired: return "Low energy"
-        }
-    }
 }
 
 #Preview {

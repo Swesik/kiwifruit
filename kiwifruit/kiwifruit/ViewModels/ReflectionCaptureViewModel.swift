@@ -26,7 +26,6 @@ final class ReflectionCaptureViewModel {
                 bookTitle: bookTitle ?? "your book",
                 durationMinutes: max(1, (durationSeconds ?? 0) / 60),
                 pagesRead: pagesRead,
-                mood: nil
             )
             reflectionPrompt = resp.prompt
         } catch {
@@ -34,7 +33,7 @@ final class ReflectionCaptureViewModel {
         }
     }
 
-    /// Saves a non-mood reflection. Returns true iff the server wrote it.
+    /// Saves a reflection. Returns true iff the server wrote it.
     @discardableResult
     func saveReflection(
         bookTitle: String?,
@@ -52,7 +51,6 @@ final class ReflectionCaptureViewModel {
                 title: trimmedTitle.isEmpty ? nil : trimmedTitle,
                 prompt: reflectionPrompt,
                 response: response,
-                mood: nil,
                 durationMinutes: (durationSeconds ?? 0) / 60,
             )
             return true

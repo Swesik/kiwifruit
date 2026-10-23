@@ -37,7 +37,6 @@ CREATE TABLE session_history (
     book_title TEXT NOT NULL,
     duration_seconds INTEGER NOT NULL,
     pages_read INTEGER,
-    mood TEXT CHECK (mood IN ('focused', 'inspired', 'tired')),
     ended_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
 );
@@ -67,7 +66,6 @@ CREATE TABLE reflections (
     title TEXT CHECK (title IS NULL OR LENGTH(title) <= 120),
     prompt TEXT NOT NULL,
     response TEXT NOT NULL CHECK (LENGTH(response) <= 2000),
-    mood TEXT CHECK (mood IN ('focused', 'inspired', 'tired')),
     duration_minutes INTEGER,
     visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility = 'private'),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

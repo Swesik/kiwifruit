@@ -288,7 +288,7 @@ struct ChallengesView: View {
         if viewModel.hasActiveAdaptiveChallenge {
             return "Finish your current personalized challenge first — a new one will be recommended after you complete it."
         }
-        return "Complete a reading session and we'll tailor a challenge to your mood and pace."
+        return "Complete a reading session and we'll tailor a challenge to your reading pace."
     }
 
     // MARK: - Discover More
