@@ -3,7 +3,7 @@ import SwiftUI
 struct CustomTabBar: View {
     @Binding var selection: Int
     private let items: [(label: String, tag: Int)] = [
-        ("Profile", 0), ("Discover", 1), ("Focus", 2), ("Challenges", 3)
+        ("Profile", 0), ("Discover", 1), ("Read", 2), ("Challenges", 3)
     ]
 
     var body: some View {

@@ -1,5 +1,6 @@
 import AVFoundation
 import SwiftUI
+import UniformTypeIdentifiers
 
 private enum FocusDesign {
     static let kiwi = Color(hex: "A3C985")
@@ -10,12 +11,13 @@ private enum FocusDesign {
     static let sketchOffset: CGFloat = 4
 }
 
-struct FocusView: View {
+struct ReadView: View {
     @Environment(\.readingSessionStore) private var sessionStore: ReadingSessionStore
     @Environment(\.sessionStore) private var session: SessionStore
     @Environment(\.challengeViewModel) private var challengeViewModel: ChallengeViewModel
     @Environment(\.moodSessionStore) private var moodStore: MoodSessionStore
     @Environment(\.recommendationsStore) private var recommendationsStore: RecommendationsStore
+    @Environment(\.userPreferencesStore) private var preferencesStore: UserPreferencesStore
 
     @State private var isSelectingBook = false
     @State private var tempBookTitle = ""
@@ -23,6 +25,8 @@ struct FocusView: View {
     @State private var showEndPageSheet = false
     @State private var tempEndingPage = ""
     @State private var showingSpeedReading = false
+    @State private var showFilePicker = false
+    @State private var speedReadingViewModel = SpeedReadingViewModel(api: AppAPI.shared)
     @State private var didFinishBook = false
     @State private var showingMoodCapture = false
     @State private var showingMoodMapStats = false
@@ -70,6 +74,7 @@ struct FocusView: View {
         .background(FocusDesign.uiBg)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
+            speedReadingViewModel = SpeedReadingViewModel(api: AppAPI.shared, preferencesStore: preferencesStore)
             // Set up callback to refresh recommendations when session completes
             sessionStore.onSessionCompleted = { [weak recommendationsStore] in
                 Task {
@@ -78,6 +83,19 @@ struct FocusView: View {
             }
         }
         .sheet(isPresented: $showingSpeedReading) { SpeedReadingView() }
+        .fileImporter(
+            isPresented: $showFilePicker,
+            allowedContentTypes: [UTType(filenameExtension: "epub") ?? .data],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                speedReadingViewModel.uploadEpub(from: url)
+            case .failure(let error):
+                speedReadingViewModel.uploadMessage = "Failed to pick file: \(error.localizedDescription)"
+            }
+        }
         .sheet(isPresented: $showingMoodMapStats) { MoodMapStatsView() }
         .sheet(isPresented: $showingNonMoodReflectionCapture) {
             ReflectionCaptureSheet(
@@ -235,6 +253,18 @@ struct FocusView: View {
                 moodTrendsBanner
                 startSessionButton
                 speedReadingButton
+                uploadFilesButton
+                if speedReadingViewModel.isUploading {
+                    ProgressView("Uploading...")
+                        .padding(.top, 12)
+                }
+                if let message = speedReadingViewModel.uploadMessage {
+                    Text(message)
+                        .font(.subheadline)
+                        .foregroundStyle(FocusDesign.handDrawnBorder)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 12)
+                }
                 Spacer()
                     .frame(height: 40)
             }
@@ -297,9 +327,9 @@ struct FocusView: View {
 
     private var startSessionButton: some View {
         Button(action: {
-            isSelectingBook = true
+            showingSpeedReading = true
         }) {
-            Text("Start\nsession")
+            Text("start")
                 .font(.system(size: 36, weight: .black))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(FocusDesign.handDrawnBorder)
@@ -320,11 +350,12 @@ struct FocusView: View {
     }
 
     private var speedReadingButton: some View {
-        Button(action: { showingSpeedReading = true }) {
-            Text("launch speed reading")
+        Button(action: { isSelectingBook = true }) {
+            Text("Start session")
                 .font(.system(size: 20, weight: .bold))
                 .tracking(0.5)
                 .foregroundStyle(FocusDesign.handDrawnBorder)
+                .frame(width: 220)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 12)
                 .background(
@@ -340,6 +371,30 @@ struct FocusView: View {
         }
         .buttonStyle(.plain)
         .padding(.top, 32)
+    }
+
+    private var uploadFilesButton: some View {
+        Button("upload book") {
+            showFilePicker = true
+        }
+        .font(.system(size: 20, weight: .bold))
+        .foregroundStyle(FocusDesign.handDrawnBorder)
+        .frame(width: 220)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 12)
+        .background(
+            Capsule()
+                .fill(FocusDesign.uiTeal)
+                .overlay(Capsule().stroke(FocusDesign.handDrawnBorder, lineWidth: 3))
+        )
+        .background(
+            Capsule()
+                .fill(FocusDesign.handDrawnBorder)
+                .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
+        )
+        .buttonStyle(.plain)
+        .disabled(speedReadingViewModel.isUploading)
+        .padding(.top, 20)
     }
 
     private var activeSessionView: some View {
@@ -982,5 +1037,5 @@ struct FocusView: View {
 }
 
 #Preview {
-    FocusView()
+    ReadView()
 }

@@ -1,10 +1,8 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct SpeedReadingView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.userPreferencesStore) private var preferencesStore
-    @State private var showFilePicker = false
     private let api: APIClientProtocol
     @State private var viewModel: SpeedReadingViewModel
     @State private var wpmText: String = "240"
@@ -46,19 +44,6 @@ struct SpeedReadingView: View {
             viewModel.loadSettings()
             wpmText = "\(viewModel.wordsPerMinute)"
             viewModel.loadBooks()
-        }
-        .fileImporter(
-            isPresented: $showFilePicker,
-            allowedContentTypes: [UTType(filenameExtension: "epub") ?? .data],
-            allowsMultipleSelection: false
-        ) { result in
-            switch result {
-            case .success(let urls):
-                guard let url = urls.first else { return }
-                viewModel.uploadEpub(from: url)
-            case .failure(let error):
-                viewModel.uploadMessage = "Failed to pick file: \(error.localizedDescription)"
-            }
         }
     }
 
@@ -111,37 +96,6 @@ struct SpeedReadingView: View {
                                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "2D3748"), lineWidth: 2))
                             }
                         }
-                    }
-                }
-
-                // Upload section
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 16) {
-                        Text("Upload")
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundColor(Color(hex: "2D3748"))
-                        Button("files") {
-                            showFilePicker = true
-                        }
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(Color(hex: "2D3748"))
-                        .padding(.horizontal, 32).padding(.vertical, 8)
-                        .background(Color(hex: "7EA2A0"))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "2D3748"), lineWidth: 3))
-                        .sketchShadow()
-                        .disabled(viewModel.isUploading)
-                    }
-
-                    if viewModel.isUploading {
-                        ProgressView("Uploading...")
-                            .foregroundColor(Color(hex: "2D3748"))
-                    }
-
-                    if let message = viewModel.uploadMessage {
-                        Text(message)
-                            .font(.subheadline)
-                            .foregroundColor(Color(hex: "2D3748"))
                     }
                 }
 

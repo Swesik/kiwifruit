@@ -53,7 +53,7 @@ struct ContentView: View {
         switch selection {
         case 0: NavigationStack { ProfileView(user: currentUser) }.id(0)
         case 1: NavigationStack { DiscoverView(bookSearchViewModel: bookSearchViewModel, bookScanViewModel: bookScanViewModel) }.id(1)
-        case 2: NavigationStack { FocusView() }.id(2)
+        case 2: NavigationStack { ReadView() }.id(2)
         case 3: NavigationStack { ChallengesView() }.id(3)
         default: EmptyView()
         }
