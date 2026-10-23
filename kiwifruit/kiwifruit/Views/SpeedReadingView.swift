@@ -198,6 +198,7 @@ struct SpeedReadingView: View {
     // MARK: - Speed Reading Player View
 
     private var speedReadingPlayerView: some View {
+        GeometryReader { geometry in
         VStack(spacing: 0) {
             if let book = viewModel.selectedBook {
                 Text(book.title)
@@ -219,6 +220,10 @@ struct SpeedReadingView: View {
                 }
                 .padding(.top, 4)
                 .disabled(viewModel.chapters.isEmpty)
+
+                chapterProgressBar
+                    .padding(.horizontal, 24)
+                    .padding(.top, 12)
             }
 
             Spacer()
@@ -253,17 +258,31 @@ struct SpeedReadingView: View {
                 }
                 .disabled(viewModel.isLoadingChapter || viewModel.isFinished)
 
-                Button {
-                    viewModel.finish()
-                } label: {
-                    Text("finish")
-                        .font(.system(size: 18, weight: .bold))
+                VStack(spacing: 4) {
+                    Text("WPM")
+                        .font(.caption).fontWeight(.bold)
                         .foregroundColor(Color(hex: "2D3748"))
-                        .padding(.horizontal, 24).padding(.vertical, 12)
-                        .background(Color(hex: "D1BFAe"))
+
+                    TextField("WPM", text: $wpmText)
+                        .keyboardType(.numberPad)
+                        .font(.system(size: 18, weight: .bold, design: .monospaced))
+                        .foregroundColor(Color(hex: "2D3748"))
+                        .multilineTextAlignment(.center)
+                        .frame(width: 88, height: 48)
+                        .background(Color.white)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "2D3748"), lineWidth: 2))
-                        .sketchShadow()
+                        .disabled(viewModel.isPlaying)
+                        .opacity(viewModel.isPlaying ? 0.6 : 1)
+                        .onChange(of: wpmText) {
+                            if let value = Int(wpmText), value > 0 {
+                                viewModel.wordsPerMinute = value
+                                viewModel.saveSettings()
+                            }
+                        }
+                        .onSubmit {
+                            commitWpm()
+                        }
                 }
             }
             .padding(.bottom, 48)
@@ -275,9 +294,38 @@ struct SpeedReadingView: View {
             .foregroundColor(Color(hex: "2D3748"))
             .padding(.bottom, 24)
         }
+        .simultaneousGesture(
+            SpatialTapGesture(count: 2)
+                .onEnded { value in
+                    let seekDuration = Double(viewModel.doubleTapSeekSeconds)
+                    viewModel.seek(by: value.location.x < geometry.size.width / 2 ? -seekDuration : seekDuration)
+                }
+        )
         .sheet(isPresented: $viewModel.showChapterPicker) {
             chapterPickerSheet
         }
+        }
+    }
+
+    private var chapterProgressBar: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color(hex: "7EA2A0").opacity(0.10))
+                Capsule()
+                    .fill(Color(hex: "7EA2A0").opacity(0.35))
+                    .frame(width: geometry.size.width * chapterProgress)
+            }
+        }
+        .frame(height: 4)
+        .accessibilityLabel("Chapter progress")
+        .accessibilityValue("\(Int(chapterProgress * 100)) percent")
+    }
+
+    private var chapterProgress: CGFloat {
+        guard !viewModel.words.isEmpty else { return 0 }
+        if viewModel.isFinished { return 1 }
+        return min(1, CGFloat(viewModel.currentWordIndex) / CGFloat(viewModel.words.count))
     }
 
     // MARK: - Chapter Picker

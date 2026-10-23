@@ -78,6 +78,10 @@ final class SpeedReadingViewModel {
         chapters.first { $0.chapterNumber == currentChapter }?.title
     }
 
+    var doubleTapSeekSeconds: Int {
+        max(1, min(30, preferencesStore.doubleTapSeekSeconds))
+    }
+
     func loadBooks() {
         books = LocalEpubStore.shared.books()
     }
@@ -160,6 +164,20 @@ final class SpeedReadingViewModel {
         } else {
             play()
         }
+    }
+
+    /// Seeks by a number of seconds, using the current reading speed and segment size.
+    func seek(by seconds: TimeInterval) {
+        guard !words.isEmpty, !isLoadingChapter else { return }
+
+        let wordsPerSecond = Double(max(1, wordsPerMinute)) / 60.0
+        let wordsToMove = Int((abs(seconds) * wordsPerSecond / Double(wordsPerSegment)).rounded()) * wordsPerSegment
+        let distance = max(wordsPerSegment, wordsToMove)
+        let target = currentWordIndex + (seconds < 0 ? -distance : distance)
+        currentWordIndex = min(max(0, target), words.count - 1)
+        isFinished = false
+        computeMaxSegmentLength()
+        saveProgressSync()
     }
 
     func play() {
