@@ -8,7 +8,7 @@ import pytest
 
 
 # ---------------------------------------------------------------------------
-# Fixtures (same pattern as test_epub.py)
+# Fixtures for the session-history API tests.
 # ---------------------------------------------------------------------------
 
 @pytest.fixture()

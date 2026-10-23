@@ -871,6 +871,6 @@ enum AppAPI {
         return url
     }()
 
-    /// Default shared client. Swap to `RESTAPIClient(baseURL:)` when you have a backend.
-    static var shared: APIClientProtocol = RESTAPIClient(baseURL: defaultBaseURL)
+    /// The app runs offline by default. RESTAPIClient remains available for explicit backend work.
+    static var shared: APIClientProtocol = MockAPIClient()
 }

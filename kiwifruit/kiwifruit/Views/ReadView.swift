@@ -11,6 +11,15 @@ private enum FocusDesign {
     static let sketchOffset: CGFloat = 4
 }
 
+private struct ReadButtonPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .offset(y: configuration.isPressed ? 2 : 0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
 struct ReadView: View {
     @Environment(\.readingSessionStore) private var sessionStore: ReadingSessionStore
     @Environment(\.sessionStore) private var session: SessionStore
@@ -26,7 +35,7 @@ struct ReadView: View {
     @State private var tempEndingPage = ""
     @State private var showingSpeedReading = false
     @State private var showFilePicker = false
-    @State private var speedReadingViewModel = SpeedReadingViewModel(api: AppAPI.shared)
+    @State private var speedReadingViewModel = SpeedReadingViewModel()
     @State private var didFinishBook = false
     @State private var showingMoodCapture = false
     @State private var showingMoodMapStats = false
@@ -74,7 +83,7 @@ struct ReadView: View {
         .background(FocusDesign.uiBg)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
-            speedReadingViewModel = SpeedReadingViewModel(api: AppAPI.shared, preferencesStore: preferencesStore)
+            speedReadingViewModel = SpeedReadingViewModel(preferencesStore: preferencesStore)
             // Set up callback to refresh recommendations when session completes
             sessionStore.onSessionCompleted = { [weak recommendationsStore] in
                 Task {
@@ -392,7 +401,7 @@ struct ReadView: View {
                 .fill(FocusDesign.handDrawnBorder)
                 .offset(x: FocusDesign.sketchOffset, y: FocusDesign.sketchOffset)
         )
-        .buttonStyle(.plain)
+        .buttonStyle(ReadButtonPressStyle())
         .disabled(speedReadingViewModel.isUploading)
         .padding(.top, 20)
     }

@@ -176,6 +176,7 @@ server/*.db
 xcuserdata/
 *.xcworkspace
 !default.xcworkspace
+!kiwifruit/kiwifruit.xcodeproj/project.xcworkspace/
 buildServer.json
 
 # Zed IDEs

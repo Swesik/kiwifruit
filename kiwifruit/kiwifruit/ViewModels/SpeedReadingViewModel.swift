@@ -3,7 +3,6 @@ import Observation
 
 @Observable
 final class SpeedReadingViewModel {
-    private let api: APIClientProtocol
     private let preferencesStore: UserPreferencesStore
 
     var isUploading = false
@@ -52,8 +51,7 @@ final class SpeedReadingViewModel {
     private var lastSavedChapter: Int = 0
     private var lastSavedWordIndex: Int = 0
 
-    init(api: APIClientProtocol = AppAPI.shared, preferencesStore: UserPreferencesStore = UserPreferencesStore()) {
-        self.api = api
+    init(preferencesStore: UserPreferencesStore = UserPreferencesStore()) {
         self.preferencesStore = preferencesStore
     }
 
@@ -81,44 +79,18 @@ final class SpeedReadingViewModel {
     }
 
     func loadBooks() {
-        guard !isLoadingBooks else { return }
-        isLoadingBooks = true
-        Task {
-            do {
-                let allBooks = try await api.fetchEpubs()
-                books = allBooks.filter { $0.status == "PARSED" }
-            } catch {
-                books = []
-            }
-            isLoadingBooks = false
-        }
+        books = LocalEpubStore.shared.books()
     }
 
     func selectBook(_ book: EpubUploadResponse) {
         stopPlayback()
         selectedBook = book
         isFinished = false
-        chapters = []
+        chapters = LocalEpubStore.shared.chapters(for: book.id)
+        let progress = LocalEpubStore.shared.progress(for: book.id)
+        currentChapter = progress.chapterNumber
+        currentWordIndex = progress.wordIndex
         Task {
-            // Fetch chapters list and progress in parallel
-            async let chaptersResult = api.fetchChapters(epubId: book.id)
-            async let progressResult = api.getSpeedReadingProgress(epubId: book.id)
-
-            do {
-                chapters = try await chaptersResult
-            } catch {
-                chapters = []
-            }
-
-            do {
-                let progress = try await progressResult
-                currentChapter = progress.chapterNumber
-                currentWordIndex = progress.wordIndex
-            } catch {
-                currentChapter = 1
-                currentWordIndex = 0
-            }
-
             lastSavedChapter = currentChapter
             lastSavedWordIndex = currentWordIndex
             await loadChapterText()
@@ -150,17 +122,17 @@ final class SpeedReadingViewModel {
     private func loadChapterText() async {
         guard let book = selectedBook else { return }
         isLoadingChapter = true
-        do {
-            let text = try await api.fetchChapterText(epubId: book.id, chapterNumber: currentChapter)
-            words = text.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
-            if currentWordIndex >= words.count {
-                currentWordIndex = 0
-            }
-            computeMaxSegmentLength()
-        } catch {
+        guard let text = LocalEpubStore.shared.chapterText(for: book.id, chapterNumber: currentChapter) else {
             words = []
             maxSegmentLength = 0
+            isLoadingChapter = false
+            return
         }
+        words = text.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+        if currentWordIndex >= words.count {
+            currentWordIndex = 0
+        }
+        computeMaxSegmentLength()
         isLoadingChapter = false
     }
 
@@ -264,8 +236,7 @@ final class SpeedReadingViewModel {
         }
     }
 
-    /// Asynchronously sends the progress update (fire-and-forget Task that captures values).
-    /// Always sends regardless of whether values match lastSaved, ensuring the server is up to date.
+    /// Persists the current reading position on this device.
     private func saveProgressSync() {
         guard let book = selectedBook else { return }
         let chapter = currentChapter
@@ -273,12 +244,7 @@ final class SpeedReadingViewModel {
         guard chapter != lastSavedChapter || wordIdx != lastSavedWordIndex else { return }
         lastSavedChapter = chapter
         lastSavedWordIndex = wordIdx
-        let epubId = book.id
-        Task {
-            try? await api.updateSpeedReadingProgress(
-                epubId: epubId, chapter: chapter, wordIndex: wordIdx
-            )
-        }
+        LocalEpubStore.shared.saveProgress(for: book.id, chapterNumber: chapter, wordIndex: wordIdx)
     }
 
     func uploadEpub(from url: URL) {
@@ -298,36 +264,13 @@ final class SpeedReadingViewModel {
         uploadMessage = nil
         Task {
             do {
-                let response = try await api.uploadEpub(fileData: fileData, filename: filename)
-                isUploading = false
-                uploadMessage = "Uploaded \"\(response.title)\" by \(response.author). Processing..."
-                // Poll until parsed
-                await pollUntilParsed(epubId: response.id)
+                let book = try await LocalEpubStore.shared.importBook(data: fileData, filename: filename)
+                books = LocalEpubStore.shared.books()
+                uploadMessage = "Imported \"\(book.title)\" by \(book.author)."
             } catch {
-                isUploading = false
-                uploadMessage = "Upload failed: \(error.localizedDescription)"
+                uploadMessage = "Unable to import EPUB: \(error.localizedDescription)"
             }
+            isUploading = false
         }
-    }
-
-    private func pollUntilParsed(epubId: String) async {
-        for _ in 0..<60 {
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            do {
-                let detail = try await api.fetchEpubDetail(epubId: epubId)
-                if detail.status == "PARSED" {
-                    uploadMessage = "Uploaded \"\(detail.title)\" by \(detail.author)"
-                    loadBooks()
-                    return
-                } else if detail.status == "FAILED" {
-                    uploadMessage = "Processing failed for uploaded book."
-                    return
-                }
-            } catch {
-                continue
-            }
-        }
-        uploadMessage = "Book is still processing. Refresh later."
-        loadBooks()
     }
 }

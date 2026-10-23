@@ -43,9 +43,6 @@ struct ContentView: View {
                 Task { await recommendationsStore.load() }
             }
         }
-        .fullScreenCover(isPresented: Binding(get: { !session.isValidSession }, set: { _ in })) {
-            LoginView()
-        }
     }
 
     @ViewBuilder

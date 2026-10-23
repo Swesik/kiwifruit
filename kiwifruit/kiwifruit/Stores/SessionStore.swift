@@ -12,7 +12,7 @@ final class SessionStore {
     private(set) var token: String? = nil
     private(set) var userId: String? = nil
     private(set) var currentUser: User? = nil
-    // Whether the saved token/session has been validated against the server
+    // Local guest sessions do not require server validation.
     private(set) var isValidSession: Bool = false
     // Whether the user is browsing as a guest (no account)
     private(set) var isGuest: Bool = false
@@ -34,24 +34,14 @@ final class SessionStore {
             apiClient.setAuthToken(nil)
             return
         }
+        // Start directly in the local app experience. No stored account or network is needed.
         load()
-        // Ensure global API client uses this REST client by default
-        AppAPI.shared = apiClient
-        apiClient.setAuthToken(token)
-        // If we have a token loaded, validate it against the server.
-        // Uses GET /users/me which requires auth — an expired/deleted token correctly fails
-        // and triggers clear(), forcing the login screen.
-        if token != nil {
-            Task {
-                do {
-                    let user = try await fetchCurrentSessionUser()
-                    self.currentUser = user
-                    self.isValidSession = true
-                } catch {
-                    self.clear()
-                }
-            }
-        }
+        token = nil
+        userId = nil
+        currentUser = MockData.sampleUser
+        isGuest = true
+        isValidSession = true
+        apiClient.setAuthToken(nil)
     }
 
     func save(token: String, user: User?) {
@@ -66,7 +56,6 @@ final class SessionStore {
             UserDefaults.standard.removeObject(forKey: userJSONKey)
         }
         apiClient.setAuthToken(token)
-        AppAPI.shared = apiClient
         isGuest = false
         isValidSession = true
         print("SessionStore.save: saved token=\(token.prefix(8)).. userId=\(user?.id ?? "<nil>") username=\(user?.username ?? "<nil>")")
@@ -89,8 +78,6 @@ final class SessionStore {
         UserDefaults.standard.removeObject(forKey: userKey)
         UserDefaults.standard.removeObject(forKey: userJSONKey)
         apiClient.setAuthToken(nil)
-        // Keep the REST client as the shared API so login/sign-up still talk to the backend.
-        AppAPI.shared = apiClient
         print("SessionStore.clear: cleared session")
     }
 
@@ -107,20 +94,6 @@ final class SessionStore {
             }
         }
         print("SessionStore.load: token=\(token != nil ? "present" : "nil") userId=\(userId ?? "nil") currentUser=\(currentUser?.username ?? "nil")")
-    }
-
-    /// Validates the stored token by calling GET /users/me (requires auth).
-    /// Throws if the token is missing, expired, or not in the sessions table.
-    private func fetchCurrentSessionUser() async throws -> User {
-        let url = apiClient.baseURL.appendingPathComponent("/users/me")
-        var req = URLRequest(url: url)
-        if let token = token { req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, resp) = try await apiClient.session.data(for: req)
-        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            throw URLError(.userAuthenticationRequired)
-        }
-        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase; decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(User.self, from: data)
     }
 
     // removed force-fresh-login API
