@@ -38,7 +38,7 @@ struct LoginView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                Button("Join as Guest") {
+                Button("Continue as Guest") {
                     session.joinAsGuest()
                     dismiss()
                 }

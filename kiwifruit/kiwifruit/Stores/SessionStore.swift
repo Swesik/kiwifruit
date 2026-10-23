@@ -38,7 +38,7 @@ final class SessionStore {
         load()
         token = nil
         userId = nil
-        currentUser = MockData.sampleUser
+        currentUser = nil
         isGuest = true
         isValidSession = true
         apiClient.setAuthToken(nil)

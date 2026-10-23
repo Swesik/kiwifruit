@@ -11,10 +11,9 @@ enum ProfileDesign {
 }
 
 struct ProfileView: View {
-    let user: User
+    let user: User?
 
     @Environment(\.userBooksStore) private var userBooksStore
-    @Environment(\.sessionStore) private var session: SessionStore
     @State private var showingSettings = false
     @State private var showingSignIn = false
 
@@ -27,54 +26,73 @@ struct ProfileView: View {
 
     var body: some View {
         Group {
-            if session.isGuest {
-                VStack(spacing: 20) {
-                    Spacer()
-                    Text("Please sign in to see profile")
-                        .font(.title3).fontWeight(.bold)
-                        .foregroundColor(ProfileDesign.uiText.opacity(0.6))
-                    Button("Sign In") {
-                        showingSignIn = true
-                    }
-                    .font(.headline).fontWeight(.black)
-                    .foregroundColor(ProfileDesign.uiText)
-                    .padding(.horizontal, 32).padding(.vertical, 12)
-                    .background(ProfileDesign.kiwi)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(ProfileDesign.border, lineWidth: 2))
-                    .sketchShadow()
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .fullScreenCover(isPresented: $showingSignIn) {
-                    LoginView()
-                }
-            } else {
+            if let user {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 0) {
-                        profileHeaderSection
+                        profileHeaderSection(user: user)
                         moodSessionHistorySection
                         myLibrarySection
                     }
                 }
-                .sheet(isPresented: $showingSettings) {
-                    SettingsView()
-                }
+            } else {
+                signedOutView
             }
+        }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView()
+        }
+        .fullScreenCover(isPresented: $showingSignIn) {
+            LoginView()
         }
         .background(Color.white)
         .toolbar(.hidden, for: .navigationBar)
     }
 
+    private var signedOutView: some View {
+        VStack(spacing: 20) {
+            HStack {
+                Spacer()
+                Button { showingSettings = true } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.title3.weight(.bold))
+                        .foregroundColor(ProfileDesign.uiText)
+                        .frame(width: 44, height: 44)
+                        .background(ProfileDesign.kiwiLight)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(ProfileDesign.border, lineWidth: 2))
+                        .sketchShadow()
+                }
+                .accessibilityLabel("Settings")
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+
+            Spacer()
+            Text("Sign in to access your profile page")
+                .font(.title3).fontWeight(.bold)
+                .foregroundColor(ProfileDesign.uiText.opacity(0.7))
+            Button("Sign In") { showingSignIn = true }
+                .font(.headline).fontWeight(.black)
+                .foregroundColor(ProfileDesign.uiText)
+                .padding(.horizontal, 32).padding(.vertical, 12)
+                .background(ProfileDesign.kiwi)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(ProfileDesign.border, lineWidth: 2))
+                .sketchShadow()
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     // MARK: - Header
 
-    private var profileHeaderSection: some View {
+    private func profileHeaderSection(user: User) -> some View {
         VStack(spacing: 0) {
             ProfileDesign.kiwiLight
                 .frame(maxWidth: .infinity)
                 .frame(height: 128)
                 .overlay(alignment: .bottom) {
-                    avatarCircle.offset(y: 48)
+                    avatarCircle(user: user).offset(y: 48)
                 }
                 .overlay(alignment: .topTrailing) {
                     Button("Settings") { showingSettings = true }
@@ -122,7 +140,7 @@ struct ProfileView: View {
         }
     }
 
-    private var avatarCircle: some View {
+    private func avatarCircle(user: User) -> some View {
         AsyncImage(url: user.avatarURL) { phase in
             if let image = phase.image { image.resizable().scaledToFill() }
             else if phase.error != nil { Image(systemName: "person.crop.circle.fill").resizable().foregroundStyle(.secondary) }

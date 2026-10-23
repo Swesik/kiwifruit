@@ -13,11 +13,6 @@ struct ContentView: View {
         api: AppAPI.shared
     )
 
-    private var currentUser: User {
-        if let user = session.currentUser { return user }
-        return MockData.sampleUser
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             currentView
@@ -48,7 +43,7 @@ struct ContentView: View {
     @ViewBuilder
     private var currentView: some View {
         switch selection {
-        case 0: NavigationStack { ProfileView(user: currentUser) }.id(0)
+        case 0: NavigationStack { ProfileView(user: session.currentUser) }.id(0)
         case 1: NavigationStack { DiscoverView(bookSearchViewModel: bookSearchViewModel, bookScanViewModel: bookScanViewModel) }.id(1)
         case 2: NavigationStack { ReadView() }.id(2)
         case 3: NavigationStack { ChallengesView() }.id(3)

@@ -5,7 +5,7 @@ import SwiftUI
 /// Observable store exposing user preferences to SwiftUI views.
 @Observable
 final class UserPreferencesStore {
-    private let api: APIClientProtocol
+    private let storageKey = "kiwifruit.userPreferences"
 
     /// Daily reading goal, in minutes.
     var dailyGoalMinutes: Int = UserPreferences().dailyGoalMinutes
@@ -16,31 +16,23 @@ final class UserPreferencesStore {
     /// Words shown per segment during speed reading (1–7).
     var wordsPerSegment: Int = UserPreferences().wordsPerSegment
 
-    init(api: APIClientProtocol = AppAPI.shared) {
-        self.api = api
+    init() {
+        loadFromLocalStorage()
     }
 
-    /// Loads preferences from the server. Falls back silently on error.
+    /// Loads preferences from this device.
     func load() async {
-        do {
-            let loaded = try await api.fetchPreferences()
-            dailyGoalMinutes = loaded.dailyGoalMinutes
-            preferredGenres = loaded.preferredGenres
-            speedReadingWpm = loaded.speedReadingWpm
-            wordsPerSegment = loaded.wordsPerSegment
-        } catch {
-            print("[UserPreferencesStore] load failed: \(error)")
-        }
+        loadFromLocalStorage()
     }
 
-    /// Updates preferences and persists them to the server.
+    /// Updates preferences and persists them on this device.
     func update(dailyGoal: Int, genres: [String]) async {
         dailyGoalMinutes = dailyGoal
         preferredGenres = genres
         await save()
     }
 
-    /// Persists all current preference values to the server.
+    /// Persists all current preference values on this device.
     func save() async {
         let prefs = UserPreferences(
             dailyGoalMinutes: dailyGoalMinutes,
@@ -48,11 +40,17 @@ final class UserPreferencesStore {
             speedReadingWpm: speedReadingWpm,
             wordsPerSegment: wordsPerSegment
         )
-        do {
-            try await api.savePreferences(prefs)
-        } catch {
-            print("[UserPreferencesStore] save failed: \(error)")
-        }
+        guard let data = try? JSONEncoder().encode(prefs) else { return }
+        UserDefaults.standard.set(data, forKey: storageKey)
+    }
+
+    private func loadFromLocalStorage() {
+        guard let data = UserDefaults.standard.data(forKey: storageKey),
+              let prefs = try? JSONDecoder().decode(UserPreferences.self, from: data) else { return }
+        dailyGoalMinutes = prefs.dailyGoalMinutes
+        preferredGenres = prefs.preferredGenres
+        speedReadingWpm = prefs.speedReadingWpm
+        wordsPerSegment = prefs.wordsPerSegment
     }
 }
 
